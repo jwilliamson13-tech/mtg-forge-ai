@@ -13,6 +13,9 @@ from dataclasses import asdict, dataclass, field
 
 VAR = "<var>"
 REF = "<ref>"
+# A card name, wherever a script names one: `Name=<name>`, `ValidCards=named<name>`.
+# An ordinary token value, not a reserved vocabulary entry.
+NAME = "<name>"
 
 # Printed stats: `Face` fields, each an int, `<var>` or None. `PT:` fills
 # power and toughness; `Loyalty:` and `Defense:` each fill the field of the

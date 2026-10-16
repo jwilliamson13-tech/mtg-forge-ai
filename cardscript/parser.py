@@ -18,7 +18,7 @@ from cardscript.dropped import (
     FLAVOR_PREFIX,
     LAST,
 )
-from cardscript.model import OWN_LINE_STATS, REF, VAR, Ability, Card, Face, KeyedNumber, ManaCost
+from cardscript.model import NAME, OWN_LINE_STATS, REF, VAR, Ability, Card, Face, KeyedNumber, ManaCost
 
 
 class ParseError(ValueError):
@@ -99,6 +99,54 @@ KEYWORD_KEYS = frozenset(
 KEYWORD_CHOICE = "KWChoice"
 _KEYWORD_LIST = re.compile(r"\s&\s")
 _KEYWORD_COMMA = re.compile(r",(?!\s)")  # `, ` with a space is English
+
+# Card names. The model must know a card by what it does, never by its name,
+# so every name in a script becomes the value `<name>`, its key kept. Measured
+# over Forge's cardsfolder and tokenscripts (commit 64569999); add a key here
+# when the sweep finds a new one.
+#
+# Keys whose value is a card name, or a list of them joined by `,`:
+NAME_KEYS = frozenset(
+    {
+        "Name",            # an effect's, emblem's, conjured or melded card's name
+        "NewName",         # Clone: the copy's new name
+        "SetName",         # Continuous: the name a card becomes
+        "DefinedName",     # CopyPermanent: a card by name, unless a reference
+        "Names",           # MakeCard: cards to conjure
+        "Spellbook",       # Draft, MakeCard: the cards to choose among
+        "ChooseFromList",  # NameCard: the names on offer
+        "FromDraftNotes",  # names noted while drafting
+        "RoomName",        # a dungeon room
+    }
+)
+# Keys that hold names under one effect only (elsewhere `Secondary$ True` is a
+# flag and `Choices$` lists modes).
+EFFECT_NAME_KEYS = {
+    "Meld": frozenset({"Primary", "Secondary"}),
+    "MakeCard": frozenset({"Choices"}),
+}
+# Keywords whose parameters are names: `K:Partner with:Toothy, Imaginary Friend:Toothy`.
+KEYWORD_NAME_PARAMS = frozenset({"Partner with"})
+# A list of names under any key: `AnySupportedCard$ Names:Seething Song,Flamebreak`.
+NAMES_PREFIX = "Names:"
+# Values under a name key that point at a card instead of naming one. Only the
+# first `.` piece counts (`DefinedName$ Targeted.!token`), and `Valid<Zone> ...`
+# selects cards in a zone.
+NAME_REFERENCES = frozenset(
+    {
+        "ChosenName", "ChosenCard", "ChosenMap", "Remembered", "DelayTriggerRemembered",
+        "Targeted", "TargetedSource", "ThisTargetedCard", "TriggeredCard", "TriggeredCards",
+        "TriggeredCardLKICopy", "TriggeredSource", "TriggeredEnlisted",
+    }
+)
+_ZONE_REFERENCE = re.compile(r"Valid[A-Z]\w* ")
+# Names in a list are joined by `,` with no space. A name's own comma has a
+# space after it (`Gisela, the Broken Blade`) or is written `;`.
+_NAME_LIST = re.compile(r",(?!\s)")
+# A `named` or `!named` filter piece, at the start of a value or after a
+# separator. The name runs to the next `.`, `+` or `,`, except that `, ` is the
+# name's own comma (`Card.namedBaru, Fist of Krosa`).
+_NAMED = re.compile(r"(?:^|(?<=[.+,])|(?<=\s&\s))(!?named)[^.+,]*(?:,\s[^.+,]*)*")
 
 # Keywords whose parameters can name ability SVars (`K:Chapter:3:DBA,DBB,DBC`).
 KEYWORD_REFERENCES = frozenset(
@@ -374,8 +422,10 @@ def _add_keyword(scope: _Scope, line: str, ability: Ability, key: str, text: str
     if protected is not None:
         ability.tokens.append(f"{base}={protected}")
     for position, param in enumerate(params, 1):
-        if not _dropped_keyword_param(name, position, len(params), param):
-            param_key = base if position == 1 else f"{base}.{position}"
+        param_key = base if position == 1 else f"{base}.{position}"
+        if name in KEYWORD_NAME_PARAMS and param.strip():
+            ability.tokens.append(f"{param_key}={NAME}")
+        elif not _dropped_keyword_param(name, position, len(params), param):
             _add_keyword_param(scope, line, ability, param_key, param.strip())
     return name
 
@@ -436,7 +486,8 @@ def _add_value(
        `key.sign=-` (or `+`) when signed. No number. See `_Scope.is_var`.
     4. Under a keyword key, a list of keywords: each read like a `K:` line's
        value, under `key` (see `_add_keyword`).
-    5. Anything else: a filter, one `key=piece` token per piece. See
+    5. Under a name key, card names: `key=<name>` per name. See `_names`.
+    6. Anything else: a filter, one `key=piece` token per piece. See
        `_add_tokens`.
     """
     if _INT.fullmatch(value):
@@ -460,7 +511,28 @@ def _add_value(
         for item in _keyword_items(key, value):
             _add_keyword(scope, item, ability, key, item)
         return
+    names = _names(ability, key, value)
+    if names:
+        ability.tokens.extend(f"{key}={NAME}" for _ in names)
+        return
     _add_tokens(ability, key, value)
+
+
+def _names(ability: Ability, key: str, value: str) -> list[str]:
+    """The card names `value` holds under `key`, or [] if it holds none.
+    See `NAME_KEYS`."""
+    if value.startswith(NAMES_PREFIX):
+        value = value[len(NAMES_PREFIX):]
+    elif key not in NAME_KEYS and key not in EFFECT_NAME_KEYS.get(_effect(ability), ()):
+        return []
+    if value.split(".")[0] in NAME_REFERENCES or _ZONE_REFERENCE.match(value):
+        return []
+    return [name for name in _NAME_LIST.split(value) if name.strip()]
+
+
+def _effect(ability: Ability) -> str:
+    """The ability's effect: the value of its first token, `Effect=...`."""
+    return ability.tokens[0].partition("=")[2]
 
 
 def _keyword_items(key: str, value: str) -> list[str]:
@@ -479,9 +551,11 @@ def _add_tokens(ability: Ability, key: str, value: str) -> None:
     `key=Creature`, `key=OppCtrl`, `key=tapped`.
 
     Pieces keep `!`, fused comparisons and inner spaces (`!token`, `cmcLE4`,
-    `namedFestering Newt`). Empty pieces are skipped. A value with no
-    separator is one token.
+    `Valid Planeswalker`). A `named` piece keeps its prefix and loses the
+    name: `namedFestering Newt` gives `key=named<name>`. Empty pieces are
+    skipped. A value with no separator is one token.
     """
+    value = _NAMED.sub(lambda m: m[1] + NAME, value)
     pieces = [p.strip() for p in _FILTER_SEPARATORS.split(value)]
     pieces = [p for p in pieces if p] or [value]
     ability.tokens.extend(f"{key}={piece}" for piece in pieces)

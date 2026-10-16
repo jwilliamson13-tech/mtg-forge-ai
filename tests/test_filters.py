@@ -33,9 +33,9 @@ def test_negation_and_comparisons_stay_inside_their_piece():
         "ValidTgts=!token", "ValidTgts=cmcLE4"]
 
 
-def test_a_card_name_with_spaces_survives_the_split():
-    assert tokens_of("A:SP$ ChangeZone | ChangeType$ Card.namedFestering Newt") == [
-        "Effect=ChangeZone", "ChangeType=Card", "ChangeType=namedFestering Newt"]
+def test_a_piece_keeps_its_inner_spaces():
+    assert tokens_of("A:SP$ Destroy | ValidTgts$ Permanent.Other+hasAbility Activated") == [
+        "Effect=Destroy", "ValidTgts=Permanent", "ValidTgts=Other", "ValidTgts=hasAbility Activated"]
 
 
 def test_an_ampersand_list_splits_like_a_comma_list(script):

@@ -172,11 +172,34 @@ A:SP$ TapAll | ValidCards$ Creature.OppCtrl+tapped
 
 gives `Effect=TapAll ValidCards=Creature ValidCards=OppCtrl ValidCards=tapped`.
 
-Snapcaster's `ValidTgts$ Instant.YouCtrl,Sorcery.YouCtrl` gives four tokens, `YouCtrl` twice. The split doesn't interpret anything. Negation stays on its piece (`!token`), comparisons stay fused (`cmcLE4`, `powerGE3`), and names keep their spaces (`namedFestering Newt`). Empty pieces are skipped. Space-separated values are not split.
+Snapcaster's `ValidTgts$ Instant.YouCtrl,Sorcery.YouCtrl` gives four tokens, `YouCtrl` twice. The split doesn't interpret anything. Negation stays on its piece (`!token`), comparisons stay fused (`cmcLE4`, `powerGE3`), and pieces keep their inner spaces (`hasAbility Activated`). A card name inside a piece is masked (see Names). Empty pieces are skipped. Space-separated values are not split.
 
 ` & ` (with a space each side) is Forge's other list separator, used between whole items: `AddTypes$ Legendary & Creature & Human & Villain` gives four `AddTypes=` tokens, and `SacValid$ Creature.Artifact & Creature.nonArtifact` gives `Creature`, `Artifact`, `Creature`, `nonArtifact`. The spec named only `.`, `+` and `,`; ` & ` was added after the sweep found it in 30-odd keys. An `&` without spaces (`R&D`) stays inside its piece.
 
 The same split applies to keyword parameters (`Enchant:Creature.YouCtrl`) and to the type field of a cost part (`Sac<1/Creature.Other>`). The effect token (`Effect=...`) is never split.
+
+## Names
+
+The model has to know a card by what it does, never by its name, so no card name reaches a token. Wherever a script names a card, the name becomes the value `<name>` and the key stays. `<name>` is an ordinary vocabulary token, not a reserved entry: `Name=<name>` and `ValidCards=named<name>` each get their own row like any other token.
+
+| Where | Example | Tokens |
+|---|---|---|
+| a `named` or `!named` filter piece, under any key | `ChangeType$ Card.namedFestering Newt` | `ChangeType=Card`, `ChangeType=named<name>` |
+| a key whose value is a name (`NAME_KEYS`) | `NewName$ Absorbing Man` | `NewName=<name>` |
+| the same, holding a list | `Spellbook$ Amorphous Axe,Citizen's Crowbar,...` | `Spellbook=<name>`, one per card |
+| a key that holds names under one effect (`EFFECT_NAME_KEYS`) | Meld's `Primary$`, `Secondary$`; MakeCard's `Choices$ Ionize,Electrolyze` | `Choices=<name>` twice |
+| a `Names:` list, under any key | `AnySupportedCard$ Names:Seething Song,Flamebreak` | `AnySupportedCard=<name>` twice |
+| a keyword whose parameters are names (`KEYWORD_NAME_PARAMS`) | `K:Partner with:Toothy, Imaginary Friend:Toothy` | `Effect=Partner with`, `Partner with=<name>`, `Partner with.2=<name>` |
+
+`NAME_KEYS` is `Name`, `NewName`, `SetName`, `DefinedName`, `Names`, `Spellbook`, `ChooseFromList`, `FromDraftNotes` and `RoomName` (a dungeon room). All the lists live in `cardscript/parser.py`, measured over the 2026-10-16 sweep. `Secondary$ True` outside Meld and `Choices$` outside MakeCard stay as they were.
+
+In a list, names are joined by `,` with no space after it. A name's own comma has a space (`Primary$ Gisela, the Broken Blade` is one name) or is written `;` (`Spellbook$ Adagia; Windswept Bastion,...`). A `named` piece runs to the next `.`, `+` or `,`, except that `, ` is the name's own comma: Grandeur's `Discard<1/Card.namedBaru, Fist of Krosa>` gives `Cost.Discard=Card`, `Cost.Discard=named<name>`.
+
+A value under a name key that points at a card rather than naming one is kept: `Name$ ChosenName`, `DefinedName$ Targeted`, `DefinedName$ TriggeredCard`, and the other words in `NAME_REFERENCES`, plus `Valid<Zone> ...` selections.
+
+The face's own `name` field is kept; it identifies the parsed card, and the vocabulary never reads it. Warnings keep names too (`copied face not resolved: Lightning Bolt`), and the vocabulary skips warnings.
+
+Left as they are: words that are both a card name and a game term (`Vigilance`, `Exile`, `Plains`, `Delirium`), and three Forge-internal keywords named after a card, `AddKeyword$ Shaman's Trance` and `AddHiddenKeyword$ CARDNAME count as Muscle Burst.` (and `Flame Burst`).
 
 ## Dropped
 

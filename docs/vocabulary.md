@@ -30,7 +30,7 @@ and these numbers:
 generic=0 pip.R=1 power=1 toughness=1 Cost.ExileFromGrave=2 NumDmg=2
 ```
 
-`Name` is not in either list. The model never sees a card's name.
+`Name` is not in either list. The model never sees a card's name: the face's `name` field is skipped, and a name inside an ability is already `<name>` in the parsed tokens (`card-structure.md`, Names). `Name=<name>`, `Spellbook=<name>` and `ValidCards=named<name>` are ordinary tokens with their own rows.
 
 ## What counts
 
