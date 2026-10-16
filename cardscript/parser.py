@@ -11,7 +11,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from cardscript.dropped import DROPPED_KEYS
+from cardscript.dropped import (
+    DROPPED_COST_FIELDS,
+    DROPPED_KEYS,
+    DROPPED_KEYWORD_PARAMS,
+    FLAVOR_PREFIX,
+    LAST,
+)
 from cardscript.model import OWN_LINE_STATS, REF, VAR, Ability, Card, Face, KeyedNumber, ManaCost
 
 
@@ -122,10 +128,6 @@ _FILTER_SEPARATORS = re.compile(r"[.+,]")
 COLORS = frozenset("WUBRG")
 
 _INT = re.compile(r"[+-]?\d+")
-
-# A filter starts with a capitalized word glued to `.` or `+`:
-# `Card.Self+kicked 1`, `Permanent.Other+hasAbility Activated`.
-_FILTER_START = re.compile(r"[A-Z]\w*[.+]\S")
 
 # Cost grammar: space-separated atoms. An atom is an integer (generic mana), a
 # mana symbol, a tap/untap flag, or a part like `ExileFromGrave<2/Card>`.
@@ -334,11 +336,22 @@ def _keyword(scope: _Scope, line: str, value: str) -> Ability:
         ability = Ability(kind="keyword", tokens=[f"Effect={name}"])
     for position, param in enumerate(params, 1):
         key = name if position == 1 else f"{name}.{position}"
-        _add_keyword_param(scope, line, ability, key, param.strip())
+        if not _dropped_keyword_param(name, position, len(params), param):
+            _add_keyword_param(scope, line, ability, key, param.strip())
     implied = KEYWORD_SVARS.get(name)
     if implied and scope.is_ability(implied):
         scope.inline(ability, name, implied)
     return ability
+
+
+def _dropped_keyword_param(keyword: str, position: int, count: int, param: str) -> bool:
+    """English by position (`DROPPED_KEYWORD_PARAMS`) or a flavor word. A
+    parameter with `Key$ Value` segments is never dropped."""
+    if "$" in param:
+        return False
+    positions = DROPPED_KEYWORD_PARAMS.get(keyword, ())
+    return (position in positions or (position == count and LAST in positions)
+            or param.strip().startswith(FLAVOR_PREFIX))
 
 
 def _add_keyword_param(scope: _Scope, line: str, ability: Ability, key: str, param: str) -> None:
@@ -349,8 +362,6 @@ def _add_keyword_param(scope: _Scope, line: str, ability: Ability, key: str, par
             _add_segment(scope, ability, *_segment(line, segment))
     elif _is_cost(param):
         _add_cost(scope, ability, key, param)
-    elif _is_free_text(param):
-        return
     else:
         _add_value(scope, ability, key, param)
 
@@ -483,22 +494,16 @@ def _add_cost_part(
 ) -> None:
     """`Name<amount/type/...>` under `key`: token `key=Name`, then each field as
     a value under `key.Name`. An integer past the amount is keyed by its
-    position (`key.Name.2`) so it never shares a key with the amount."""
+    position (`key.Name.2`) so it never shares a key with the amount.
+    Description fields (`DROPPED_COST_FIELDS`) are dropped."""
     sub = f"{key}.{name}"
     ability.tokens.append(f"{key}={name}")
+    dropped = DROPPED_COST_FIELDS.get(name, ())
     for position, field_ in enumerate(fields, 1):
-        if not field_ or (position > 1 and _is_free_text(field_)):
+        if not field_ or position in dropped:
             continue
         number_key = sub if position == 1 else f"{sub}.{position}"
         _add_value(scope, ability, sub, field_, number_key=number_key)
-
-
-def _is_free_text(value: str) -> bool:
-    """English description fields: `another creature`, `card`, `monocolored`.
-    A filter is never free text, even with a space in one of its pieces."""
-    if _FILTER_START.match(value):
-        return False
-    return " " in value or value[:1].islower()
 
 
 def _segment(line: str, segment: str) -> tuple[str, str]:

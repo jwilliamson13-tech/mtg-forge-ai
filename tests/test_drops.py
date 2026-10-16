@@ -126,3 +126,45 @@ def test_malformed_line_in_the_second_face_still_raises():
     with pytest.raises(ParseError) as err:
         parse_card(text)
     assert err.value.line == "A:SP$ Draw | oops"
+
+
+# --- English inside keyword and cost parameters: dropped by position ---------
+
+
+def keyword(card_text, effect):
+    return next(a for a in parse_card(card_text).faces[0].abilities if a.tokens[0] == effect)
+
+
+def test_a_cost_description_is_dropped_by_position_even_as_one_word(script):
+    # `Unattach<OriginalHost/Heartseeker>`: the description is the card's own name.
+    (equip, granter) = parse_card(script("heartseeker")).faces[0].abilities
+    (destroy,) = granter.subabilities
+    assert destroy.tokens == ["Effect=Destroy", "Cost=T", "Cost=Unattach",
+                              "Cost.Unattach=OriginalHost", "ValidTgts=Creature"]
+
+
+def test_a_cost_part_without_a_description_field_keeps_every_field():
+    (spell,) = parse_card("Name:T\nA:AB$ Draw | Cost$ PutCardToLibFromGrave<1/-1/Instant>\n").faces[0].abilities
+    assert spell.tokens == ["Effect=Draw", "Cost=PutCardToLibFromGrave", "Cost.PutCardToLibFromGrave=Instant"]
+    assert [(n.key, n.value) for n in spell.numbers] == [
+        ("Cost.PutCardToLibFromGrave", 1), ("Cost.PutCardToLibFromGrave.2", -1)]
+
+
+def test_companion_drops_its_last_parameter_wherever_it_falls(script):
+    companion = keyword(script("lutri_the_spellchaser"), "Effect=Companion")
+    assert companion.tokens == ["Effect=Companion", "Companion=Special", "Companion.2=UniqueNames"]
+
+
+def test_an_equip_flavor_word_is_dropped(script):
+    equip = keyword(script("astrologians_planisphere"), "Effect=Equip")
+    assert (equip.tokens, [(n.key, n.value) for n in equip.numbers]) == (["Effect=Equip"], [("Equip", 2)])
+
+
+def test_a_keyword_parameter_not_on_the_list_is_kept_even_with_a_space(script):
+    partner = keyword(script("chief_jim_hopper"), "Effect=Partner")
+    assert partner.tokens == ["Effect=Partner", "Partner=Friends forever"]
+
+
+def test_a_segment_parameter_at_a_dropped_position_is_still_parsed():
+    equip = keyword("Name:T\nK:Equip:3:::ReduceCost$ Y:This ability costs {1} less\n", "Effect=Equip")
+    assert equip.tokens == ["Effect=Equip", "ReduceCost=<var>"]

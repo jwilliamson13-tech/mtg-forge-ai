@@ -118,7 +118,7 @@ Any segment whose key ends in `Cost` (`Cost$`, `UnlessCost$`, `AlternateCost$`, 
 | `Name<amount/type/description>` | token `Cost=Name`; amount as a number under `Cost.Name`; type split like a filter under `Cost.Name`; the description is dropped | `Sac<1/Creature.Other/another creature>` gives `Cost=Sac`, `Cost.Sac=Creature`, `Cost.Sac=Other`, number `Cost.Sac=1` |
 | anything else (`Y`, an SVar name) | a plain value, by the same rules as any segment value | `Y` gives `Cost=<var>` |
 
-A field inside `<...>` counts as description when it has a space or starts lowercase, unless it starts like a filter (see Keywords, rule 4). Integer fields past the first get a positional key: `PutCardToLibFromGrave<1/-1/Instant>` gives `Cost.PutCardToLibFromGrave=1` and `Cost.PutCardToLibFromGrave.2=-1`.
+Which fields are description is listed per cost part, by position, in `DROPPED_COST_FIELDS` (see Dropped). A part not listed keeps every field. Integer fields past the first get a positional key: `PutCardToLibFromGrave<1/-1/Instant>` gives `Cost.PutCardToLibFromGrave=1` and `Cost.PutCardToLibFromGrave.2=-1`.
 
 ## Keywords
 
@@ -139,13 +139,13 @@ Each parameter goes through the first rule that fits:
 
 1. Empty: skipped. It still uses up its position.
 2. Contains `$`: parsed as `|`-separated `Key$ Value` segments, like an ability line.
-3. Several cost atoms, or one `Name<...>` part: parsed as a cost under the parameter's key.
-4. Has a space or starts lowercase: English description, dropped. A value that starts like a filter, a capitalized word glued to `.` or `+` (`Card.Self+kicked 1`), is kept and goes to rule 5.
+3. English by position, or a flavor word: dropped. `DROPPED_KEYWORD_PARAMS` lists the positions per keyword (`Enchant` drops its second parameter, the filter's description); see Dropped.
+4. Several cost atoms, or one `Name<...>` part: parsed as a cost under the parameter's key.
 5. Anything else: a plain value. An integer is a number, anything else is split like a filter (see Filters).
 
 `Protection from X` is read as `Protection` with parameter `X`, and `X` is always kept.
 
-Known gap, sized by the 2026-10-16 sweep: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence, 159 lines on 155 cards. A textual parameter with a space, such as a partner's card name, gets dropped as description.
+Known gap, sized by the 2026-10-16 sweep: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence, 159 lines on 155 cards.
 
 ## Filters
 
@@ -163,7 +163,9 @@ The same split applies to keyword parameters (`Enchant:Creature.YouCtrl`) and to
 
 ## Dropped
 
-`cardscript/dropped.py` holds one allow-list, `DROPPED_KEYS`. A name on it is dropped wherever it appears:
+`cardscript/dropped.py` holds every allow-list of things dropped on purpose. Nothing is dropped by guessing from its wording.
+
+`DROPPED_KEYS` drops by name. A name on it is dropped wherever it appears:
 
 | Where | Example | Result |
 |---|---|---|
@@ -172,6 +174,16 @@ The same split applies to keyword parameters (`Enchant:Creature.YouCtrl`) and to
 | SVar name | `SVar:NeedsToPlayVar:X LE12`, `SVar:AIPreference:SacCost$Creature` | never resolves; a value naming it stays a plain token |
 
 It covers English (descriptions, prompts, titles, messages, Oracle and reminder text), Forge's AI hints (the `AI*` keys, `IsCurse`, the hint SVars) and deckbuilding lines. To drop another key, add one line to that file.
+
+Forge also writes English inside keyword and cost parameters. Those are dropped by position, from two lists measured over the cardsfolder:
+
+| List | Example | Result |
+|---|---|---|
+| `DROPPED_KEYWORD_PARAMS`: keyword name to positions (1 is the first parameter; `LAST` is the final one wherever it falls) | `K:Enchant:Creature.YouCtrl:creature you control` | `Enchant` drops position 2; `Enchant=Creature`, `Enchant=YouCtrl` stay |
+| `FLAVOR_PREFIX`: a keyword parameter starting `Flavor ` | `K:Equip:2:Flavor Diana` | dropped at any position |
+| `DROPPED_COST_FIELDS`: cost part to positions (1 is the amount) | `Sac<1/Creature.Other/another creature>` | `Sac` drops position 3 |
+
+A parameter holding `Key$ Value` segments is parsed even at a listed position. Anything not listed is kept, whatever it looks like: `K:Partner:Friends forever` gives `Partner=Friends forever`, and Anavolver's `Card.Self+kicked 1` stays a filter. When a new card brings a new description slot, its text shows up as a rare token until a line is added to the list.
 
 Lines starting with `#` are comments and are skipped.
 
