@@ -143,7 +143,22 @@ Each parameter goes through the first rule that fits:
 4. Several cost atoms, or one `Name<...>` part: parsed as a cost under the parameter's key.
 5. Anything else: a plain value. An integer is a number, anything else is split like a filter (see Filters).
 
-`Protection from X` is read as `Protection` with parameter `X`, and `X` is always kept.
+`Protection from X` is read as `Protection` with parameter `X`, and `X` is always kept. Forge also writes protection as a filter, `K:Protection:Card.MultiColor:multicolored`, which gives `Protection=Card`, `Protection=MultiColor`. The two forms aren't unified: `Protection=red` and `Protection=Red` are different tokens, and the learned embeddings are left to place them close together.
+
+### Granted keywords
+
+A segment that grants, removes or tests keywords holds the same text as a `K:` line. `KEYWORD_KEYS` in `cardscript/parser.py` lists those keys: `AddKeyword`, `KW`, `Keywords`, `AddKeywords`, `AddKWs`, `PumpKeywords`, `AddHiddenKeyword`, `HiddenKeywords`, `RemoveKeyword`, `RemoveKeywords`, `CantHaveKeyword`, `ValidKeyword`, `AddsKeywords`, `SharedKeywords` and `KWChoice`. Each keyword in the value becomes the token `Key=Name`, and its parameters go through the same rules as on a `K:` line, keyed `Key.Name` (then `Key.Name.2`, ...):
+
+| Segment | tokens | numbers |
+|---|---|---|
+| `AddKeyword$ Ward:1` | `AddKeyword=Ward` | `AddKeyword.Ward=1` |
+| `AddKeyword$ Protection from red` | `AddKeyword=Protection`, `AddKeyword.Protection=red` | |
+| `KW$ Landwalk:Forest & Haste` | `KW=Landwalk`, `KW.Landwalk=Forest`, `KW=Haste` | |
+| `KWChoice$ Flying,Rampage:3` | `KWChoice=Flying`, `KWChoice=Rampage` | `KWChoice.Rampage=3` |
+| `Keywords$ Enchant:Creature.IsRemembered:<text>` | `Keywords=Enchant`, `Keywords.Enchant=Creature`, `Keywords.Enchant=IsRemembered` | |
+| `AddHiddenKeyword$ CARDNAME can't block.` | `AddHiddenKeyword=CARDNAME can't block.` | |
+
+The segment key stays in front so a granted Ward 1 and the card's own `K:Ward:1` (number `Ward=1`) are told apart. Keywords in one value are joined by ` & `. `KWChoice` joins them with `,`, and so does a list of bare names (`Keywords$ Vigilance,Reach`); inside a keyword with parameters a comma belongs to the parameter (`Protection:Spell.Instant,Spell.Sorcery`). In a granted cost, `CardManaCost` (the card's own mana cost) is a cost atom like `T`: `KW$ Escape:CardManaCost ExileFromGrave<3/Card.Other/other>` parses as a cost. Gift and Tribute inline their SVar only on a `K:` line.
 
 Known gap, sized by the 2026-10-16 sweep: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence, 159 lines on 155 cards.
 

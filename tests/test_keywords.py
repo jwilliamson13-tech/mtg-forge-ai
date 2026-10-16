@@ -123,3 +123,76 @@ def test_a_filter_parameter_with_a_space_is_kept_not_dropped_as_text(script):
 def test_an_english_parameter_is_still_dropped(script):
     enchant = parse_card("Name:A\nK:Enchant:Creature.YouCtrl:creature you control\n").faces[0].abilities[0]
     assert enchant.tokens == ["Effect=Enchant", "Enchant=Creature", "Enchant=YouCtrl"]
+
+
+# --- keywords granted by a segment (`AddKeyword$`, `KW$`, ...) ---------------
+
+
+def granted(ability, key):
+    """`key=` tokens and `key.` numbers of one ability."""
+    return ([t for t in ability.tokens if t.split("=")[0].split(".")[0] == key],
+            [(n.key, n.value) for n in ability.numbers if n.key.split(".")[0] == key])
+
+
+def test_a_granted_keyword_keeps_its_number_under_a_keyed_name(script):
+    static = parse_card(script("leather_armor")).faces[0].abilities[0]
+    assert granted(static, "AddKeyword") == (["AddKeyword=Ward"], [("AddKeyword.Ward", 1)])
+
+
+def test_a_granted_protection_from_reads_like_the_k_line(script):
+    static = parse_card(script("absolute_law")).faces[0].abilities[0]
+    assert granted(static, "AddKeyword") == (["AddKeyword=Protection", "AddKeyword.Protection=red"], [])
+
+
+def test_a_comma_list_of_granted_keywords_parses_each(script):
+    (trigger,) = parse_card(script("gabriel_angelfire")).faces[0].abilities
+    (pump,) = trigger.subabilities
+    assert granted(pump, "KWChoice") == (
+        ["KWChoice=Flying", "KWChoice=First Strike", "KWChoice=Trample", "KWChoice=Rampage"],
+        [("KWChoice.Rampage", 3)])
+
+
+def test_an_ampersand_list_of_granted_keywords_parses_each():
+    (pump,) = parse_card("Name:T\nA:SP$ Pump | KW$ Landwalk:Forest & Haste\n").faces[0].abilities
+    assert granted(pump, "KW") == (["KW=Landwalk", "KW.Landwalk=Forest", "KW=Haste"], [])
+
+
+def test_a_granted_keyword_drops_its_english_like_the_k_line():
+    line = "A:SP$ Animate | Keywords$ Enchant:Creature.IsRemembered:creature put onto the battlefield"
+    (animate,) = parse_card(f"Name:T\n{line}\n").faces[0].abilities
+    assert granted(animate, "Keywords") == (
+        ["Keywords=Enchant", "Keywords.Enchant=Creature", "Keywords.Enchant=IsRemembered"], [])
+
+
+def test_a_granted_sentence_keyword_stays_one_token(script):
+    (effect,) = parse_card(script("magmatic_chasm")).faces[0].abilities
+    (static,) = effect.subabilities
+    assert granted(static, "AddHiddenKeyword") == (["AddHiddenKeyword=CARDNAME can't block."], [])
+
+
+def test_a_granted_keyword_with_a_segment_parameter_parses_it():
+    (pump,) = parse_card("Name:T\nA:SP$ Pump | KW$ Encore:X:XAlternative$ Number$ConvertedManaCost\n").faces[0].abilities
+    assert pump.tokens == ["Effect=Pump", "KW=Encore", "KW.Encore=<var>", "XAlternative=<var>"]
+
+
+def test_a_comma_inside_a_granted_keyword_parameter_does_not_split_it():
+    line = ("A:AB$ Pump | ValidTgts$ Permanent.YouCtrl | "
+            "KW$ Protection:Spell.Instant,Spell.Sorcery:instant spells and from sorcery spells")
+    (pump,) = parse_card(f"Name:T\n{line}\n").faces[0].abilities
+    assert granted(pump, "KW") == (
+        ["KW=Protection", "KW.Protection=Spell", "KW.Protection=Instant",
+         "KW.Protection=Spell", "KW.Protection=Sorcery"], [])
+
+
+def test_a_plain_comma_list_of_granted_keywords_still_splits():
+    (animate,) = parse_card("Name:T\nA:SP$ Animate | Keywords$ Vigilance,Reach\n").faces[0].abilities
+    assert granted(animate, "Keywords") == (["Keywords=Vigilance", "Keywords=Reach"], [])
+
+
+def test_a_granted_cost_starting_with_the_cards_own_mana_cost_parses_as_a_cost():
+    line = "S:Mode$ Continuous | Affected$ Card.YouOwn | AddKeyword$ Escape:CardManaCost ExileFromGrave<3/Card.Other/other>"
+    (static,) = parse_card(f"Name:T\n{line}\n").faces[0].abilities
+    assert granted(static, "AddKeyword") == (
+        ["AddKeyword=Escape", "AddKeyword.Escape=CardManaCost", "AddKeyword.Escape=ExileFromGrave",
+         "AddKeyword.Escape.ExileFromGrave=Card", "AddKeyword.Escape.ExileFromGrave=Other"],
+        [("AddKeyword.Escape.ExileFromGrave", 3)])

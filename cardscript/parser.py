@@ -84,6 +84,22 @@ STATIC_REFERENCE_KEYS = frozenset(
      "StaticEffect", "Statics"}
 )
 REFERENCE_KEYS = _RUN_KEYS | _GRANT_KEYS | STATIC_REFERENCE_KEYS
+# Keys whose value grants, removes or tests keywords, each item written like a
+# `K:` line's value (`AddKeyword$ Flying & Ward:1`). Items are joined by ` & `.
+# `KWChoice$ Flying,Rampage:3` joins them by `,`, and so do a few plain lists
+# (`Keywords$ Vigilance,Reach`); elsewhere a comma belongs to a parameter
+# (`Protection:Spell.Instant,Spell.Sorcery`).
+KEYWORD_KEYS = frozenset(
+    {
+        "KW", "AddKeyword", "AddKeywords", "Keywords", "AddKWs", "PumpKeywords",
+        "AddHiddenKeyword", "HiddenKeywords", "RemoveKeyword", "RemoveKeywords",
+        "CantHaveKeyword", "ValidKeyword", "AddsKeywords", "SharedKeywords", "KWChoice",
+    }
+)
+KEYWORD_CHOICE = "KWChoice"
+_KEYWORD_LIST = re.compile(r"\s&\s")
+_KEYWORD_COMMA = re.compile(r",(?!\s)")  # `, ` with a space is English
+
 # Keywords whose parameters can name ability SVars (`K:Chapter:3:DBA,DBB,DBC`).
 KEYWORD_REFERENCES = frozenset(
     {"Chapter", "ETBReplacement", "MayEffectFromOpeningHand", "MayEffectFromOpeningDeck",
@@ -115,6 +131,9 @@ SPECIALIZE = "SPECIALIZE:"
 
 COMMENT = "#"
 
+# An ability's first token is `Effect=<API, mode, event or keyword name>`.
+EFFECT = "Effect"
+
 # `Variant:<id>:<Key>:...` lines (alternate printings) and `CopyFaceFrom:<face>`.
 VARIANT = "Variant"
 COPY_FACE = "CopyFaceFrom"
@@ -139,7 +158,9 @@ _COST_PART = re.compile(r"(\w+)<([^>]*)>")
 # A mana symbol has a letter: `R`, `2W`, `RWP`, `X`. A bare integer is generic
 # mana, a number.
 _MANA_SYMBOL = re.compile(r"(?=.*[WUBRGCSPX])[WUBRGCSPX0-9/]+|XMin\d+")
-COST_FLAGS = frozenset({"T", "Q"})
+# Tap and untap, and `CardManaCost` (the card's own mana cost, in a keyword
+# granted to other cards: `KW$ Escape:CardManaCost ExileFromGrave<3/...>`).
+COST_FLAGS = frozenset({"T", "Q", "CardManaCost"})
 
 
 def parse_card(text: str) -> Card:
@@ -312,7 +333,7 @@ def _ability(scope: _Scope, line: str, value: str, kinds: dict[str, str]) -> Abi
     api, effect = segments[0]
     if api not in kinds:
         raise ParseError(line, f"unknown ability API {api!r}")
-    ability = Ability(kind=kinds[api], tokens=[f"Effect={effect}"])
+    ability = Ability(kind=kinds[api], tokens=[f"{EFFECT}={effect}"])
     for key, val in segments[1:]:
         _add_segment(scope, ability, key, val)
     return ability
@@ -320,30 +341,43 @@ def _ability(scope: _Scope, line: str, value: str, kinds: dict[str, str]) -> Abi
 
 
 def _keyword(scope: _Scope, line: str, value: str) -> Ability:
-    """`K:Name[:param[:param...]]` -> a keyword ability.
-
-    The first parameter is keyed by the keyword name, later ones by
-    `Name.<position>`, so Suspend's 5 time counters and its {G} never share a
-    key. `Protection from red` is read as `Protection:red`.
-    """
-    name, *params = value.split(":")
-    name = name.strip()
-    if not name:
-        raise ParseError(line, "empty keyword")
-    if name.startswith(PROTECTION_FROM):
-        protected = name[len(PROTECTION_FROM):]
-        name = "Protection"
-        ability = Ability(kind="keyword", tokens=[f"Effect={name}", f"{name}={protected}"])
-    else:
-        ability = Ability(kind="keyword", tokens=[f"Effect={name}"])
-    for position, param in enumerate(params, 1):
-        key = name if position == 1 else f"{name}.{position}"
-        if not _dropped_keyword_param(name, position, len(params), param):
-            _add_keyword_param(scope, line, ability, key, param.strip())
+    """`K:Name[:param[:param...]]` -> a keyword ability, `Effect=Name` plus
+    its parameters (see `_add_keyword`). Gift and Tribute also inline the SVar
+    Forge fetches for them by fixed name."""
+    ability = Ability(kind="keyword")
+    name = _add_keyword(scope, line, ability, EFFECT, value)
     implied = KEYWORD_SVARS.get(name)
     if implied and scope.is_ability(implied):
         scope.inline(ability, name, implied)
     return ability
+
+
+def _add_keyword(scope: _Scope, line: str, ability: Ability, key: str, text: str) -> str:
+    """One keyword, `Name[:param...]`: token `key=Name`, then its parameters.
+    Returns the name.
+
+    On a `K:` line `key` is `Effect` and the first parameter is keyed by the
+    keyword name, later ones by `Name.<position>`, so Suspend's 5 time counters
+    and its {G} never share a key. A keyword granted by a segment
+    (`AddKeyword$ Ward:1`) prefixes those keys with the segment key:
+    `AddKeyword.Ward`. `Protection from red` is read as `Protection:red`.
+    """
+    name, *params = text.split(":")
+    name = name.strip()
+    if not name:
+        raise ParseError(line, "empty keyword")
+    protected = None
+    if name.startswith(PROTECTION_FROM):
+        name, protected = "Protection", name[len(PROTECTION_FROM):]
+    ability.tokens.append(f"{key}={name}")
+    base = name if key == EFFECT else f"{key}.{name}"
+    if protected is not None:
+        ability.tokens.append(f"{base}={protected}")
+    for position, param in enumerate(params, 1):
+        if not _dropped_keyword_param(name, position, len(params), param):
+            param_key = base if position == 1 else f"{base}.{position}"
+            _add_keyword_param(scope, line, ability, param_key, param.strip())
+    return name
 
 
 def _dropped_keyword_param(keyword: str, position: int, count: int, param: str) -> bool:
@@ -400,7 +434,9 @@ def _add_value(
        past `INLINE_DEPTH`.
     3. A runtime quantity, with an optional leading sign: `key=<var>`, then
        `key.sign=-` (or `+`) when signed. No number. See `_Scope.is_var`.
-    4. Anything else: a filter, one `key=piece` token per piece. See
+    4. Under a keyword key, a list of keywords: each read like a `K:` line's
+       value, under `key` (see `_add_keyword`).
+    5. Anything else: a filter, one `key=piece` token per piece. See
        `_add_tokens`.
     """
     if _INT.fullmatch(value):
@@ -420,7 +456,22 @@ def _add_value(
         if sign:
             ability.tokens.append(f"{key}.sign={sign}")
         return
+    if key in KEYWORD_KEYS:
+        for item in _keyword_items(key, value):
+            _add_keyword(scope, item, ability, key, item)
+        return
     _add_tokens(ability, key, value)
+
+
+def _keyword_items(key: str, value: str) -> list[str]:
+    """The keywords in a keyword key's value, in order. See `KEYWORD_KEYS`."""
+    items = []
+    for item in _KEYWORD_LIST.split(value):
+        if key == KEYWORD_CHOICE or ":" not in item:
+            items += _KEYWORD_COMMA.split(item)
+        else:
+            items.append(item)
+    return [item.strip() for item in items if item.strip()]
 
 
 def _add_tokens(ability: Ability, key: str, value: str) -> None:
