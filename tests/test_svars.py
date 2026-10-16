@@ -216,7 +216,7 @@ def test_a_value_that_merely_matches_an_svar_name_is_not_inlined():
 def test_choices_that_are_not_all_svars_stay_a_value():
     text = "Name:T\nA:SP$ ChooseCard | Choices$ DBA,Creature\nSVar:DBA:DB$ Draw\n"
     (spell,) = abilities(text)
-    assert spell.tokens == ["Effect=ChooseCard", "Choices=DBA,Creature"]
+    assert spell.tokens == ["Effect=ChooseCard", "Choices=DBA", "Choices=Creature"]
     assert spell.subabilities == []
 
 

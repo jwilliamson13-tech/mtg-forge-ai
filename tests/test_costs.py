@@ -74,7 +74,7 @@ def test_generic_mana_in_a_cost_is_a_number_under_the_cost_key():
 def test_cost_part_description_text_is_dropped():
     line = "A:AB$ Draw | Cost$ Sac<1/Creature.Other/another creature> | NumCards$ 1"
     (ability,) = parse_card(f"Name:T\n{line}\n").faces[0].abilities
-    assert ability.tokens == ["Effect=Draw", "Cost=Sac", "Cost.Sac=Creature.Other"]
+    assert ability.tokens == ["Effect=Draw", "Cost=Sac", "Cost.Sac=Creature", "Cost.Sac=Other"]
     assert numbers(ability) == [("Cost.Sac", 1), ("NumCards", 1)]
 
 
