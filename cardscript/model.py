@@ -57,6 +57,8 @@ class Face:
     colors: list[str] = field(default_factory=list)
     power: int | str | None = None
     toughness: int | str | None = None
+    loyalty: int | str | None = None
+    defense: int | str | None = None
     abilities: list[Ability] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -69,6 +71,8 @@ class Face:
             colors=list(d["colors"]),
             power=d["power"],
             toughness=d["toughness"],
+            loyalty=d["loyalty"],
+            defense=d["defense"],
             abilities=[Ability.from_dict(a) for a in d["abilities"]],
             warnings=list(d["warnings"]),
         )

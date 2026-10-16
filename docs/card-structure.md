@@ -26,6 +26,8 @@ The parsed card:
       "colors": [],
       "power": null,
       "toughness": null,
+      "loyalty": null,
+      "defense": null,
       "abilities": [
         {
           "kind": "spell",
@@ -74,6 +76,8 @@ The card has two 2s. They sit under two keys, so the model never sees one merged
 | `types` | list of string | The `Types:` line split on spaces, in order: `Creature Bear` gives `["Creature", "Bear"]`. |
 | `colors` | list of string | The `Colors:` line split on commas, in file order: `white,blue` gives `["white", "blue"]`. Mostly token scripts and back faces set it. Empty when the script has no `Colors:` line. |
 | `power`, `toughness` | int, `"<var>"` or null | The `PT:` line. A runtime value such as `*` is `"<var>"`. Null when the card has no `PT:` line. |
+| `loyalty` | int, `"<var>"` or null | The `Loyalty:` line, read like one half of `PT:`. `Loyalty:X` is `"<var>"`. Null when absent. |
+| `defense` | int, `"<var>"` or null | A battle's `Defense:` line, read the same way. Null when absent. |
 | `abilities` | list of Ability | One per ability line, in file order. |
 | `warnings` | list of string | Lines the parser didn't recognize, such as `"unknown key: Frobnicate"`. A warning never stops the parse. See Errors and warnings. |
 

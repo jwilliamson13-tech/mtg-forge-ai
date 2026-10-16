@@ -182,6 +182,10 @@ def _face(lines: list[str]) -> Face:
             face.colors = [c.strip() for c in value.split(",") if c.strip()]
         elif key == "PT":
             face.power, face.toughness = _power_toughness(value)
+        elif key == "Loyalty":
+            face.loyalty = _printed_stat(value)
+        elif key == "Defense":
+            face.defense = _printed_stat(value)
         elif key in LINE_KINDS:
             face.abilities.append(_ability(scope, line, value, LINE_KINDS[key]))
         elif key == "K":
@@ -215,7 +219,7 @@ def _power_toughness(value: str) -> tuple[int | str, int | str]:
 
 
 def _printed_stat(value: str) -> int | str:
-    """An integer, or `<var>` for anything computed at runtime (`*`, `1+*`)."""
+    """An integer, or `<var>` for anything computed at runtime (`*`, `1+*`, `X`)."""
     value = value.strip()
     return int(value) if _INT.fullmatch(value) else VAR
 

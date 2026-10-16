@@ -46,6 +46,7 @@ Ability tokens are the `tokens` lists from the parsed structure, unchanged, for 
 | `mana_cost.pips` | | `pip.U` with the pip count: `1 U U U` gives `pip.U=3` |
 | `mana_cost.special` | `pip=BP`, one per symbol | |
 | `power`, `toughness` | `power=<var>` for a `*` value | `power`, `toughness` for an integer |
+| `loyalty`, `defense` | `loyalty=<var>` for `X` | `loyalty`, `defense` for an integer |
 | ability `kind` | `kind=trigger`, one per ability and sub-ability | |
 | ability `tokens` | as parsed | |
 | ability `numbers` | | as parsed |

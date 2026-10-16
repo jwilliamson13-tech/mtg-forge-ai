@@ -21,6 +21,10 @@ def _face(face: Face) -> list[str]:
         lines.append(f"  colors: {' '.join(face.colors)}")
     if face.power is not None or face.toughness is not None:
         lines.append(f"  pt: {face.power}/{face.toughness}")
+    if face.loyalty is not None:
+        lines.append(f"  loyalty: {face.loyalty}")
+    if face.defense is not None:
+        lines.append(f"  defense: {face.defense}")
     for n, ability in enumerate(face.abilities, 1):
         lines.extend(_ability(ability, f"ability {n}", "  "))
     for warning in face.warnings:

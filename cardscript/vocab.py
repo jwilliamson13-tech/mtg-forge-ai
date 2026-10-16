@@ -36,12 +36,17 @@ def _walk(abilities: list[Ability]):
         yield from _walk(ability.subabilities)
 
 
+def _printed_stats(face: Face) -> list[tuple[str, int | str | None]]:
+    return [("power", face.power), ("toughness", face.toughness),
+            ("loyalty", face.loyalty), ("defense", face.defense)]
+
+
 def face_tokens(face: Face) -> list[str]:
     """Every categorical token on a face: identity fields, then each ability and sub-ability."""
     tokens = [f"type={t}" for t in face.types]
     tokens += [f"color={c}" for c in face.colors]
     tokens += [f"pip={p}" for p in face.mana_cost.special]
-    for field, value in (("power", face.power), ("toughness", face.toughness)):
+    for field, value in _printed_stats(face):
         if isinstance(value, str):
             tokens.append(f"{field}={value}")
     for ability in _walk(face.abilities):
@@ -50,10 +55,10 @@ def face_tokens(face: Face) -> list[str]:
 
 
 def face_numbers(face: Face) -> list[KeyedNumber]:
-    """Every keyed number on a face: mana cost, printed P/T, then each ability and sub-ability."""
+    """Every keyed number on a face: mana cost, printed P/T, loyalty and defense, then each ability and sub-ability."""
     numbers = [KeyedNumber("generic", face.mana_cost.generic)]
     numbers += [KeyedNumber(f"pip.{p}", n) for p, n in face.mana_cost.pips.items()]
-    for field, value in (("power", face.power), ("toughness", face.toughness)):
+    for field, value in _printed_stats(face):
         if isinstance(value, int):
             numbers.append(KeyedNumber(field, value))
     for ability in _walk(face.abilities):
