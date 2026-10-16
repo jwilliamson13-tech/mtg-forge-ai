@@ -259,3 +259,30 @@ def test_st_svar_body_is_an_ability_reference(script):
     (effect,) = trigger.subabilities
     assert "Abilities=<ref>" in effect.tokens
     assert "Abilities=PayUp" not in effect.tokens
+
+
+# --- ResultSubAbilities$: die results ------------------------------------------
+
+
+def test_each_die_result_is_a_sub_ability_carrying_its_range(script):
+    (roll,) = abilities(script("berserkers_frenzy"))
+    assert not any(t.startswith("ResultSubAbilities=") for t in roll.tokens)
+    must_block, choose_block = roll.subabilities
+    assert must_block.tokens[0] == "Effect=ChooseCard"
+    assert numbers(must_block)[:2] == [("ResultSubAbilities.min", 1), ("ResultSubAbilities.max", 14)]
+    assert choose_block.tokens[0] == "Effect=Effect"
+    assert numbers(choose_block)[:2] == [("ResultSubAbilities.min", 15), ("ResultSubAbilities.max", 20)]
+
+
+def test_else_die_result_is_a_token_on_its_sub_ability(script):
+    (roll,) = abilities(script("diviners_portent"))
+    draw, scry = roll.subabilities
+    assert numbers(draw)[:2] == [("ResultSubAbilities.min", 1), ("ResultSubAbilities.max", 14)]
+    assert scry.tokens[:2] == ["Effect=Scry", "ResultSubAbilities=Else"]
+
+
+def test_die_results_past_the_inline_depth_are_refs(script):
+    trigger = abilities(script("arden_angel"))[1]
+    (roll,) = trigger.subabilities
+    assert roll.tokens == ["Effect=RollDice", "ResultSubAbilities=<ref>"]
+    assert numbers(roll) == [("Sides", 4)]

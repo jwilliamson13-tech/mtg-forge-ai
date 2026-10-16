@@ -82,6 +82,10 @@ KEYWORD_REFERENCES = frozenset(
 )
 _REFERENCE_LIST = re.compile(r",|\s&\s")
 
+# A die roll's outcomes: `ResultSubAbilities$ 1-14:DBA,15-20:DBB,Else:DBC`.
+RESULT_KEY = "ResultSubAbilities"
+_RESULT_RANGE = re.compile(r"(\d+)(?:-(\d+))?")
+
 # How many SVar references deep a body is inlined. Past this, `Key=<ref>`.
 INLINE_DEPTH = 1
 
@@ -334,6 +338,8 @@ def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
     if _INT.fullmatch(value):
         ability.numbers.append(KeyedNumber(key, int(value)))
         return
+    if key == RESULT_KEY and _add_results(scope, ability, key, value):
+        return
     if _is_reference_key(key):
         names = _REFERENCE_LIST.split(value)
         if all(_ability_svar(scope, name) for name in names):
@@ -381,15 +387,43 @@ def _svar_api(body: str) -> str:
     return key.strip() if sep and value[:1].isspace() else ""
 
 
-def _inline(scope: _Scope, ability: Ability, key: str, name: str) -> None:
+def _inline(scope: _Scope, ability: Ability, key: str, name: str) -> Ability | None:
+    """Append SVar `name`'s body as a sub-ability and return it, or append
+    `key=<ref>` and return None once past `INLINE_DEPTH`."""
     if scope.depth >= INLINE_DEPTH:
         ability.tokens.append(f"{key}={REF}")
-        return
+        return None
     line, body = scope.svars[name]
     kinds = dict(SVAR_KINDS)
     if key in STATIC_REFERENCE_KEYS:
         kinds["Mode"] = "static"
-    ability.subabilities.append(_ability(scope.deeper(), line, body, kinds))
+    sub = _ability(scope.deeper(), line, body, kinds)
+    ability.subabilities.append(sub)
+    return sub
+
+
+def _add_results(scope: _Scope, ability: Ability, key: str, value: str) -> bool:
+    """`ResultSubAbilities$ 1-14:DBA,15-20:DBB` (a die roll's outcomes).
+
+    Each `result:Name` inlines like any reference. A range `lo-hi` (or a single
+    `n`) goes on that sub-ability as numbers `key.min` and `key.max`; a word
+    such as `Else` as the token `key=Else`. False, and nothing added, unless
+    every item names an ability SVar.
+    """
+    items = [item.partition(":") for item in value.split(",")]
+    if not all(sep and _ability_svar(scope, name.strip()) for _, sep, name in items):
+        return False
+    for result, _, name in items:
+        sub = _inline(scope, ability, key, name.strip())
+        if sub is None:
+            continue
+        span = _RESULT_RANGE.fullmatch(result.strip())
+        if span:
+            low, high = int(span[1]), int(span[2] or span[1])
+            sub.numbers[:0] = [KeyedNumber(f"{key}.min", low), KeyedNumber(f"{key}.max", high)]
+        else:
+            sub.tokens.insert(1, f"{key}={result.strip()}")
+    return True
 
 
 def _is_var(scope: _Scope, value: str) -> bool:

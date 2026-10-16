@@ -226,6 +226,8 @@ Keyword parameters resolve for the keywords in `KEYWORD_REFERENCES`. `K:Chapter:
 
 A value can list several SVars, joined by `,` or ` & `. Each becomes its own sub-ability, but only when every item names an ability SVar. `Choices$ DBA,Creature` stays a plain value, split into `Choices=DBA` and `Choices=Creature`. Cryptic Command's `Choices$ DBCounter,DBReturn,DBTapAll,DBDraw | CharmNum$ 2` gives four sub-abilities and number `CharmNum=2`.
 
+A die roll's `ResultSubAbilities$` lists `result:Name` items. Each name inlines like any reference, and its result goes on that sub-ability: a range `1-14` as numbers `ResultSubAbilities.min=1` and `ResultSubAbilities.max=14` (a single `6` gives 6 and 6), a word such as `Else` as the token `ResultSubAbilities=Else`. Berserker's Frenzy's `1-14:MustBlock,15-20:ChooseBlock` gives two sub-abilities. Past the depth limit each item is `ResultSubAbilities=<ref>` and the ranges are gone.
+
 The sub-ability's kind comes from its body's first key:
 
 | Body starts with | kind |
