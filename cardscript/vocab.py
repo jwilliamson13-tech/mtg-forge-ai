@@ -18,7 +18,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from cardscript.model import REF, VAR, Ability, Card, Face, KeyedNumber
+from cardscript.model import PRINTED_STATS, REF, VAR, Ability, Card, Face, KeyedNumber
 
 UNK = "<unk>"
 RESERVED = (UNK, VAR, REF)
@@ -37,8 +37,7 @@ def _walk(abilities: list[Ability]):
 
 
 def _printed_stats(face: Face) -> list[tuple[str, int | str | None]]:
-    return [("power", face.power), ("toughness", face.toughness),
-            ("loyalty", face.loyalty), ("defense", face.defense)]
+    return [(stat, getattr(face, stat)) for stat in PRINTED_STATS]
 
 
 def face_tokens(face: Face) -> list[str]:

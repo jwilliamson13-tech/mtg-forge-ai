@@ -14,6 +14,13 @@ from dataclasses import asdict, dataclass, field
 VAR = "<var>"
 REF = "<ref>"
 
+# Printed stats: `Face` fields, each an int, `<var>` or None. `PT:` fills
+# power and toughness; `Loyalty:` and `Defense:` each fill the field of the
+# same name.
+PT = ("power", "toughness")
+OWN_LINE_STATS = ("loyalty", "defense")
+PRINTED_STATS = (*PT, *OWN_LINE_STATS)
+
 
 @dataclass
 class KeyedNumber:
@@ -69,10 +76,7 @@ class Face:
             mana_cost=ManaCost.from_dict(d["mana_cost"]),
             types=list(d["types"]),
             colors=list(d["colors"]),
-            power=d["power"],
-            toughness=d["toughness"],
-            loyalty=d["loyalty"],
-            defense=d["defense"],
+            **{stat: d[stat] for stat in PRINTED_STATS},
             abilities=[Ability.from_dict(a) for a in d["abilities"]],
             warnings=list(d["warnings"]),
         )

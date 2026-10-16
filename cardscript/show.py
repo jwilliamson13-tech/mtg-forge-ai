@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cardscript.model import Ability, Card, Face, ManaCost
+from cardscript.model import OWN_LINE_STATS, PT, Ability, Card, Face, ManaCost
 
 
 def format_card(card: Card) -> str:
@@ -19,12 +19,11 @@ def _face(face: Face) -> list[str]:
     lines.append(f"  types: {' '.join(face.types)}")
     if face.colors:
         lines.append(f"  colors: {' '.join(face.colors)}")
-    if face.power is not None or face.toughness is not None:
+    if any(getattr(face, stat) is not None for stat in PT):
         lines.append(f"  pt: {face.power}/{face.toughness}")
-    if face.loyalty is not None:
-        lines.append(f"  loyalty: {face.loyalty}")
-    if face.defense is not None:
-        lines.append(f"  defense: {face.defense}")
+    for stat in OWN_LINE_STATS:
+        if getattr(face, stat) is not None:
+            lines.append(f"  {stat}: {getattr(face, stat)}")
     for n, ability in enumerate(face.abilities, 1):
         lines.extend(_ability(ability, f"ability {n}", "  "))
     for warning in face.warnings:

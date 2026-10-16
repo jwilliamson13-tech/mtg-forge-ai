@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 
 from cardscript.dropped import DROPPED_KEYS
-from cardscript.model import REF, VAR, Ability, Card, Face, KeyedNumber, ManaCost
+from cardscript.model import OWN_LINE_STATS, REF, VAR, Ability, Card, Face, KeyedNumber, ManaCost
 
 
 class ParseError(ValueError):
@@ -48,8 +48,8 @@ SVAR_KINDS = {
 # Keys whose value names ability SVars (one, or a list joined by `,` or ` & `).
 # Only these resolve: plenty of values merely match an SVar name
 # (`Destination$ Exile` on a card with `SVar:Exile`). Measured over Forge's
-# cardsfolder; add a key here when the sweep finds a new one.
-REFERENCE_KEYS = frozenset(
+# cardsfolder; add a key to the right group when the sweep finds a new one.
+_RUN_KEYS = frozenset(
     {
         # Run as part of this ability.
         "Execute", "SubAbility", "ReplaceWith", "Choices", "RepeatSubAbility",
@@ -61,20 +61,23 @@ REFERENCE_KEYS = frozenset(
         "UnmatchedAbility", "ChosenPile", "UnchosenPile", "NextRoom", "Highest",
         "Lowest", "NotLowest", "GuessWrong", "GuessCorrect", "Trigger",
         "ExtraTurnDelayedTriggerExecute", "ExtraPhaseDelayedTriggerExcute",
-        # Granted to something: an ability, trigger, static or replacement.
+    }
+)
+_GRANT_KEYS = frozenset(
+    {
+        # Granted to something: an ability, trigger or replacement.
         "Ability", "Abilities", "AddAbility", "AddAbilities", "Triggers",
         "AddTrigger", "AddTriggers", "TriggersWhenSpent", "ExtraPhaseDelayedTrigger",
         "ReplacementEffects", "Replacements", "AddReplacementEffect",
         "GainTextAbilities",
-        "StaticAbilities", "staticAbilities", "AddStaticAbility",
-        "AddStaticAbilities", "StaticEffect", "Statics",
     }
 )
-# Reference keys whose `Mode$` bodies are statics rather than triggers.
+# Granted statics: under these keys a `Mode$` body is a static, not a trigger.
 STATIC_REFERENCE_KEYS = frozenset(
     {"StaticAbilities", "staticAbilities", "AddStaticAbility", "AddStaticAbilities",
      "StaticEffect", "Statics"}
 )
+REFERENCE_KEYS = _RUN_KEYS | _GRANT_KEYS | STATIC_REFERENCE_KEYS
 # Keywords whose parameters can name ability SVars (`K:Chapter:3:DBA,DBB,DBC`).
 KEYWORD_REFERENCES = frozenset(
     {"Chapter", "ETBReplacement", "MayEffectFromOpeningHand", "MayEffectFromOpeningDeck",
@@ -106,12 +109,23 @@ SPECIALIZE = "SPECIALIZE:"
 
 COMMENT = "#"
 
+# `Variant:<id>:<Key>:...` lines (alternate printings) and `CopyFaceFrom:<face>`.
+VARIANT = "Variant"
+COPY_FACE = "CopyFaceFrom"
+
+# `K:Protection from red` is read as `K:Protection:red`.
+PROTECTION_FROM = "Protection from "
+
 # A filter value splits on these, one `key=piece` token per piece.
 _FILTER_SEPARATORS = re.compile(r"[.+,]")
 
 COLORS = frozenset("WUBRG")
 
 _INT = re.compile(r"[+-]?\d+")
+
+# A filter starts with a capitalized word glued to `.` or `+`:
+# `Card.Self+kicked 1`, `Permanent.Other+hasAbility Activated`.
+_FILTER_START = re.compile(r"[A-Z]\w*[.+]\S")
 
 # Cost grammar: space-separated atoms. An atom is an integer (generic mana), a
 # mana symbol, a tap/untap flag, or a part like `ExileFromGrave<2/Card>`.
@@ -192,10 +206,8 @@ def _face(lines: list[str]) -> Face:
             face.colors = [c.strip() for c in value.split(",") if c.strip()]
         elif key == "PT":
             face.power, face.toughness = _power_toughness(value)
-        elif key == "Loyalty":
-            face.loyalty = _printed_stat(value)
-        elif key == "Defense":
-            face.defense = _printed_stat(value)
+        elif key.lower() in OWN_LINE_STATS:  # `Loyalty:`, `Defense:`
+            setattr(face, key.lower(), _printed_stat(value))
         elif key in LINE_KINDS:
             face.abilities.append(_ability(scope, line, value, LINE_KINDS[key]))
         elif key == "K":
@@ -214,9 +226,6 @@ def _face(lines: list[str]) -> Face:
             face.warnings.append(f"unknown key: {key}")
     return face
 
-
-VARIANT = "Variant"
-COPY_FACE = "CopyFaceFrom"
 
 
 def _variant(face: Face, value: str) -> None:
@@ -269,8 +278,6 @@ def _ability(scope: _Scope, line: str, value: str, kinds: dict[str, str]) -> Abi
         _add_segment(scope, ability, key, val)
     return ability
 
-
-PROTECTION_FROM = "Protection from "
 
 
 def _keyword(scope: _Scope, line: str, value: str) -> Ability:
@@ -487,10 +494,6 @@ def _add_cost_part(
         else:
             _add_tokens(ability, sub, field_)
 
-
-# A filter starts with a capitalized word glued to `.` or `+`:
-# `Card.Self+kicked 1`, `Permanent.Other+hasAbility Activated`.
-_FILTER_START = re.compile(r"[A-Z]\w*[.+]\S")
 
 
 def _is_free_text(value: str) -> bool:
