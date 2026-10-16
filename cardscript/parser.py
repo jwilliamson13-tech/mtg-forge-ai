@@ -71,6 +71,8 @@ def parse_card(text: str) -> Card:
             face.mana_cost = _mana_cost(value)
         elif key == "Types":
             face.types = value.split()
+        elif key == "Colors":
+            face.colors = [c.strip() for c in value.split(",") if c.strip()]
         elif key == "PT":
             face.power, face.toughness = _power_toughness(value)
         elif key == "A":

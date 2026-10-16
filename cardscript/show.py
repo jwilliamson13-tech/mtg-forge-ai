@@ -17,6 +17,8 @@ def format_card(card: Card) -> str:
 def _face(face: Face) -> list[str]:
     lines = [face.name, f"  cost: {_cost(face.mana_cost)}"]
     lines.append(f"  types: {' '.join(face.types)}")
+    if face.colors:
+        lines.append(f"  colors: {' '.join(face.colors)}")
     if face.power is not None or face.toughness is not None:
         lines.append(f"  pt: {face.power}/{face.toughness}")
     for n, ability in enumerate(face.abilities, 1):

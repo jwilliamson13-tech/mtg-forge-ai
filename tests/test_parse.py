@@ -77,3 +77,26 @@ def test_malformed_ability_segment_raises_parse_error_naming_the_line():
         parse_card(f"Name:Broken\n{line}\n")
     assert caught.value.line == line
     assert caught.value.cause
+
+
+def test_goblin_token_script_parses_with_its_colors(script):
+    face = parse_card(script("r_1_1_goblin")).faces[0]
+    assert face.name == "Goblin Token"
+    assert face.colors == ["red"]
+    assert face.types == ["Creature", "Goblin"]
+    assert (face.power, face.toughness) == (1, 1)
+    assert face.warnings == []
+
+
+def test_colors_line_splits_on_commas_in_file_order():
+    assert parse_card("Name:T\nColors:green, blue\n").faces[0].colors == ["green", "blue"]
+
+
+def test_a_card_without_a_colors_line_has_no_colors(script):
+    assert parse_card(script("lightning_bolt")).faces[0].colors == []
+
+
+def test_costs_keywords_and_colors_round_trip_through_json(script):
+    for name in ("grim_lavamancer", "r_1_1_goblin", "silver_knight", "durkwood_baloth"):
+        card = parse_card(script(name))
+        assert Card.from_json(card.to_json()) == card

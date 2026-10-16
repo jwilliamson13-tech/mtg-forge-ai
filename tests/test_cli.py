@@ -43,3 +43,8 @@ def test_module_runs_as_a_script(fixture_path):
     )
     assert result.returncode == 0
     assert result.stdout.startswith("Lightning Bolt\n")
+
+
+def test_show_prints_colors_when_the_script_has_them(fixture_path, capsys):
+    main(["show", str(fixture_path("r_1_1_goblin"))])
+    assert "  colors: red\n" in capsys.readouterr().out

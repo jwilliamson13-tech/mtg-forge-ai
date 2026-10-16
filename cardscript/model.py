@@ -54,6 +54,7 @@ class Face:
     name: str = ""
     mana_cost: ManaCost = field(default_factory=ManaCost)
     types: list[str] = field(default_factory=list)
+    colors: list[str] = field(default_factory=list)
     power: int | str | None = None
     toughness: int | str | None = None
     abilities: list[Ability] = field(default_factory=list)
@@ -65,6 +66,7 @@ class Face:
             name=d["name"],
             mana_cost=ManaCost.from_dict(d["mana_cost"]),
             types=list(d["types"]),
+            colors=list(d["colors"]),
             power=d["power"],
             toughness=d["toughness"],
             abilities=[Ability.from_dict(a) for a in d["abilities"]],
