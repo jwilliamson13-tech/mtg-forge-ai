@@ -1,0 +1,2 @@
+# Forge scripts are copied byte-for-byte; never rewrite their line endings.
+tests/fixtures/** -text

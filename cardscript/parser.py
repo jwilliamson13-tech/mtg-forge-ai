@@ -1,0 +1,123 @@
+"""Turn one Forge card script into a `Card`.
+
+A script is a list of `Key:Value` lines. Ability lines (`A:` and, later,
+`T:`, `S:`, `R:`) hold `|`-separated segments of the form `Key$ Value`.
+"""
+
+from __future__ import annotations
+
+import re
+
+from cardscript.model import VAR, Ability, Card, Face, KeyedNumber, ManaCost
+
+
+class ParseError(ValueError):
+    """A line that cannot be parsed. Carries the line and a short cause."""
+
+    def __init__(self, line: str, cause: str):
+        super().__init__(f"{cause}: {line}")
+        self.line = line
+        self.cause = cause
+
+
+# First segment's key -> ability kind.
+ABILITY_KINDS = {
+    "SP": "spell",
+    "AB": "activated",
+}
+
+# Free-text keys inside an ability line. Dropped so English never becomes a token.
+DROPPED_SEGMENT_KEYS = frozenset(
+    {
+        "SpellDescription",
+        "TriggerDescription",
+        "Description",
+        "TgtPrompt",
+        "StackDescription",
+    }
+)
+
+# Whole lines dropped without a warning.
+DROPPED_LINE_KEYS = frozenset({"Oracle"})
+
+COLORS = frozenset("WUBRG")
+
+_INT = re.compile(r"[+-]?\d+")
+
+
+def parse_card(text: str) -> Card:
+    """Parse a Forge card script's text into a plain-data `Card`."""
+    face = Face()
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        key, sep, value = line.partition(":")
+        if not sep:
+            face.warnings.append(f"unrecognized line: {line}")
+            continue
+        value = value.strip()
+        if key == "Name":
+            face.name = value
+        elif key == "ManaCost":
+            face.mana_cost = _mana_cost(value)
+        elif key == "Types":
+            face.types = value.split()
+        elif key == "PT":
+            face.power, face.toughness = _power_toughness(value)
+        elif key == "A":
+            face.abilities.append(_ability(line, value))
+        elif key in DROPPED_LINE_KEYS:
+            continue
+        else:
+            face.warnings.append(f"unknown key: {key}")
+    return Card(faces=[face])
+
+
+def _mana_cost(value: str) -> ManaCost:
+    cost = ManaCost()
+    if value == "no cost":
+        return cost
+    for symbol in value.split():
+        if _INT.fullmatch(symbol):
+            cost.generic += int(symbol)
+        elif symbol in COLORS:
+            cost.pips[symbol] = cost.pips.get(symbol, 0) + 1
+        else:
+            cost.special.append(symbol)
+    return cost
+
+
+def _power_toughness(value: str) -> tuple[int | str, int | str]:
+    power, _, toughness = value.partition("/")
+    return _printed_stat(power), _printed_stat(toughness)
+
+
+def _printed_stat(value: str) -> int | str:
+    """An integer, or `<var>` for anything computed at runtime (`*`, `1+*`)."""
+    value = value.strip()
+    return int(value) if _INT.fullmatch(value) else VAR
+
+
+def _ability(line: str, value: str) -> Ability:
+    segments = [_segment(line, s) for s in value.split("|")]
+    api, effect = segments[0]
+    if api not in ABILITY_KINDS:
+        raise ParseError(line, f"unknown ability API {api!r}")
+    ability = Ability(kind=ABILITY_KINDS[api], tokens=[f"Effect={effect}"])
+    for key, val in segments[1:]:
+        if key in DROPPED_SEGMENT_KEYS:
+            continue
+        if _INT.fullmatch(val):
+            ability.numbers.append(KeyedNumber(key, int(val)))
+        else:
+            ability.tokens.append(f"{key}={val}")
+    return ability
+
+
+def _segment(line: str, segment: str) -> tuple[str, str]:
+    key, sep, value = segment.partition("$")
+    key, value = key.strip(), value.strip()
+    if not sep or not key:
+        raise ParseError(line, "segment without Key$")
+    return key, value
