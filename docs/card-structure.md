@@ -118,7 +118,7 @@ Any segment whose key ends in `Cost` (`Cost$`, `UnlessCost$`, `AlternateCost$`, 
 | `Name<amount/type/description>` | token `Cost=Name`; amount as a number under `Cost.Name`; type split like a filter under `Cost.Name`; the description is dropped | `Sac<1/Creature.Other/another creature>` gives `Cost=Sac`, `Cost.Sac=Creature`, `Cost.Sac=Other`, number `Cost.Sac=1` |
 | anything else (`XMin1`, an SVar name) | a plain value | `Y` gives `Cost=Y` |
 
-A field inside `<...>` counts as description when it has a space or starts lowercase. Integer fields past the first get a positional key: `PutCardToLibFromGrave<1/-1/Instant>` gives `Cost.PutCardToLibFromGrave=1` and `Cost.PutCardToLibFromGrave.2=-1`.
+A field inside `<...>` counts as description when it has a space or starts lowercase, unless it starts like a filter (see Keywords, rule 4). Integer fields past the first get a positional key: `PutCardToLibFromGrave<1/-1/Instant>` gives `Cost.PutCardToLibFromGrave=1` and `Cost.PutCardToLibFromGrave.2=-1`.
 
 ## Keywords
 
@@ -140,7 +140,7 @@ Each parameter goes through the first rule that fits:
 1. Empty: skipped. It still uses up its position.
 2. Contains `$`: parsed as `|`-separated `Key$ Value` segments, like an ability line.
 3. Several cost atoms, or one `Name<...>` part: parsed as a cost under the parameter's key.
-4. Has a space or starts lowercase: English description, dropped.
+4. Has a space or starts lowercase: English description, dropped. A value that starts like a filter, a capitalized word glued to `.` or `+` (`Card.Self+kicked 1`), is kept and goes to rule 5.
 5. Anything else: a plain value. An integer is a number, anything else is split like a filter (see Filters).
 
 `Protection from X` is read as `Protection` with parameter `X`, and `X` is always kept.

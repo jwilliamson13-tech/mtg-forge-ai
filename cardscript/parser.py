@@ -483,8 +483,16 @@ def _add_cost_part(
             _add_tokens(ability, sub, field_)
 
 
+# A filter starts with a capitalized word glued to `.` or `+`:
+# `Card.Self+kicked 1`, `Permanent.Other+hasAbility Activated`.
+_FILTER_START = re.compile(r"[A-Z]\w*[.+]\S")
+
+
 def _is_free_text(value: str) -> bool:
-    """English description fields: `another creature`, `card`, `monocolored`."""
+    """English description fields: `another creature`, `card`, `monocolored`.
+    A filter is never free text, even with a space in one of its pieces."""
+    if _FILTER_START.match(value):
+        return False
     return " " in value or value[:1].islower()
 
 

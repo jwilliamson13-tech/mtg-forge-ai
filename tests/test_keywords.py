@@ -111,3 +111,15 @@ def test_tribute_inlines_its_not_tribute_trigger_body(script):
     assert [(n.key, n.value) for n in tribute.numbers] == [("Tribute", 3)]
     (destroy,) = tribute.subabilities
     assert destroy.tokens[0] == "Effect=Destroy"
+
+
+def test_a_filter_parameter_with_a_space_is_kept_not_dropped_as_text(script):
+    strength, pumped = keywords(script("anavolver"))[1:]
+    assert strength.tokens[-3:] == ["ETBReplacement.5=Card", "ETBReplacement.5=Self",
+                                    "ETBReplacement.5=kicked 1"]
+    assert pumped.tokens[-1] == "ETBReplacement.5=kicked 2"
+
+
+def test_an_english_parameter_is_still_dropped(script):
+    enchant = parse_card("Name:A\nK:Enchant:Creature.YouCtrl:creature you control\n").faces[0].abilities[0]
+    assert enchant.tokens == ["Effect=Enchant", "Enchant=Creature", "Enchant=YouCtrl"]
