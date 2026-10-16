@@ -201,6 +201,10 @@ gives two faces. Fire has cost 1 plus `R`, one spell with tokens `Effect=DealDam
 
 `AlternateMode:` (Split, DoubleFaced, Adventure, ...) is dropped. The face list already carries the layout.
 
+### Variants
+
+`Variant:<id>:<Key>:...` lines describe alternate printings of one card. When `<Key>` is on the drop list the line leaves no trace: flavor names (`Variant:UniversesWithin:FlavorName:Rhilex the Accursed`, 189 lines), Attraction lights (`Variant:A:Lights:2 6`) and their `Oracle`. Any other inner key (`A`, `T`, `SVar`, `PT`, ...) gives the warning `unparsed variant line: <Key>`. Only three Unstable cards do this (Everythingamajig, Garbage Elemental, Sly Spy); their printings have different rules, so no one printing stands for the card.
+
 ## SVars
 
 `SVar:Name:Body` lines never become abilities on their own. A value that names one pulls the body in. An SVar nobody names (`PlayMain1`, `NeedsToPlayVar`, most AI hints) leaves no trace. Hint SVars on the drop list never resolve even when named (see Dropped). SVars are scoped to a face, and an SVar used above its definition still resolves. A name defined twice keeps the last body, as Forge does.

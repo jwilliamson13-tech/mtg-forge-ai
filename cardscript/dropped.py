@@ -103,6 +103,7 @@ DROPPED_KEYS = frozenset(
         "MeldPair",
         "SETCOLORID",
         "Lights",
+        "FlavorName",  # inside `Variant:UniversesWithin:FlavorName:...`
         "HandLifeModifier",
         # AI hint SVars (`SVar:PlayMain1:TRUE`).
         "PlayMain1",

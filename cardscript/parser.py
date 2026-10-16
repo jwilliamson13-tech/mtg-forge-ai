@@ -197,9 +197,28 @@ def _face(lines: list[str]) -> Face:
             continue  # Pulled in by the values that name it.
         elif key in DROPPED_KEYS:
             continue
+        elif key == VARIANT:
+            _variant(face, value)
         else:
             face.warnings.append(f"unknown key: {key}")
     return face
+
+
+VARIANT = "Variant"
+
+
+def _variant(face: Face, value: str) -> None:
+    """`Variant:<id>:<Key>:...`: one line of an alternate printing.
+
+    A line whose inner key is on the drop list (`FlavorName`, `Lights`,
+    `Oracle`) is printing metadata and leaves no trace. Anything else (`A`,
+    `SVar`, `PT`: the three Unstable cards whose printings differ in rules) is
+    a warning, not parsed: one printing can't speak for the others.
+    """
+    _, _, rest = value.partition(":")
+    inner = rest.partition(":")[0].strip()
+    if inner not in DROPPED_KEYS:
+        face.warnings.append(f"unparsed variant line: {inner}")
 
 
 def _mana_cost(value: str) -> ManaCost:
