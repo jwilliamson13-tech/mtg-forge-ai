@@ -167,6 +167,39 @@ class _Scope:
     def deeper(self) -> _Scope:
         return _Scope(self.svars, self.depth + 1)
 
+    def is_ability(self, name: str) -> bool:
+        """`name` is an SVar here whose body is an ability (`DB$ ...`, `Mode$ ...`)."""
+        if name not in self.svars:
+            return False
+        return _svar_api(self.svars[name][1]) in SVAR_KINDS
+
+    def is_var(self, value: str) -> bool:
+        """`X`/`Y`/`Z`; an inline expression (`TriggerCount$Amount`); or the name of
+        an SVar whose body is one (`SVar:X:Count$YourLifeTotal`).
+
+        Unlike inlining, this holds under any key. Over Forge's cardsfolder every
+        key naming a runtime SVar is a quantity (`NumDmg`, `CheckSVar`,
+        `TargetMax`, ...), so there is no false hit to guard against.
+        """
+        if value in BARE_VARS or _RUNTIME_BODY.match(value):
+            return True
+        svar = self.svars.get(value)
+        return svar is not None and bool(_RUNTIME_BODY.match(svar[1]))
+
+    def inline(self, ability: Ability, key: str, name: str) -> Ability | None:
+        """Append SVar `name`'s body to `ability` as a sub-ability and return it,
+        or append `key=<ref>` and return None once past `INLINE_DEPTH`."""
+        if self.depth >= INLINE_DEPTH:
+            ability.tokens.append(f"{key}={REF}")
+            return None
+        line, body = self.svars[name]
+        kinds = dict(SVAR_KINDS)
+        if key in STATIC_REFERENCE_KEYS:
+            kinds["Mode"] = "static"
+        sub = _ability(self.deeper(), line, body, kinds)
+        ability.subabilities.append(sub)
+        return sub
+
 
 def _svars(lines: list[str]) -> dict[str, tuple[str, str]]:
     """`SVar:Name:Body` lines of one face, minus dropped hint SVars. A
@@ -301,8 +334,8 @@ def _keyword(scope: _Scope, line: str, value: str) -> Ability:
         key = name if position == 1 else f"{name}.{position}"
         _add_keyword_param(scope, line, ability, key, param.strip())
     implied = KEYWORD_SVARS.get(name)
-    if implied and _ability_svar(scope, implied):
-        _inline(scope, ability, name, implied)
+    if implied and scope.is_ability(implied):
+        scope.inline(ability, name, implied)
     return ability
 
 
@@ -349,7 +382,7 @@ def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
        are abilities: each body inlined as a sub-ability, or `key=<ref>` once
        past `INLINE_DEPTH`.
     3. A runtime quantity, with an optional leading sign: `key=<var>`, then
-       `key.sign=-` (or `+`) when signed. No number. See `_is_var`.
+       `key.sign=-` (or `+`) when signed. No number. See `_Scope.is_var`.
     4. Anything else: a filter, one `key=piece` token per piece. See
        `_add_tokens`.
     """
@@ -360,12 +393,12 @@ def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
         return
     if _is_reference_key(key):
         names = _REFERENCE_LIST.split(value)
-        if all(_ability_svar(scope, name) for name in names):
+        if all(scope.is_ability(name) for name in names):
             for name in names:
-                _inline(scope, ability, key, name)
+                scope.inline(ability, key, name)
             return
     sign, unsigned = (value[0], value[1:]) if value[:1] in ("+", "-") else ("", value)
-    if _is_var(scope, unsigned):
+    if scope.is_var(unsigned):
         ability.tokens.append(f"{key}={VAR}")
         if sign:
             ability.tokens.append(f"{key}.sign={sign}")
@@ -392,32 +425,11 @@ def _is_reference_key(key: str) -> bool:
     return key in REFERENCE_KEYS or key.partition(".")[0] in KEYWORD_REFERENCES
 
 
-def _ability_svar(scope: _Scope, name: str) -> bool:
-    if name not in scope.svars:
-        return False
-    return _svar_api(scope.svars[name][1]) in SVAR_KINDS
-
-
 def _svar_api(body: str) -> str:
     """The first segment's key of an ability-shaped body (`DB$ Draw`), else ""."""
     first = body.split("|", 1)[0]
     key, sep, value = first.partition("$")
     return key.strip() if sep and value[:1].isspace() else ""
-
-
-def _inline(scope: _Scope, ability: Ability, key: str, name: str) -> Ability | None:
-    """Append SVar `name`'s body as a sub-ability and return it, or append
-    `key=<ref>` and return None once past `INLINE_DEPTH`."""
-    if scope.depth >= INLINE_DEPTH:
-        ability.tokens.append(f"{key}={REF}")
-        return None
-    line, body = scope.svars[name]
-    kinds = dict(SVAR_KINDS)
-    if key in STATIC_REFERENCE_KEYS:
-        kinds["Mode"] = "static"
-    sub = _ability(scope.deeper(), line, body, kinds)
-    ability.subabilities.append(sub)
-    return sub
 
 
 def _add_results(scope: _Scope, ability: Ability, key: str, value: str) -> bool:
@@ -429,10 +441,10 @@ def _add_results(scope: _Scope, ability: Ability, key: str, value: str) -> bool:
     every item names an ability SVar.
     """
     items = [item.partition(":") for item in value.split(",")]
-    if not all(sep and _ability_svar(scope, name.strip()) for _, sep, name in items):
+    if not all(sep and scope.is_ability(name.strip()) for _, sep, name in items):
         return False
     for result, _, name in items:
-        sub = _inline(scope, ability, key, name.strip())
+        sub = scope.inline(ability, key, name.strip())
         if sub is None:
             continue
         span = _RESULT_RANGE.fullmatch(result.strip())
@@ -442,20 +454,6 @@ def _add_results(scope: _Scope, ability: Ability, key: str, value: str) -> bool:
         else:
             sub.tokens.insert(1, f"{key}={result.strip()}")
     return True
-
-
-def _is_var(scope: _Scope, value: str) -> bool:
-    """`X`/`Y`/`Z`; an inline expression (`TriggerCount$Amount`); or the name of
-    an SVar whose body is one (`SVar:X:Count$YourLifeTotal`).
-
-    Unlike inlining, this holds under any key. Over Forge's cardsfolder every
-    key naming a runtime SVar is a quantity (`NumDmg`, `CheckSVar`,
-    `TargetMax`, ...), so there is no false hit to guard against.
-    """
-    if value in BARE_VARS or _RUNTIME_BODY.match(value):
-        return True
-    svar = scope.svars.get(value)
-    return svar is not None and bool(_RUNTIME_BODY.match(svar[1]))
 
 
 def _add_cost(scope: _Scope, ability: Ability, key: str, value: str) -> None:
