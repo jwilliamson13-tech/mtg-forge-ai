@@ -44,6 +44,14 @@ COLORS = frozenset("WUBRG")
 
 _INT = re.compile(r"[+-]?\d+")
 
+# Cost grammar: space-separated atoms. An atom is an integer (generic mana), a
+# mana symbol, a tap/untap flag, or a part like `ExileFromGrave<2/Card>`.
+# A `<...>` part may hold spaces in its description field, hence the regex.
+_COST_ATOM = re.compile(r"[^\s<]*<[^>]*>|\S+")
+_COST_PART = re.compile(r"(\w+)<([^>]*)>")
+_MANA_SYMBOL = re.compile(r"[WUBRGCSPX0-9/]+|XMin\d+")
+COST_FLAGS = frozenset({"T", "Q"})
+
 
 def parse_card(text: str) -> Card:
     """Parse a Forge card script's text into a plain-data `Card`."""
@@ -106,13 +114,66 @@ def _ability(line: str, value: str) -> Ability:
         raise ParseError(line, f"unknown ability API {api!r}")
     ability = Ability(kind=ABILITY_KINDS[api], tokens=[f"Effect={effect}"])
     for key, val in segments[1:]:
-        if key in DROPPED_SEGMENT_KEYS:
-            continue
-        if _INT.fullmatch(val):
-            ability.numbers.append(KeyedNumber(key, int(val)))
-        else:
-            ability.tokens.append(f"{key}={val}")
+        _add_segment(ability, key, val)
     return ability
+
+
+def _add_segment(ability: Ability, key: str, value: str) -> None:
+    """One `Key$ Value` segment: dropped, parsed as a cost, or a plain value."""
+    if key in DROPPED_SEGMENT_KEYS:
+        return
+    if key.endswith("Cost"):
+        _add_cost(ability, key, value)
+    else:
+        _add_value(ability, key, value)
+
+
+def _add_value(ability: Ability, key: str, value: str) -> None:
+    """The one place a value is classified: an integer, or a categorical token."""
+    if _INT.fullmatch(value):
+        ability.numbers.append(KeyedNumber(key, int(value)))
+    else:
+        ability.tokens.append(f"{key}={value}")
+
+
+def _add_cost(ability: Ability, key: str, value: str) -> None:
+    """A cost: `R T ExileFromGrave<2/Card>` under key `Cost`.
+
+    Integers are generic mana, a number under `key`. Mana symbols and T/Q are
+    `key=symbol` tokens. A part `Name<amount/type/description>` is a `key=Name`
+    token, its amount a number under `key.Name`, its type a `key.Name=type`
+    token; free-text fields are dropped. Anything else is a plain value.
+    """
+    for atom in _COST_ATOM.findall(value):
+        part = _COST_PART.fullmatch(atom)
+        if part:
+            _add_cost_part(ability, key, part[1], part[2].split("/"))
+        elif _INT.fullmatch(atom):
+            ability.numbers.append(KeyedNumber(key, int(atom)))
+        elif atom in COST_FLAGS or _MANA_SYMBOL.fullmatch(atom):
+            ability.tokens.append(f"{key}={atom}")
+        else:
+            _add_value(ability, key, atom)
+
+
+def _add_cost_part(ability: Ability, key: str, name: str, fields: list[str]) -> None:
+    sub = f"{key}.{name}"
+    ability.tokens.append(f"{key}={name}")
+    amount, *rest = fields
+    if amount:
+        _add_value(ability, sub, amount)
+    for position, field_ in enumerate(rest, 2):
+        if not field_ or _is_free_text(field_):
+            continue
+        if _INT.fullmatch(field_):
+            ability.numbers.append(KeyedNumber(f"{sub}.{position}", int(field_)))
+        else:
+            ability.tokens.append(f"{sub}={field_}")
+
+
+def _is_free_text(value: str) -> bool:
+    """English description fields: `another creature`, `card`, `monocolored`."""
+    return " " in value or value[:1].islower()
 
 
 def _segment(line: str, segment: str) -> tuple[str, str]:
