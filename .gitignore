@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Data and models (generated, large)
+data/
+*.parquet
+*.jsonl
+*.jsonl.gz
+*.onnx
+runs/
+
+# Forge checkout lives beside this repo, not inside it
+forge/
