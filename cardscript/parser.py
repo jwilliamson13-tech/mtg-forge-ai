@@ -80,6 +80,9 @@ KEYWORD_REFERENCES = frozenset(
     {"Chapter", "ETBReplacement", "MayEffectFromOpeningHand", "MayEffectFromOpeningDeck",
      "Backup", "Visit", "Haunt", "Dungeon", "Prize"}
 )
+# Keywords whose effect lives in an SVar with a fixed name that no line names:
+# Forge looks it up when it builds the keyword.
+KEYWORD_SVARS = {"Gift": "GiftAbility", "Tribute": "TrigNotTribute"}
 _REFERENCE_LIST = re.compile(r",|\s&\s")
 
 # A die roll's outcomes: `ResultSubAbilities$ 1-14:DBA,15-20:DBB,Else:DBC`.
@@ -285,6 +288,9 @@ def _keyword(scope: _Scope, line: str, value: str) -> Ability:
     for position, param in enumerate(params, 1):
         key = name if position == 1 else f"{name}.{position}"
         _add_keyword_param(scope, line, ability, key, param.strip())
+    implied = KEYWORD_SVARS.get(name)
+    if implied and _ability_svar(scope, implied):
+        _inline(scope, ability, name, implied)
     return ability
 
 

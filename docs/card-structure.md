@@ -224,6 +224,8 @@ Only values under a reference key resolve: `Execute`, `SubAbility`, `ReplaceWith
 
 Keyword parameters resolve for the keywords in `KEYWORD_REFERENCES`. `K:Chapter:2:DBA,DBB` gives number `Chapter=2` and two sub-abilities.
 
+Two keywords name no SVar at all: Forge fetches a fixed name when it builds them. `K:Gift` inlines `SVar:GiftAbility` and `K:Tribute:3` inlines `SVar:TrigNotTribute`, each as a sub-ability of the keyword (`KEYWORD_SVARS` in `cardscript/parser.py`).
+
 A value can list several SVars, joined by `,` or ` & `. Each becomes its own sub-ability, but only when every item names an ability SVar. `Choices$ DBA,Creature` stays a plain value, split into `Choices=DBA` and `Choices=Creature`. Cryptic Command's `Choices$ DBCounter,DBReturn,DBTapAll,DBDraw | CharmNum$ 2` gives four sub-abilities and number `CharmNum=2`.
 
 A die roll's `ResultSubAbilities$` lists `result:Name` items. Each name inlines like any reference, and its result goes on that sub-ability: a range `1-14` as numbers `ResultSubAbilities.min=1` and `ResultSubAbilities.max=14` (a single `6` gives 6 and 6), a word such as `Else` as the token `ResultSubAbilities=Else`. Berserker's Frenzy's `1-14:MustBlock,15-20:ChooseBlock` gives two sub-abilities. Past the depth limit each item is `ResultSubAbilities=<ref>` and the ranges are gone.

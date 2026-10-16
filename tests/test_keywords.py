@@ -93,3 +93,21 @@ def test_empty_keyword_line_raises_parse_error():
     with pytest.raises(ParseError) as caught:
         parse_card("Name:T\nK:\n")
     assert caught.value.line == "K:"
+
+
+# --- SVars a keyword names by convention ---------------------------------------
+
+
+def test_gift_inlines_its_gift_ability_svar(script):
+    gift = parse_card(script("bilbos_gambit")).faces[0].abilities[0]
+    assert gift.tokens == ["Effect=Gift"]
+    (promise,) = gift.subabilities
+    assert promise.kind == "sub"
+    assert promise.tokens[:3] == ["Effect=Token", "TokenScript=c_a_treasure_sac", "TokenOwner=Promised"]
+
+
+def test_tribute_inlines_its_not_tribute_trigger_body(script):
+    tribute = parse_card(script("nessian_demolok")).faces[0].abilities[0]
+    assert [(n.key, n.value) for n in tribute.numbers] == [("Tribute", 3)]
+    (destroy,) = tribute.subabilities
+    assert destroy.tokens[0] == "Effect=Destroy"
