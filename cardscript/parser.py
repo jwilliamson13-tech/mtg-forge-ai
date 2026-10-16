@@ -75,6 +75,8 @@ def parse_card(text: str) -> Card:
             face.power, face.toughness = _power_toughness(value)
         elif key == "A":
             face.abilities.append(_ability(line, value))
+        elif key == "K":
+            face.abilities.append(_keyword(line, value))
         elif key in DROPPED_LINE_KEYS:
             continue
         else:
@@ -116,6 +118,57 @@ def _ability(line: str, value: str) -> Ability:
     for key, val in segments[1:]:
         _add_segment(ability, key, val)
     return ability
+
+
+PROTECTION_FROM = "Protection from "
+
+
+def _keyword(line: str, value: str) -> Ability:
+    """`K:Name[:param[:param...]]` -> a keyword ability.
+
+    The first parameter is keyed by the keyword name, later ones by
+    `Name.<position>`, so Suspend's 5 time counters and its {G} never share a
+    key. `Protection from red` is read as `Protection:red`.
+    """
+    name, *params = value.split(":")
+    name = name.strip()
+    if not name:
+        raise ParseError(line, "empty keyword")
+    if name.startswith(PROTECTION_FROM):
+        protected = name[len(PROTECTION_FROM):]
+        name = "Protection"
+        ability = Ability(kind="keyword", tokens=[f"Effect={name}", f"{name}={protected}"])
+    else:
+        ability = Ability(kind="keyword", tokens=[f"Effect={name}"])
+    for position, param in enumerate(params, 1):
+        key = name if position == 1 else f"{name}.{position}"
+        _add_keyword_param(line, ability, key, param.strip())
+    return ability
+
+
+def _add_keyword_param(line: str, ability: Ability, key: str, param: str) -> None:
+    if not param:
+        return
+    if "$" in param:
+        for segment in param.split("|"):
+            _add_segment(ability, *_segment(line, segment))
+    elif _is_cost(param):
+        _add_cost(ability, key, param)
+    elif _is_free_text(param):
+        return
+    else:
+        _add_value(ability, key, param)
+
+
+def _is_cost(value: str) -> bool:
+    """A multi-atom mana/cost string (`1 U`, `PayLife<3>`), not a lone value."""
+    atoms = _COST_ATOM.findall(value)
+    if len(atoms) == 1 and "<" not in value:
+        return False
+    return all(
+        _COST_PART.fullmatch(a) or _INT.fullmatch(a) or a in COST_FLAGS or _MANA_SYMBOL.fullmatch(a)
+        for a in atoms
+    )
 
 
 def _add_segment(ability: Ability, key: str, value: str) -> None:
