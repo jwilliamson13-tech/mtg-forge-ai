@@ -5,8 +5,10 @@ import shutil
 
 import pytest
 
-from cardscript import Card
+import cardscript.sweep
+from cardscript import Card, parse_card
 from cardscript.__main__ import main
+from cardscript.sweep import SweepReport
 from cardscript.vocab import build_vocabulary
 
 GOOD = ["lightning_bolt", "grizzly_bears", "grim_lavamancer", "fire_ice", "cryptic_command"]
@@ -116,8 +118,6 @@ def test_out_matches_parse_card(cards, tmp_path, script, capsys):
     out = tmp_path / "cards.jsonl"
     main(["sweep", str(cards), "--out", str(out)])
     first = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
-    from cardscript import parse_card
-
     assert Card.from_dict(first) == parse_card(script("lightning_bolt"))
 
 
@@ -151,8 +151,8 @@ def test_any_other_exception_is_a_failure_grouped_by_its_type(tmp_path, fixture_
     for name in ("x", "y"):
         (root / f"{name}.txt").write_text(f"Name:{name}\n", encoding="utf-8")
 
-    import cardscript.sweep
-
+    # No real script raises anything but ParseError, so a stand-in parse_card
+    # is the only way to reach the sweep's catch-all branch.
     real = cardscript.sweep.parse_card
 
     def flaky(text):
@@ -185,8 +185,6 @@ def test_an_empty_folder_reports_zero_coverage(tmp_path, capsys):
 
 
 def test_coverage_rounds_down_so_100_means_every_script_parsed():
-    from cardscript.sweep import SweepReport
-
     assert "coverage  99.99%\n" in SweepReport(seen=34702, parsed=34701).format()
     assert "coverage  100.00%\n" in SweepReport(seen=3, parsed=3).format()
     assert "coverage  33.33%\n" in SweepReport(seen=3, parsed=1).format()
