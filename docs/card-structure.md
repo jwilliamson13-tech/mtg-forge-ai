@@ -201,6 +201,10 @@ gives two faces. Fire has cost 1 plus `R`, one spell with tokens `Effect=DealDam
 
 `AlternateMode:` (Split, DoubleFaced, Adventure, ...) is dropped. The face list already carries the layout.
 
+### Copied faces
+
+A face that is only `CopyFaceFrom:<face name>` takes its rules from another script: Emeritus of Conflict's second face is `CopyFaceFrom:Lightning Bolt`. `parse_card` sees one script, so that face comes out empty (no name, no abilities) with the warning `copied face not resolved: Lightning Bolt`. A reader holding the whole dump can fill it in by face name. 23 cards do this in the 2026-10-16 sweep.
+
 ### Variants
 
 `Variant:<id>:<Key>:...` lines describe alternate printings of one card. When `<Key>` is on the drop list the line leaves no trace: flavor names (`Variant:UniversesWithin:FlavorName:Rhilex the Accursed`, 189 lines), Attraction lights (`Variant:A:Lights:2 6`) and their `Oracle`. Any other inner key (`A`, `T`, `SVar`, `PT`, ...) gives the warning `unparsed variant line: <Key>`. Only three Unstable cards do this (Everythingamajig, Garbage Elemental, Sly Spy); their printings have different rules, so no one printing stands for the card.

@@ -51,3 +51,19 @@ def test_specialize_separators_give_one_face_each_in_file_order():
 
 def test_alternate_mode_line_is_recognized():
     assert parse_card("Name:A\nAlternateMode:Split\n").faces[0].warnings == []
+
+
+def test_a_copied_face_is_empty_with_a_warning_naming_its_source(script):
+    bind, liberate = parse_card(script("bind_liberate")).faces
+    assert bind.warnings == ["copied face not resolved: Bind"]
+    assert liberate.warnings == ["copied face not resolved: Liberate"]
+    assert bind.abilities == liberate.abilities == []
+
+
+def test_a_copied_face_leaves_the_other_face_intact(script):
+    emeritus, bolt = parse_card(script("emeritus_of_conflict_lightning_bolt")).faces
+    assert emeritus.name == "Emeritus of Conflict"
+    assert emeritus.warnings == []
+    assert [a.kind for a in emeritus.abilities] == ["keyword", "trigger"]
+    assert (bolt.name, bolt.abilities) == ("", [])
+    assert bolt.warnings == ["copied face not resolved: Lightning Bolt"]

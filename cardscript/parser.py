@@ -206,12 +206,17 @@ def _face(lines: list[str]) -> Face:
             continue
         elif key == VARIANT:
             _variant(face, value)
+        elif key == COPY_FACE:
+            # Forge copies the named face from another script. parse_card sees
+            # one script, so the face stays empty; the warning keeps the name.
+            face.warnings.append(f"copied face not resolved: {value}")
         else:
             face.warnings.append(f"unknown key: {key}")
     return face
 
 
 VARIANT = "Variant"
+COPY_FACE = "CopyFaceFrom"
 
 
 def _variant(face: Face, value: str) -> None:
