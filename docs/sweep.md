@@ -68,12 +68,14 @@ Run on 2026-10-16 over Forge commit `64569999b8b99dd7176ab9d3e1e6008f3ab68590` (
 | tokenscripts | 857 | 857 | 100.00% |
 | both | 34,702 | 34,702 | 100.00% |
 
-The excluded sub-folders hold 230 `rebalanced` and 13 `upcoming` scripts. Every `A:`, `T:`, `S:`, `R:` and `K:` line (63,336) became exactly one top-level ability. Warnings land on 26 cards; see "Errors and warnings" in `card-structure.md`.
+The excluded sub-folders hold 230 `rebalanced` and 13 `upcoming` scripts. Every `A:`, `T:`, `S:`, `R:` and `K:` line (63,336) became exactly one top-level ability. Of 43,318 ability-shaped SVars, all but 7 are reached through a reference key (5 named nowhere in their own script, Face Yourself's `AddSVars$`, and I Am Duskmourn's `Abandon`). Warnings land on 26 cards; see "Errors and warnings" in `card-structure.md`.
+
+The numbers here were rerun after the review of the parser: card names masked as `<name>`, granted keywords parsed like `K:` lines, ` & ` lists split, and English inside keyword and cost parameters dropped by listed position. Coverage and the ability-line audit didn't move. No card name survives in a token except the game words and Forge mechanics listed under Names in `card-structure.md`.
 
 The outputs live in the main checkout's gitignored `data/` folder, which Spec 5 reads:
 
 - `data/cards.jsonl`: the dump, 34,702 lines.
-- `data/vocab.json`: `build_vocabulary(..., min_count=5)` over the dump: 3,494 tokens and 231 numeric keys, reserved entries included.
+- `data/vocab.json`: `build_vocabulary(..., min_count=5)` over the dump: 3,535 tokens and 234 numeric keys, reserved entries included. At `min_count=1` the dump holds 11,979 distinct tokens and 464 numeric keys.
 
 To rebuild them, from the repo root with Forge cloned beside it:
 

@@ -201,7 +201,7 @@ A value under a name key that points at a card rather than naming one is kept: `
 
 The face's own `name` field is kept; it identifies the parsed card, and the vocabulary never reads it. Warnings keep names too (`copied face not resolved: Lightning Bolt`), and the vocabulary skips warnings.
 
-Left as they are: words that are both a card name and a game term (`Vigilance`, `Exile`, `Plains`, `Delirium`), and three Forge-internal keywords named after a card, `AddKeyword$ Shaman's Trance` and `AddHiddenKeyword$ CARDNAME count as Muscle Burst.` (and `Flame Burst`).
+Left as they are: words that are both a card name and a game term (`Vigilance`, `Exile`, `Plains`, `Delirium`, creature types such as `Atog`); Forge mechanics named after the card that introduced them, which are Forge's own vocabulary (`Effect=Fog`, `Effect=Balance`, the static mode `Panharmonicon`, the player keywords `AddKeyword=Shaman's Trance` and `AddKeyword=Piracy`); and two hidden-keyword sentences, `AddHiddenKeyword$ CARDNAME count as Muscle Burst.` and `... Flame Burst.`, which name the card they help count.
 
 ## Dropped
 
