@@ -3,8 +3,8 @@
 `build_vocabulary` counts tokens over parsed cards, keeps the ones on at
 least `min_count` cards, and returns a `Vocabulary` with `<unk>`, `<var>`
 and `<ref>` at indices 0, 1, 2 whatever the corpus. Numeric keys get their
-own table with `<unk>` at index 0. docs/card-structure.md ("Vocabulary")
-describes the token names and the lookup rules.
+own table with `<unk>` at index 0. docs/vocabulary.md describes the token
+names and the lookup rules.
 
 `face_tokens` and `face_numbers` are the one place that turns a parsed face
 into what the encoder looks up, so the builder and the encoder can't drift.
