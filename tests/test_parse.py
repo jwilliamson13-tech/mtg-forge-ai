@@ -1,6 +1,7 @@
 """parse_card: script text in, plain-data card out."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -100,3 +101,18 @@ def test_costs_keywords_and_colors_round_trip_through_json(script):
     for name in ("grim_lavamancer", "r_1_1_goblin", "silver_knight", "durkwood_baloth"):
         card = parse_card(script(name))
         assert Card.from_json(card.to_json()) == card
+
+
+ALL_FIXTURES = sorted(p.stem for p in (Path(__file__).parent / "fixtures").glob("*.txt"))
+
+
+@pytest.mark.parametrize("name", ALL_FIXTURES)
+def test_parsing_twice_gives_identical_output(script, name):
+    text = script(name)
+    assert parse_card(text).to_json() == parse_card(text).to_json()
+
+
+@pytest.mark.parametrize("name", ALL_FIXTURES)
+def test_every_fixture_round_trips_through_json(script, name):
+    card = parse_card(script(name))
+    assert Card.from_json(card.to_json()) == card

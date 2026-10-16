@@ -67,7 +67,7 @@ def test_second_parameter_gets_a_positional_key_so_numbers_never_merge(script):
 
 def test_textual_parameter_is_a_sub_token_and_its_description_is_dropped(script):
     assert only_keyword(script("dizzying_gaze")) == (
-        ["Effect=Enchant", "Enchant=Creature.YouCtrl"], [])
+        ["Effect=Enchant", "Enchant=Creature", "Enchant=YouCtrl"], [])
 
 
 def test_numeric_second_parameter_is_a_positional_number():

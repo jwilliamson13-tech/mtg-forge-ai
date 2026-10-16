@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from cardscript.dropped import DROPPED_KEYS
 from cardscript.model import REF, VAR, Ability, Card, Face, KeyedNumber, ManaCost
 
 
@@ -88,19 +89,15 @@ BARE_VARS = frozenset({"X", "Y", "Z"})
 # `TriggerCount$DamageAmount`. A word, `$`, then no space.
 _RUNTIME_BODY = re.compile(r"\w+\$\S")
 
-# Free-text keys inside an ability line. Dropped so English never becomes a token.
-DROPPED_SEGMENT_KEYS = frozenset(
-    {
-        "SpellDescription",
-        "TriggerDescription",
-        "Description",
-        "TgtPrompt",
-        "StackDescription",
-    }
-)
+# Lines that split a script into faces: `ALTERNATE` (split, flip, transform,
+# modal, adventure, ...) and `SPECIALIZE:<COLOR>` (Specialize's extra faces).
+ALTERNATE = "ALTERNATE"
+SPECIALIZE = "SPECIALIZE:"
 
-# Whole lines dropped without a warning.
-DROPPED_LINE_KEYS = frozenset({"Oracle"})
+COMMENT = "#"
+
+# A filter value splits on these, one `key=piece` token per piece.
+_FILTER_SEPARATORS = re.compile(r"[.+,]")
 
 COLORS = frozenset("WUBRG")
 
@@ -116,8 +113,24 @@ COST_FLAGS = frozenset({"T", "Q"})
 
 
 def parse_card(text: str) -> Card:
-    """Parse a Forge card script's text into a plain-data `Card`."""
-    return Card(faces=[_face(text.splitlines())])
+    """Parse a Forge card script's text into a plain-data `Card`.
+
+    Raises `ParseError` for an ability line it can't read. A line key it
+    doesn't know is a warning on the face instead.
+    """
+    return Card(faces=[_face(block) for block in _face_blocks(text.splitlines())])
+
+
+def _face_blocks(lines: list[str]) -> list[list[str]]:
+    """The script's lines, one block per face, in file order."""
+    blocks: list[list[str]] = [[]]
+    for raw in lines:
+        line = raw.strip()
+        if line == ALTERNATE or line.startswith(SPECIALIZE):
+            blocks.append([])
+        else:
+            blocks[-1].append(raw)
+    return blocks
 
 
 @dataclass(frozen=True)
@@ -132,13 +145,16 @@ class _Scope:
 
 
 def _svars(lines: list[str]) -> dict[str, tuple[str, str]]:
-    """`SVar:Name:Body` lines of one face. A redefined name keeps the last body."""
+    """`SVar:Name:Body` lines of one face, minus dropped hint SVars. A
+    redefined name keeps the last body."""
     svars = {}
     for raw in lines:
         line = raw.strip()
         if line.startswith("SVar:"):
             name, _, body = line[len("SVar:"):].partition(":")
-            svars[name.strip()] = (line, body.strip())
+            name = name.strip()
+            if name not in DROPPED_KEYS:
+                svars[name] = (line, body.strip())
     return svars
 
 
@@ -149,7 +165,7 @@ def _face(lines: list[str]) -> Face:
     scope = _Scope(_svars(lines))
     for raw in lines:
         line = raw.strip()
-        if not line:
+        if not line or line.startswith(COMMENT):
             continue
         key, sep, value = line.partition(":")
         if not sep:
@@ -172,7 +188,7 @@ def _face(lines: list[str]) -> Face:
             face.abilities.append(_keyword(scope, line, value))
         elif key == "SVar":
             continue  # Pulled in by the values that name it.
-        elif key in DROPPED_LINE_KEYS:
+        elif key in DROPPED_KEYS:
             continue
         else:
             face.warnings.append(f"unknown key: {key}")
@@ -269,7 +285,7 @@ def _is_cost(value: str) -> bool:
 
 def _add_segment(scope: _Scope, ability: Ability, key: str, value: str) -> None:
     """One `Key$ Value` segment: dropped, parsed as a cost, or a plain value."""
-    if key in DROPPED_SEGMENT_KEYS:
+    if key in DROPPED_KEYS:
         return
     if key.endswith("Cost"):
         _add_cost(scope, ability, key, value)
@@ -286,7 +302,8 @@ def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
        past `INLINE_DEPTH`.
     3. A runtime quantity, with an optional leading sign: `key=<var>`, then
        `key.sign=-` (or `+`) when signed. No number. See `_is_var`.
-    4. Anything else: one `key=value` token.
+    4. Anything else: a filter, one `key=piece` token per piece. See
+       `_add_tokens`.
     """
     if _INT.fullmatch(value):
         ability.numbers.append(KeyedNumber(key, int(value)))
@@ -303,7 +320,20 @@ def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
         if sign:
             ability.tokens.append(f"{key}.sign={sign}")
         return
-    ability.tokens.append(f"{key}={value}")
+    _add_tokens(ability, key, value)
+
+
+def _add_tokens(ability: Ability, key: str, value: str) -> None:
+    """Split on `.`, `+` and `,`: `Creature.OppCtrl+tapped` gives
+    `key=Creature`, `key=OppCtrl`, `key=tapped`.
+
+    Pieces keep `!`, fused comparisons and inner spaces (`!token`, `cmcLE4`,
+    `namedFestering Newt`). Empty pieces are skipped. A value with no
+    separator is one token.
+    """
+    pieces = [p.strip() for p in _FILTER_SEPARATORS.split(value)]
+    pieces = [p for p in pieces if p] or [value]
+    ability.tokens.extend(f"{key}={piece}" for piece in pieces)
 
 
 def _is_reference_key(key: str) -> bool:
@@ -355,8 +385,8 @@ def _add_cost(scope: _Scope, ability: Ability, key: str, value: str) -> None:
 
     Integers are generic mana, a number under `key`. Mana symbols and T/Q are
     `key=symbol` tokens. A part `Name<amount/type/description>` is a `key=Name`
-    token, its amount a number under `key.Name`, its type a `key.Name=type`
-    token; free-text fields are dropped. Anything else is a plain value.
+    token, its amount a number under `key.Name`, its type `key.Name=...`
+    tokens split like any filter; free-text fields are dropped. Anything else is a plain value.
     """
     for atom in _COST_ATOM.findall(value):
         part = _COST_PART.fullmatch(atom)
@@ -384,7 +414,7 @@ def _add_cost_part(
         if _INT.fullmatch(field_):
             ability.numbers.append(KeyedNumber(f"{sub}.{position}", int(field_)))
         else:
-            ability.tokens.append(f"{sub}={field_}")
+            _add_tokens(ability, sub, field_)
 
 
 def _is_free_text(value: str) -> bool:

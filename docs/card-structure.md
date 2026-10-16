@@ -63,7 +63,7 @@ The card has two 2s. They sit under two keys, so the model never sees one merged
 
 | Field | Type | Meaning |
 |---|---|---|
-| `faces` | list of Face | One face per half of the card, in file order. A plain card has one. |
+| `faces` | list of Face | One face per half of the card, in file order. A plain card has one. See Faces. |
 
 ### Face
 
@@ -75,7 +75,7 @@ The card has two 2s. They sit under two keys, so the model never sees one merged
 | `colors` | list of string | The `Colors:` line split on commas, in file order: `white,blue` gives `["white", "blue"]`. Mostly token scripts and back faces set it. Empty when the script has no `Colors:` line. |
 | `power`, `toughness` | int, `"<var>"` or null | The `PT:` line. A runtime value such as `*` is `"<var>"`. Null when the card has no `PT:` line. |
 | `abilities` | list of Ability | One per ability line, in file order. |
-| `warnings` | list of string | Lines the parser didn't recognize, such as `"unknown key: Frobnicate"`. A warning never stops the parse. |
+| `warnings` | list of string | Lines the parser didn't recognize, such as `"unknown key: Frobnicate"`. A warning never stops the parse. See Errors and warnings. |
 
 ### ManaCost
 
@@ -111,7 +111,7 @@ Any segment whose key ends in `Cost` (`Cost$`, `UnlessCost$`, `AlternateCost$`, 
 |---|---|---|
 | integer | a number under the cost key (generic mana) | `2` gives number `Cost=2` |
 | mana symbol, `T`, `Q` | a token | `R` gives `Cost=R`; `U U` gives `Cost=U` twice |
-| `Name<amount/type/description>` | token `Cost=Name`; amount as a number under `Cost.Name`; type as token `Cost.Name=type`; the description is dropped | `Sac<1/Creature.Other/another creature>` gives `Cost=Sac`, `Cost.Sac=Creature.Other`, number `Cost.Sac=1` |
+| `Name<amount/type/description>` | token `Cost=Name`; amount as a number under `Cost.Name`; type split like a filter under `Cost.Name`; the description is dropped | `Sac<1/Creature.Other/another creature>` gives `Cost=Sac`, `Cost.Sac=Creature`, `Cost.Sac=Other`, number `Cost.Sac=1` |
 | anything else (`XMin1`, an SVar name) | a plain value | `Y` gives `Cost=Y` |
 
 A field inside `<...>` counts as description when it has a space or starts lowercase. Integer fields past the first get a positional key: `PutCardToLibFromGrave<1/-1/Instant>` gives `Cost.PutCardToLibFromGrave=1` and `Cost.PutCardToLibFromGrave.2=-1`.
@@ -128,7 +128,7 @@ Each `K:` line is one ability of kind `keyword`. The line is `K:Name[:param[:par
 | `K:Cycling:1 U` | `Effect=Cycling`, `Cycling=U` | `Cycling=1` |
 | `K:Suspend:5:G` | `Effect=Suspend`, `Suspend.2=G` | `Suspend=5` |
 | `K:Protection from red` | `Effect=Protection`, `Protection=red` | |
-| `K:Enchant:Creature.YouCtrl:creature you control` | `Effect=Enchant`, `Enchant=Creature.YouCtrl` | |
+| `K:Enchant:Creature.YouCtrl:creature you control` | `Effect=Enchant`, `Enchant=Creature`, `Enchant=YouCtrl` | |
 | `K:Crew:1:ActivationLimit$ 1` | `Effect=Crew` | `Crew=1`, `ActivationLimit=1` |
 
 Each parameter goes through the first rule that fits:
@@ -137,15 +137,69 @@ Each parameter goes through the first rule that fits:
 2. Contains `$`: parsed as `|`-separated `Key$ Value` segments, like an ability line.
 3. Several cost atoms, or one `Name<...>` part: parsed as a cost under the parameter's key.
 4. Has a space or starts lowercase: English description, dropped.
-5. Anything else: a plain value, a number if it's an integer and a token if not.
+5. Anything else: a plain value. An integer is a number, anything else is split like a filter (see Filters).
 
 `Protection from X` is read as `Protection` with parameter `X`, and `X` is always kept.
 
 Known gaps, left for the coverage sweep to size: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence. A textual parameter with a space, such as a partner's card name, gets dropped as description.
 
+## Filters
+
+A plain value (not a number, `<var>` or inlined reference) is split on `.`, `+` and `,`. Each piece becomes its own token under the segment's key:
+
+```
+A:SP$ TapAll | ValidCards$ Creature.OppCtrl+tapped
+```
+
+gives `Effect=TapAll ValidCards=Creature ValidCards=OppCtrl ValidCards=tapped`.
+
+Snapcaster's `ValidTgts$ Instant.YouCtrl,Sorcery.YouCtrl` gives four tokens, `YouCtrl` twice. The split doesn't interpret anything. Negation stays on its piece (`!token`), comparisons stay fused (`cmcLE4`, `powerGE3`), and names keep their spaces (`namedFestering Newt`). Empty pieces are skipped. `&` lists and space-separated values are not split: `KW$ Flying & First Strike` is one token.
+
+The same split applies to keyword parameters (`Enchant:Creature.YouCtrl`) and to the type field of a cost part (`Sac<1/Creature.Other>`). The effect token (`Effect=...`) is never split.
+
+## Dropped
+
+`cardscript/dropped.py` holds one allow-list, `DROPPED_KEYS`. A name on it is dropped wherever it appears:
+
+| Where | Example | Result |
+|---|---|---|
+| line key | `Oracle:`, `DeckHints:`, `AI:`, `Text:`, `AlternateMode:` | line skipped, no warning |
+| segment key | `SpellDescription$`, `TgtPrompt$`, `AILogic$`, `IsCurse$` | no token, no number |
+| SVar name | `SVar:NeedsToPlayVar:X LE12`, `SVar:AIPreference:SacCost$Creature` | never resolves; a value naming it stays a plain token |
+
+It covers English (descriptions, prompts, titles, messages, Oracle and reminder text), Forge's AI hints (the `AI*` keys, `IsCurse`, the hint SVars) and deckbuilding lines. To drop another key, add one line to that file.
+
+Lines starting with `#` are comments and are skipped.
+
+## Faces
+
+`ALTERNATE` on a line by itself starts a new face, and so does `SPECIALIZE:<COLOR>`. Each face is parsed on its own, with its own SVars. Fire // Ice:
+
+```
+Name:Fire
+ManaCost:1 R
+Types:Instant
+A:SP$ DealDamage | ValidTgts$ Any | TgtPrompt$ ... | NumDmg$ 2 | TargetMin$ 1 | TargetMax$ 2 | DividedAsYouChoose$ 2 | SpellDescription$ ...
+AlternateMode:Split
+Oracle:...
+
+ALTERNATE
+
+Name:Ice
+ManaCost:1 U
+Types:Instant
+A:SP$ Tap | ValidTgts$ Permanent | SubAbility$ DBDraw | SpellDescription$ ...
+SVar:DBDraw:DB$ Draw
+Oracle:...
+```
+
+gives two faces. Fire has cost 1 plus `R`, one spell with tokens `Effect=DealDamage ValidTgts=Any` and numbers `NumDmg=2 TargetMin=1 TargetMax=2 DividedAsYouChoose=2`. Ice has cost 1 plus `U`, one spell `Effect=Tap ValidTgts=Permanent` with one sub-ability `Effect=Draw`. An SVar defined on one face doesn't resolve on the other. A Specialize card has six faces.
+
+`AlternateMode:` (Split, DoubleFaced, Adventure, ...) is dropped. The face list already carries the layout.
+
 ## SVars
 
-`SVar:Name:Body` lines never become abilities on their own. A value that names one pulls the body in. An SVar nobody names (`PlayMain1`, `NeedsToPlayVar`, most AI hints) leaves no trace. SVars are scoped to a face, and an SVar used above its definition still resolves. A name defined twice keeps the last body, as Forge does.
+`SVar:Name:Body` lines never become abilities on their own. A value that names one pulls the body in. An SVar nobody names (`PlayMain1`, `NeedsToPlayVar`, most AI hints) leaves no trace. Hint SVars on the drop list never resolve even when named (see Dropped). SVars are scoped to a face, and an SVar used above its definition still resolves. A name defined twice keeps the last body, as Forge does.
 
 ### Inlining, one level
 
@@ -162,7 +216,7 @@ Only values under a reference key resolve: `Execute`, `SubAbility`, `ReplaceWith
 
 Keyword parameters resolve for the keywords in `KEYWORD_REFERENCES`. `K:Chapter:2:DBA,DBB` gives number `Chapter=2` and two sub-abilities.
 
-A value can list several SVars, joined by `,` or ` & `. Each becomes its own sub-ability, but only when every item names an ability SVar. `Choices$ DBA,Creature` stays one token. Cryptic Command's `Choices$ DBCounter,DBReturn,DBTapAll,DBDraw | CharmNum$ 2` gives four sub-abilities and number `CharmNum=2`.
+A value can list several SVars, joined by `,` or ` & `. Each becomes its own sub-ability, but only when every item names an ability SVar. `Choices$ DBA,Creature` stays a plain value, split into `Choices=DBA` and `Choices=Creature`. Cryptic Command's `Choices$ DBCounter,DBReturn,DBTapAll,DBDraw | CharmNum$ 2` gives four sub-abilities and number `CharmNum=2`.
 
 The sub-ability's kind comes from its body's first key:
 
@@ -207,6 +261,8 @@ In costs, `X` stays the mana symbol `Cost=X`. `Y`, `Z`, SVar names and `<...>` a
 
 `<var>` and `<ref>` always show up as the value of a `Key=` token, so the model sees which quantity is runtime and which reference was cut. A printed `*` power or toughness is the bare string `"<var>"` (see Face).
 
-## Errors
+## Errors and warnings
 
-An ability segment without a `Key$`, an ability line whose first key doesn't fit its line (`T:` must start with `Mode$`, `R:` with `Event$`, `A:` with `SP$` or `AB$`), or an empty `K:` line raises `cardscript.ParseError`. A bad inlined body raises the same way, naming its `SVar:` line. The error carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it).
+Only ability lines can fail. Anything else the parser doesn't know becomes a warning on its face and parsing goes on: `"unknown key: Frobnicate"` for an unknown line key, `"unrecognized line: ..."` for a line with no colon. In Forge's current card folder the warnings are `Loyalty`, `Variant`, `Defense` and `CopyFaceFrom` lines.
+
+An ability segment without a `Key$`, an ability line whose first key doesn't fit its line (`T:` must start with `Mode$`, `R:` with `Event$`, `A:` with `SP$` or `AB$`), or an empty `K:` line raises `cardscript.ParseError`. A bad inlined body raises the same way, naming its `SVar:` line. The error carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it). `str(error)` is `"<cause>: <line>"`. The causes are `segment without Key$`, `unknown ability API '<key>'` (one group per unexpected first key, such as `'ST'`), and `empty keyword`.
