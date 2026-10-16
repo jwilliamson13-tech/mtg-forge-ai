@@ -13,7 +13,7 @@ vocab.index("Effect=DealDamage")   # token row
 vocab.key_index("NumDmg")          # numeric key row
 ```
 
-`cards` can be any iterable, so a JSONL dump streams straight in: `build_vocabulary(json.loads(line) for line in f)`.
+`cards` can be any iterable of `Card`s or their `to_dict()` form, so the JSONL dump (`sweep.md`) streams straight in without parsing again: `build_vocabulary(json.loads(line) for line in f)`. `save` and `load` exist because the encoder (#12) must read the same table the builder wrote.
 
 ## Grim Lavamancer
 
@@ -58,6 +58,8 @@ Names and warnings are skipped.
 ## Cutoff
 
 A token or key is kept when it appears on at least `min_count` cards. Each card counts once, however often it repeats the token: Dismember's two `pip=BP` count as one. The default `min_count=1` keeps everything seen.
+
+This is document frequency, on purpose. The cutoff asks whether enough different cards carry a token for the model to learn its embedding. A token repeated inside one card (Cryptic Command's modes each start `kind=sub`) is still one card's evidence, so counting occurrences would let a single wordy card push a token past the cutoff.
 
 Kept tokens come after the reserved ones, most frequent first, ties in string order. The same cards and cutoff always give the same file.
 

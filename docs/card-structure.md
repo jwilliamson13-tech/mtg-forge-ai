@@ -2,6 +2,8 @@
 
 `cardscript.parse_card(text)` returns a `Card`. `Card.to_dict()` gives the same thing as plain JSON. This page describes that JSON so another emitter (the Java snapshot hook, later) can produce it without reading the Python.
 
+The sweep over Forge's real scripts (`sweep.md`) turned up things the spec didn't spell out. Each is a small, deliberate addition, described in its section below: the `sub` kind for inlined bodies (Ability), resolving SVars only under listed reference keys (SVars), `SPECIALIZE` faces (Faces), variant and copied faces (Variants, Copied faces), die-roll results and the Gift and Tribute SVars (SVars), ` & ` lists (Filters), granted keywords (Granted keywords) and card names masked as `<name>` (Names).
+
 ## Lightning Bolt
 
 The script:
@@ -95,7 +97,7 @@ The card has two 2s. They sit under two keys, so the model never sees one merged
 
 | Field | Type | Meaning |
 |---|---|---|
-| `kind` | string | `spell` (`SP$`) or `activated` (`AB$`, and `ST$` for the few abilities that don't use the stack, such as Circling Vultures' discard) for `A:` lines, `trigger` for `T:`, `static` for `S:`, `replacement` for `R:`, `keyword` for `K:`. An inlined SVar body adds `sub` (`DB$`); see SVars. |
+| `kind` | string | `spell` (`SP$`) or `activated` (`AB$`, and `ST$` for the few abilities that don't use the stack, such as Circling Vultures' discard) for `A:` lines, `trigger` for `T:`, `static` for `S:`, `replacement` for `R:`, `keyword` for `K:`. An inlined SVar body adds `sub` (`DB$`); see SVars. The spec's kind list has no slot for a `DB$` body: it is neither cast nor activated by itself, it runs as part of the ability that names it, so it gets a kind of its own. |
 | `tokens` | list of string | Categorical tokens, `Key=Value`, in script order. The first is always `Effect=<first segment's value>`: the API effect (`DealDamage`), the trigger or static mode (`ChangesZone`, `Continuous`), the replacement event (`GameLoss`), or the keyword name. |
 | `numbers` | list of KeyedNumber | Every integer the line holds, in script order: plain segment values, cost amounts (see Costs), keyword parameters (see Keywords). |
 | `subabilities` | list of Ability | Same shape, one per inlined SVar, in reference order. See SVars. |
@@ -277,6 +279,8 @@ SVar:TrigFlashback:DB$ Pump | ValidTgts$ ... | TgtZone$ Graveyard | KW$ Flashbac
 The trigger has no `Execute=` token. Its `subabilities` holds one ability of kind `sub` with tokens `Effect=Pump ... KW=Flashback ...`.
 
 Only values under a reference key resolve: `Execute`, `SubAbility`, `ReplaceWith`, `Choices`, the other `*SubAbility` keys, and the keys that grant abilities (`Triggers`, `StaticAbilities`, `ReplacementEffects`, `AddAbility`, `AddTrigger`, ...). The full list is `REFERENCE_KEYS` in `cardscript/parser.py`. Any other value that happens to match an SVar name stays a plain token. `Destination$ Exile` on a card that also defines `SVar:Exile` is still `Destination=Exile`.
+
+This is narrower than the spec's wording, "a value naming an SVar whose body begins with `DB$`", on purpose: inlining every matching value would turn `Destination=Exile` into a sub-ability. The cost is that a new reference key is missed until someone adds it, so the checkpoint sweep audits it: of 43,318 ability-shaped SVars in Forge's scripts, all but 7 are reached through a listed key (`sweep.md`, The checkpoint run).
 
 Keyword parameters resolve for the keywords in `KEYWORD_REFERENCES`. `K:Chapter:2:DBA,DBB` gives number `Chapter=2` and two sub-abilities.
 
