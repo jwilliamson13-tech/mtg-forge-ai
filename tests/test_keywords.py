@@ -82,7 +82,7 @@ def test_segment_parameter_parses_like_an_ability_segment():
 
 def test_empty_parameters_are_skipped_but_keep_positions():
     text = "Name:T\nK:Equip:2:::ReduceCost$ Y:This ability costs {2} less to activate\n"
-    assert only_keyword(text) == (["Effect=Equip", "ReduceCost=Y"], [("Equip", 2)])
+    assert only_keyword(text) == (["Effect=Equip", "ReduceCost=<var>"], [("Equip", 2)])
 
 
 def test_keyword_lines_leave_no_warning(script):

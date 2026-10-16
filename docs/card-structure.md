@@ -91,10 +91,10 @@ The card has two 2s. They sit under two keys, so the model never sees one merged
 
 | Field | Type | Meaning |
 |---|---|---|
-| `kind` | string | `spell` (`SP$`) or `activated` (`AB$`) for `A:` lines, `keyword` for `K:` lines. Later: `trigger`, `static`, `replacement`. |
-| `tokens` | list of string | Categorical tokens, `Key=Value`, in script order. The first is always `Effect=<API effect>`, or `Effect=<keyword name>` for a keyword. |
+| `kind` | string | `spell` (`SP$`) or `activated` (`AB$`) for `A:` lines, `trigger` for `T:`, `static` for `S:`, `replacement` for `R:`, `keyword` for `K:`. An inlined SVar body adds `sub` (`DB$`); see SVars. |
+| `tokens` | list of string | Categorical tokens, `Key=Value`, in script order. The first is always `Effect=<first segment's value>`: the API effect (`DealDamage`), the trigger or static mode (`ChangesZone`, `Continuous`), the replacement event (`GameLoss`), or the keyword name. |
 | `numbers` | list of KeyedNumber | Every integer the line holds, in script order: plain segment values, cost amounts (see Costs), keyword parameters (see Keywords). |
-| `subabilities` | list of Ability | Same shape, for inlined SVars. Empty for now. |
+| `subabilities` | list of Ability | Same shape, one per inlined SVar, in reference order. See SVars. |
 
 ### KeyedNumber
 
@@ -143,6 +143,70 @@ Each parameter goes through the first rule that fits:
 
 Known gaps, left for the coverage sweep to size: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence. A textual parameter with a space, such as a partner's card name, gets dropped as description.
 
+## SVars
+
+`SVar:Name:Body` lines never become abilities on their own. A value that names one pulls the body in. An SVar nobody names (`PlayMain1`, `NeedsToPlayVar`, most AI hints) leaves no trace. SVars are scoped to a face, and an SVar used above its definition still resolves. A name defined twice keeps the last body, as Forge does.
+
+### Inlining, one level
+
+Snapcaster Mage:
+
+```
+T:Mode$ ChangesZone | Origin$ Any | Destination$ Battlefield | ValidCard$ Card.Self | Execute$ TrigFlashback | ...
+SVar:TrigFlashback:DB$ Pump | ValidTgts$ ... | TgtZone$ Graveyard | KW$ Flashback | PumpZone$ Graveyard
+```
+
+The trigger has no `Execute=` token. Its `subabilities` holds one ability of kind `sub` with tokens `Effect=Pump ... KW=Flashback ...`.
+
+Only values under a reference key resolve: `Execute`, `SubAbility`, `ReplaceWith`, `Choices`, the other `*SubAbility` keys, and the keys that grant abilities (`Triggers`, `StaticAbilities`, `ReplacementEffects`, `AddAbility`, `AddTrigger`, ...). The full list is `REFERENCE_KEYS` in `cardscript/parser.py`. Any other value that happens to match an SVar name stays a plain token. `Destination$ Exile` on a card that also defines `SVar:Exile` is still `Destination=Exile`.
+
+Keyword parameters resolve for the keywords in `KEYWORD_REFERENCES`. `K:Chapter:2:DBA,DBB` gives number `Chapter=2` and two sub-abilities.
+
+A value can list several SVars, joined by `,` or ` & `. Each becomes its own sub-ability, but only when every item names an ability SVar. `Choices$ DBA,Creature` stays one token. Cryptic Command's `Choices$ DBCounter,DBReturn,DBTapAll,DBDraw | CharmNum$ 2` gives four sub-abilities and number `CharmNum=2`.
+
+The sub-ability's kind comes from its body's first key:
+
+| Body starts with | kind |
+|---|---|
+| `DB$` | `sub` |
+| `AB$` | `activated` |
+| `SP$` | `spell` |
+| `Event$` | `replacement` |
+| `Mode$` | `static` under `StaticAbilities`, `AddStaticAbility` and the other static keys; `trigger` otherwise |
+
+Depth is fixed at 1. A top-level ability inlines what it names. An inlined body does not: each reference inside it becomes the token `Key=<ref>`, one per named SVar. Thassa's Oracle shows the cutoff:
+
+```
+T:Mode$ ChangesZone | ... | Execute$ TrigDig
+SVar:TrigDig:DB$ Dig | DigNum$ X | ChangeNum$ 1 | ... | SubAbility$ DBWin
+SVar:DBWin:DB$ WinsGame | ...
+```
+
+The trigger's one sub-ability is the `Dig`, and its tokens include `SubAbility=<ref>`. `WinsGame` appears nowhere. About 13% of Forge's abilities chain deeper than one level, so `<ref>` is common. The cap also means a self-referencing SVar can't loop.
+
+### `<var>`: runtime quantities
+
+A value becomes `Key=<var>`, with no number, when it is:
+
+- bare `X`, `Y` or `Z`, with or without an SVar behind it;
+- an inline expression such as `TriggerCount$Amount`;
+- the name of an SVar whose body is an expression: `Count$...`, `Remembered$Amount`, `SVar$Z1/Minus.Z2`, `Number$0` and the rest of the `Word$...` family. `Number$N` counts too, because Forge mostly uses it as a mutable counter.
+
+This holds under any key, not just the reference keys. Across Forge's cardsfolder, every key that names an expression SVar holds a quantity, so there's no false hit to guard against.
+
+A leading sign is kept as a second token, `Key.sign=-` or `Key.sign=+`. Death's Shadow:
+
+```
+S:Mode$ Continuous | AffectedDefined$ Self | AddPower$ -X | AddToughness$ -X
+SVar:X:Count$YourLifeTotal
+```
+
+gives tokens `Effect=Continuous AffectedDefined=Self AddPower=<var> AddPower.sign=- AddToughness=<var> AddToughness.sign=-` and no numbers.
+
+In costs, `X` stays the mana symbol `Cost=X`. `Y`, `Z`, SVar names and `<...>` amounts go through the same rules, so `Sac<Y/Creature>` gives `Cost.Sac=<var>`.
+
+`<var>` and `<ref>` always show up as the value of a `Key=` token, so the model sees which quantity is runtime and which reference was cut. A printed `*` power or toughness is the bare string `"<var>"` (see Face).
+
 ## Errors
 
-An ability segment without a `Key$`, or an empty `K:` line, raises `cardscript.ParseError`. It carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it).
+An ability segment without a `Key$`, an ability line whose first key doesn't fit its line (`T:` must start with `Mode$`, `R:` with `Event$`, `A:` with `SP$` or `AB$`), or an empty `K:` line raises `cardscript.ParseError`. A bad inlined body raises the same way, naming its `SVar:` line. The error carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it).
