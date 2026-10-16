@@ -24,9 +24,11 @@ class ParseError(ValueError):
         self.cause = cause
 
 
-# Ability line key -> {first segment's key -> ability kind}.
+# Ability line key -> {first segment's key -> ability kind}. `ST$` is an
+# ability that doesn't use the stack (Circling Vultures' discard, the `PayUp`
+# abilities of Nafs Asp and friends); it reads as `activated`.
 LINE_KINDS = {
-    "A": {"SP": "spell", "AB": "activated"},
+    "A": {"SP": "spell", "AB": "activated", "ST": "activated"},
     "T": {"Mode": "trigger"},
     "S": {"Mode": "static"},
     "R": {"Event": "replacement"},
@@ -37,6 +39,7 @@ LINE_KINDS = {
 SVAR_KINDS = {
     "DB": "sub",
     "AB": "activated",
+    "ST": "activated",
     "SP": "spell",
     "Event": "replacement",
     "Mode": "trigger",

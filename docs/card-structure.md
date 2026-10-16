@@ -95,7 +95,7 @@ The card has two 2s. They sit under two keys, so the model never sees one merged
 
 | Field | Type | Meaning |
 |---|---|---|
-| `kind` | string | `spell` (`SP$`) or `activated` (`AB$`) for `A:` lines, `trigger` for `T:`, `static` for `S:`, `replacement` for `R:`, `keyword` for `K:`. An inlined SVar body adds `sub` (`DB$`); see SVars. |
+| `kind` | string | `spell` (`SP$`) or `activated` (`AB$`, and `ST$` for the few abilities that don't use the stack, such as Circling Vultures' discard) for `A:` lines, `trigger` for `T:`, `static` for `S:`, `replacement` for `R:`, `keyword` for `K:`. An inlined SVar body adds `sub` (`DB$`); see SVars. |
 | `tokens` | list of string | Categorical tokens, `Key=Value`, in script order. The first is always `Effect=<first segment's value>`: the API effect (`DealDamage`), the trigger or static mode (`ChangesZone`, `Continuous`), the replacement event (`GameLoss`), or the keyword name. |
 | `numbers` | list of KeyedNumber | Every integer the line holds, in script order: plain segment values, cost amounts (see Costs), keyword parameters (see Keywords). |
 | `subabilities` | list of Ability | Same shape, one per inlined SVar, in reference order. See SVars. |
@@ -227,7 +227,7 @@ The sub-ability's kind comes from its body's first key:
 | Body starts with | kind |
 |---|---|
 | `DB$` | `sub` |
-| `AB$` | `activated` |
+| `AB$`, `ST$` | `activated` |
 | `SP$` | `spell` |
 | `Event$` | `replacement` |
 | `Mode$` | `static` under `StaticAbilities`, `AddStaticAbility` and the other static keys; `trigger` otherwise |
@@ -269,4 +269,4 @@ In costs, `X` stays the mana symbol `Cost=X`. `Y`, `Z`, SVar names and `<...>` a
 
 Only ability lines can fail. Anything else the parser doesn't know becomes a warning on its face and parsing goes on: `"unknown key: Frobnicate"` for an unknown line key, `"unrecognized line: ..."` for a line with no colon. In Forge's current card folder the warnings are `Loyalty`, `Variant`, `Defense` and `CopyFaceFrom` lines.
 
-An ability segment without a `Key$`, an ability line whose first key doesn't fit its line (`T:` must start with `Mode$`, `R:` with `Event$`, `A:` with `SP$` or `AB$`), or an empty `K:` line raises `cardscript.ParseError`. A bad inlined body raises the same way, naming its `SVar:` line. The error carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it). `str(error)` is `"<cause>: <line>"`. The causes are `segment without Key$`, `unknown ability API '<key>'` (one group per unexpected first key, such as `'ST'`), and `empty keyword`. The sweep groups any other exception under `unexpected <ExceptionType>`; see `sweep.md`.
+An ability segment without a `Key$`, an ability line whose first key doesn't fit its line (`T:` must start with `Mode$`, `R:` with `Event$`, `A:` with `SP$`, `AB$` or `ST$`), or an empty `K:` line raises `cardscript.ParseError`. A bad inlined body raises the same way, naming its `SVar:` line. The error carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it). `str(error)` is `"<cause>: <line>"`. The causes are `segment without Key$`, `unknown ability API '<key>'` (one group per unexpected first key, such as `'Mode'` on an `A:` line), and `empty keyword`. The sweep groups any other exception under `unexpected <ExceptionType>`; see `sweep.md`.

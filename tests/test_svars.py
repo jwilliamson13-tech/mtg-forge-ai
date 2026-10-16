@@ -241,3 +241,21 @@ def test_keyword_parameter_naming_a_non_ability_svar_stays_a_token():
 def test_an_inline_expression_value_is_var():
     (spell,) = abilities("Name:T\nA:SP$ DealDamage | NumDmg$ TriggerCount$Amount | NumAtt$ +Count$ChosenNumber\n")
     assert spell.tokens == ["Effect=DealDamage", "NumDmg=<var>", "NumAtt=<var>", "NumAtt.sign=+"]
+
+
+# --- ST$: abilities that don't use the stack ----------------------------------
+
+
+def test_st_line_is_an_activated_ability(script):
+    vultures = abilities(script("circling_vultures"))
+    st = vultures[-1]
+    assert [a.kind for a in vultures] == ["keyword", "trigger", "activated"]
+    assert st.tokens[:2] == ["Effect=Discard", "Mode=Defined"]
+    assert ("Cost", 0) in numbers(st)
+
+
+def test_st_svar_body_is_an_ability_reference(script):
+    (trigger,) = abilities(script("glass_asp"))
+    (effect,) = trigger.subabilities
+    assert "Abilities=<ref>" in effect.tokens
+    assert "Abilities=PayUp" not in effect.tokens
