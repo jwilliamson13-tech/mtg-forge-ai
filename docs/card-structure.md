@@ -145,7 +145,7 @@ Each parameter goes through the first rule that fits:
 
 `Protection from X` is read as `Protection` with parameter `X`, and `X` is always kept.
 
-Known gaps, left for the coverage sweep to size: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence. A textual parameter with a space, such as a partner's card name, gets dropped as description.
+Known gap, sized by the 2026-10-16 sweep: keywords Forge writes as whole English sentences (`K:CARDNAME can't attack alone.`) become one `Effect=` token holding the sentence, 159 lines on 155 cards. A textual parameter with a space, such as a partner's card name, gets dropped as description.
 
 ## Filters
 
@@ -279,6 +279,6 @@ In costs, `X` stays the mana symbol `Cost=X`. `Y`, `Z`, SVar names and `<...>` a
 
 ## Errors and warnings
 
-Only ability lines can fail. Anything else the parser doesn't know becomes a warning on its face and parsing goes on: `"unknown key: Frobnicate"` for an unknown line key, `"unrecognized line: ..."` for a line with no colon. In Forge's current card folder the warnings are `Loyalty`, `Variant`, `Defense` and `CopyFaceFrom` lines.
+Only ability lines can fail. Anything else the parser doesn't know becomes a warning on its face and parsing goes on: `"unknown key: Frobnicate"` for an unknown line key, `"unrecognized line: ..."` for a line with no colon. Two warnings name a known gap instead: `copied face not resolved: <face>` (see Copied faces) and `unparsed variant line: <key>` (see Variants). In the 2026-10-16 sweep those are the only warnings, on 26 cards.
 
 An ability segment without a `Key$`, an ability line whose first key doesn't fit its line (`T:` must start with `Mode$`, `R:` with `Event$`, `A:` with `SP$`, `AB$` or `ST$`), or an empty `K:` line raises `cardscript.ParseError`. A bad inlined body raises the same way, naming its `SVar:` line. The error carries `line` (the offending script line) and `cause` (a short reason, the same for every line that fails the same way, so the sweep can group failures by it). `str(error)` is `"<cause>: <line>"`. The causes are `segment without Key$`, `unknown ability API '<key>'` (one group per unexpected first key, such as `'Mode'` on an `A:` line), and `empty keyword`. The sweep groups any other exception under `unexpected <ExceptionType>`; see `sweep.md`.

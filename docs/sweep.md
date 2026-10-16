@@ -28,6 +28,8 @@ failures by cause:
   1  unknown ability API 'ST'  (cardsfolder/c/circling_vultures.txt)
 ```
 
+(That is the first smoke run; the `ST$` failure is fixed. See The checkpoint run.)
+
 Coverage is parsed over scripts, rounded down to two decimals, so `100.00%` means every script parsed. Causes are listed most common first, with the first file that failed that way. `--top N` sets how many causes to list (default 10). If more exist, the last line says how many were left out.
 
 `--min-coverage 95` makes the command exit 1, with a line on stderr, when coverage is below 95. It compares the exact percentage, not the rounded one. Without the flag the exit code is 0 whatever the coverage. A folder that doesn't exist exits 2.
@@ -55,3 +57,28 @@ with open("cards.jsonl", encoding="utf-8") as f:
     vocab = build_vocabulary((json.loads(line) for line in f), min_count=5)
 vocab.save("vocab.json")
 ```
+
+## The checkpoint run
+
+Run on 2026-10-16 over Forge commit `64569999b8b99dd7176ab9d3e1e6008f3ab68590` (`forge-gui/res/cardsfolder` and `forge-gui/res/tokenscripts`, default exclusions):
+
+| | scripts | parsed | coverage |
+|---|---|---|---|
+| cardsfolder | 33,845 | 33,845 | 100.00% |
+| tokenscripts | 857 | 857 | 100.00% |
+| both | 34,702 | 34,702 | 100.00% |
+
+The excluded sub-folders hold 230 `rebalanced` and 13 `upcoming` scripts. Every `A:`, `T:`, `S:`, `R:` and `K:` line (63,336) became exactly one top-level ability. Warnings land on 26 cards; see "Errors and warnings" in `card-structure.md`.
+
+The outputs live in the main checkout's gitignored `data/` folder, which Spec 5 reads:
+
+- `data/cards.jsonl`: the dump, 34,702 lines.
+- `data/vocab.json`: `build_vocabulary(..., min_count=5)` over the dump: 3,494 tokens and 231 numeric keys, reserved entries included.
+
+To rebuild them, from the repo root with Forge cloned beside it:
+
+```
+python -m cardscript sweep ../forge/forge-gui/res/cardsfolder ../forge/forge-gui/res/tokenscripts --out data/cards.jsonl --min-coverage 95
+```
+
+then the vocabulary snippet above with `min_count=5` and `vocab.save("data/vocab.json")`.
