@@ -4,7 +4,7 @@ A learned board evaluator for Forge. `HANDOFF.md` has the design.
 
 ## Card-script parser
 
-`cardscript` turns a Forge card script into plain data, described in `docs/card-structure.md`. It needs Python 3.11 or newer and nothing outside the standard library.
+`cardscript` turns a Forge card script into plain data, described in `docs/card-structure.md`. `cardscript.vocab` builds the token and numeric-key tables the encoder looks up, described in `docs/vocabulary.md`. It needs Python 3.11 or newer and nothing outside the standard library.
 
 Print one card's parsed structure:
 
