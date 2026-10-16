@@ -1,4 +1,4 @@
-"""Filter values split on `.`, `+` and `,` into sub-tokens under their key."""
+"""Filter values split on `.`, `+`, `,` and ` & ` into sub-tokens under their key."""
 
 from cardscript import parse_card
 
@@ -36,6 +36,22 @@ def test_negation_and_comparisons_stay_inside_their_piece():
 def test_a_card_name_with_spaces_survives_the_split():
     assert tokens_of("A:SP$ ChangeZone | ChangeType$ Card.namedFestering Newt") == [
         "Effect=ChangeZone", "ChangeType=Card", "ChangeType=namedFestering Newt"]
+
+
+def test_an_ampersand_list_splits_like_a_comma_list(script):
+    (trigger,) = [a for a in parse_card(script("absorbing_man")).faces[0].abilities if a.kind == "trigger"]
+    (clone,) = trigger.subabilities
+    assert [t for t in clone.tokens if t.startswith("AddTypes=")] == [
+        "AddTypes=Legendary", "AddTypes=Creature", "AddTypes=Human", "AddTypes=Villain"]
+
+
+def test_ampersand_and_filter_separators_combine():
+    assert tokens_of("A:SP$ Sacrifice | SacValid$ Creature.Artifact & Creature.nonArtifact") == [
+        "Effect=Sacrifice", "SacValid=Creature", "SacValid=Artifact", "SacValid=Creature", "SacValid=nonArtifact"]
+
+
+def test_an_ampersand_without_spaces_is_not_a_separator():
+    assert tokens_of("A:SP$ Pump | ValidTgts$ R&D") == ["Effect=Pump", "ValidTgts=R&D"]
 
 
 def test_a_value_with_no_separator_is_one_token():

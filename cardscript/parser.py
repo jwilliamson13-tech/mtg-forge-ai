@@ -122,8 +122,10 @@ COPY_FACE = "CopyFaceFrom"
 # `K:Protection from red` is read as `K:Protection:red`.
 PROTECTION_FROM = "Protection from "
 
-# A filter value splits on these, one `key=piece` token per piece.
-_FILTER_SEPARATORS = re.compile(r"[.+,]")
+# A filter value splits on these, one `key=piece` token per piece: `.`, `+`
+# and `,` inside a filter, and ` & ` between the items of a list
+# (`AddTypes$ Legendary & Creature`).
+_FILTER_SEPARATORS = re.compile(r"[.+,]|\s&\s")
 
 COLORS = frozenset("WUBRG")
 
@@ -422,7 +424,7 @@ def _add_value(
 
 
 def _add_tokens(ability: Ability, key: str, value: str) -> None:
-    """Split on `.`, `+` and `,`: `Creature.OppCtrl+tapped` gives
+    """Split on `.`, `+`, `,` and ` & `: `Creature.OppCtrl+tapped` gives
     `key=Creature`, `key=OppCtrl`, `key=tapped`.
 
     Pieces keep `!`, fused comparisons and inner spaces (`!token`, `cmcLE4`,

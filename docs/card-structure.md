@@ -149,7 +149,7 @@ Known gap, sized by the 2026-10-16 sweep: keywords Forge writes as whole English
 
 ## Filters
 
-A plain value (not a number, `<var>` or inlined reference) is split on `.`, `+` and `,`. Each piece becomes its own token under the segment's key:
+A plain value (not a number, `<var>` or inlined reference) is split on `.`, `+`, `,` and ` & `. Each piece becomes its own token under the segment's key:
 
 ```
 A:SP$ TapAll | ValidCards$ Creature.OppCtrl+tapped
@@ -157,7 +157,9 @@ A:SP$ TapAll | ValidCards$ Creature.OppCtrl+tapped
 
 gives `Effect=TapAll ValidCards=Creature ValidCards=OppCtrl ValidCards=tapped`.
 
-Snapcaster's `ValidTgts$ Instant.YouCtrl,Sorcery.YouCtrl` gives four tokens, `YouCtrl` twice. The split doesn't interpret anything. Negation stays on its piece (`!token`), comparisons stay fused (`cmcLE4`, `powerGE3`), and names keep their spaces (`namedFestering Newt`). Empty pieces are skipped. `&` lists and space-separated values are not split: `KW$ Flying & First Strike` is one token.
+Snapcaster's `ValidTgts$ Instant.YouCtrl,Sorcery.YouCtrl` gives four tokens, `YouCtrl` twice. The split doesn't interpret anything. Negation stays on its piece (`!token`), comparisons stay fused (`cmcLE4`, `powerGE3`), and names keep their spaces (`namedFestering Newt`). Empty pieces are skipped. Space-separated values are not split.
+
+` & ` (with a space each side) is Forge's other list separator, used between whole items: `AddTypes$ Legendary & Creature & Human & Villain` gives four `AddTypes=` tokens, and `SacValid$ Creature.Artifact & Creature.nonArtifact` gives `Creature`, `Artifact`, `Creature`, `nonArtifact`. The spec named only `.`, `+` and `,`; ` & ` was added after the sweep found it in 30-odd keys. An `&` without spaces (`R&D`) stays inside its piece.
 
 The same split applies to keyword parameters (`Enchant:Creature.YouCtrl`) and to the type field of a cost part (`Sac<1/Creature.Other>`). The effect token (`Effect=...`) is never split.
 
