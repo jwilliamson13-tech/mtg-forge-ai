@@ -12,6 +12,12 @@ Print one card's parsed structure:
 python -m cardscript show tests/fixtures/lightning_bolt.txt
 ```
 
+Parse Forge's card and token folders, print coverage and the top failure causes, and dump every parsed card to JSONL (`docs/sweep.md` has the details):
+
+```
+python -m cardscript sweep path/to/cardsfolder path/to/tokenscripts --out cards.jsonl --min-coverage 95
+```
+
 Run the tests (pytest is the only dependency):
 
 ```
