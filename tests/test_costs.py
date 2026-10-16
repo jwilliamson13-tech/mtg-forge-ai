@@ -90,3 +90,9 @@ def test_other_cost_keys_parse_the_same_way():
     (ability,) = parse_card(f"Name:T\n{line}\n").faces[0].abilities
     assert "UnlessCost=Discard" in ability.tokens
     assert numbers(ability) == [("UnlessCost.Discard", 1)]
+
+
+def test_a_cost_field_naming_a_runtime_value_is_var(script):
+    roll = parse_card(script("clay_golem")).faces[0].abilities[0]
+    assert roll.tokens[:3] == ["Effect=PutCounter", "Cost=RollDice", "Cost.RollDice=<var>"]
+    assert numbers(roll) == [("Cost", 6), ("Cost.RollDice", 1), ("Cost.RollDice.2", 8)]

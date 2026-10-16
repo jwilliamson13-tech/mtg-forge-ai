@@ -132,7 +132,9 @@ _FILTER_START = re.compile(r"[A-Z]\w*[.+]\S")
 # A `<...>` part may hold spaces in its description field, hence the regex.
 _COST_ATOM = re.compile(r"[^\s<]*<[^>]*>|\S+")
 _COST_PART = re.compile(r"(\w+)<([^>]*)>")
-_MANA_SYMBOL = re.compile(r"[WUBRGCSPX0-9/]+|XMin\d+")
+# A mana symbol has a letter: `R`, `2W`, `RWP`, `X`. A bare integer is generic
+# mana, a number.
+_MANA_SYMBOL = re.compile(r"(?=.*[WUBRGCSPX])[WUBRGCSPX0-9/]+|XMin\d+")
 COST_FLAGS = frozenset({"T", "Q"})
 
 
@@ -374,10 +376,12 @@ def _add_segment(scope: _Scope, ability: Ability, key: str, value: str) -> None:
         _add_value(scope, ability, key, value)
 
 
-def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
+def _add_value(
+    scope: _Scope, ability: Ability, key: str, value: str, number_key: str | None = None
+) -> None:
     """The one place a value is classified. First rule that fits:
 
-    1. An integer: a number under `key`.
+    1. An integer: a number under `number_key`, which defaults to `key`.
     2. Under a reference key, a name or list of names of SVars whose bodies
        are abilities: each body inlined as a sub-ability, or `key=<ref>` once
        past `INLINE_DEPTH`.
@@ -387,7 +391,7 @@ def _add_value(scope: _Scope, ability: Ability, key: str, value: str) -> None:
        `_add_tokens`.
     """
     if _INT.fullmatch(value):
-        ability.numbers.append(KeyedNumber(key, int(value)))
+        ability.numbers.append(KeyedNumber(number_key or key, int(value)))
         return
     if key == RESULT_KEY and _add_results(scope, ability, key, value):
         return
@@ -459,17 +463,15 @@ def _add_results(scope: _Scope, ability: Ability, key: str, value: str) -> bool:
 def _add_cost(scope: _Scope, ability: Ability, key: str, value: str) -> None:
     """A cost: `R T ExileFromGrave<2/Card>` under key `Cost`.
 
-    Integers are generic mana, a number under `key`. Mana symbols and T/Q are
-    `key=symbol` tokens. A part `Name<amount/type/description>` is a `key=Name`
-    token, its amount a number under `key.Name`, its type `key.Name=...`
-    tokens split like any filter; free-text fields are dropped. Anything else is a plain value.
+    Mana symbols and T/Q are `key=symbol` tokens. A part
+    `Name<amount/type/description>` is a `key=Name` token plus its fields (see
+    `_add_cost_part`). Any other atom, generic mana included, is a plain value
+    under `key`: an integer is a number, `Y` is `<var>`.
     """
     for atom in _COST_ATOM.findall(value):
         part = _COST_PART.fullmatch(atom)
         if part:
             _add_cost_part(scope, ability, key, part[1], part[2].split("/"))
-        elif _INT.fullmatch(atom):
-            ability.numbers.append(KeyedNumber(key, int(atom)))
         elif atom in COST_FLAGS or _MANA_SYMBOL.fullmatch(atom):
             ability.tokens.append(f"{key}={atom}")
         else:
@@ -479,19 +481,16 @@ def _add_cost(scope: _Scope, ability: Ability, key: str, value: str) -> None:
 def _add_cost_part(
     scope: _Scope, ability: Ability, key: str, name: str, fields: list[str]
 ) -> None:
+    """`Name<amount/type/...>` under `key`: token `key=Name`, then each field as
+    a value under `key.Name`. An integer past the amount is keyed by its
+    position (`key.Name.2`) so it never shares a key with the amount."""
     sub = f"{key}.{name}"
     ability.tokens.append(f"{key}={name}")
-    amount, *rest = fields
-    if amount:
-        _add_value(scope, ability, sub, amount)
-    for position, field_ in enumerate(rest, 2):
-        if not field_ or _is_free_text(field_):
+    for position, field_ in enumerate(fields, 1):
+        if not field_ or (position > 1 and _is_free_text(field_)):
             continue
-        if _INT.fullmatch(field_):
-            ability.numbers.append(KeyedNumber(f"{sub}.{position}", int(field_)))
-        else:
-            _add_tokens(ability, sub, field_)
-
+        number_key = sub if position == 1 else f"{sub}.{position}"
+        _add_value(scope, ability, sub, field_, number_key=number_key)
 
 
 def _is_free_text(value: str) -> bool:

@@ -116,7 +116,7 @@ Any segment whose key ends in `Cost` (`Cost$`, `UnlessCost$`, `AlternateCost$`, 
 | integer | a number under the cost key (generic mana) | `2` gives number `Cost=2` |
 | mana symbol, `T`, `Q` | a token | `R` gives `Cost=R`; `U U` gives `Cost=U` twice |
 | `Name<amount/type/description>` | token `Cost=Name`; amount as a number under `Cost.Name`; type split like a filter under `Cost.Name`; the description is dropped | `Sac<1/Creature.Other/another creature>` gives `Cost=Sac`, `Cost.Sac=Creature`, `Cost.Sac=Other`, number `Cost.Sac=1` |
-| anything else (`XMin1`, an SVar name) | a plain value | `Y` gives `Cost=Y` |
+| anything else (`Y`, an SVar name) | a plain value, by the same rules as any segment value | `Y` gives `Cost=<var>` |
 
 A field inside `<...>` counts as description when it has a space or starts lowercase, unless it starts like a filter (see Keywords, rule 4). Integer fields past the first get a positional key: `PutCardToLibFromGrave<1/-1/Instant>` gives `Cost.PutCardToLibFromGrave=1` and `Cost.PutCardToLibFromGrave.2=-1`.
 
@@ -273,7 +273,7 @@ SVar:X:Count$YourLifeTotal
 
 gives tokens `Effect=Continuous AffectedDefined=Self AddPower=<var> AddPower.sign=- AddToughness=<var> AddToughness.sign=-` and no numbers.
 
-In costs, `X` stays the mana symbol `Cost=X`. `Y`, `Z`, SVar names and `<...>` amounts go through the same rules, so `Sac<Y/Creature>` gives `Cost.Sac=<var>`.
+In costs, `X` stays the mana symbol `Cost=X`. `Y`, `Z`, SVar names and every kept `<...>` field go through the same rules, so `Sac<Y/Creature>` gives `Cost.Sac=<var>` and Clay Golem's `RollDice<1/8/X>` gives `Cost.RollDice=<var>` with numbers `Cost.RollDice=1` and `Cost.RollDice.2=8`.
 
 `<var>` and `<ref>` always show up as the value of a `Key=` token, so the model sees which quantity is runtime and which reference was cut. A printed `*` power or toughness is the bare string `"<var>"` (see Face).
 
