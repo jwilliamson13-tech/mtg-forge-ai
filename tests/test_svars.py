@@ -1,4 +1,4 @@
-"""T:/S:/R: lines, SVar inlining one level deep, and <var> for runtime values."""
+"""T:/S:/R: lines, SVar inlining two levels deep, and <var> for runtime values."""
 
 import pytest
 
@@ -77,13 +77,29 @@ def test_svar_defined_after_its_use_still_inlines():
     assert numbers(gain) == [("LifeAmount", 3)]
 
 
-def test_thassas_oracle_inlines_one_level_and_refs_the_next(script):
+def test_thassas_oracle_inlines_two_levels_down_to_its_win(script):
     (trigger,) = abilities(script("thassas_oracle"))
     (dig,) = trigger.subabilities
     assert dig.tokens[0] == "Effect=Dig"
-    assert "SubAbility=<ref>" in dig.tokens
-    assert dig.subabilities == []
     assert numbers(dig) == [("ChangeNum", 1), ("LibraryPosition", 0)]
+    assert not any(t.startswith("SubAbility=") for t in dig.tokens)
+    (win,) = dig.subabilities
+    assert win.kind == "sub"
+    assert win.tokens == [
+        "Effect=WinsGame", "Defined=You", "ConditionCheckSVar=<var>", "ConditionSVarCompare=LEX"]
+    assert win.numbers == []
+    assert win.subabilities == []
+
+
+def test_mayaels_aria_refs_the_third_level(script):
+    (trigger,) = abilities(script("mayaels_aria"))
+    (counters,) = trigger.subabilities
+    (gain,) = counters.subabilities
+    assert gain.tokens == [
+        "Effect=GainLife", "Defined=You", "ConditionPresent=Creature", "ConditionPresent=YouCtrl",
+        "ConditionPresent=powerGE10", "SubAbility=<ref>"]
+    assert numbers(gain) == [("LifeAmount", 10)]
+    assert gain.subabilities == []
 
 
 def test_cryptic_command_is_four_inlined_modes_and_charm_num_2(script):
@@ -97,13 +113,15 @@ def test_cryptic_command_is_four_inlined_modes_and_charm_num_2(script):
     assert not any(t.startswith("Choices=") for t in charm.tokens)
 
 
-def test_a_comma_list_inside_a_sub_ability_becomes_one_ref_each():
+def test_a_comma_list_past_the_inline_depth_becomes_one_ref_each():
     text = (
-        "Name:T\nT:Mode$ Attacks | Execute$ TrigCharm\n"
-        "SVar:TrigCharm:DB$ Charm | Choices$ DBA,DBB\n"
+        "Name:T\nT:Mode$ Attacks | Execute$ TrigDraw\n"
+        "SVar:TrigDraw:DB$ Draw | SubAbility$ DBCharm\n"
+        "SVar:DBCharm:DB$ Charm | Choices$ DBA,DBB\n"
         "SVar:DBA:DB$ Draw\nSVar:DBB:DB$ Mill\n"
     )
-    (charm,) = abilities(text)[0].subabilities
+    (draw,) = abilities(text)[0].subabilities
+    (charm,) = draw.subabilities
     assert charm.tokens == ["Effect=Charm", "Choices=<ref>", "Choices=<ref>"]
 
 
@@ -131,11 +149,14 @@ def test_a_name_with_no_svar_stays_a_plain_token():
     assert spell.subabilities == []
 
 
-def test_a_self_referencing_svar_stops_at_one_level():
+def test_a_self_referencing_svar_stops_at_two_levels():
     text = "Name:T\nA:SP$ Draw | SubAbility$ DBLoop\nSVar:DBLoop:DB$ Mill | SubAbility$ DBLoop\n"
     (spell,) = abilities(text)
     (loop,) = spell.subabilities
-    assert loop.tokens == ["Effect=Mill", "SubAbility=<ref>"]
+    assert loop.tokens == ["Effect=Mill"]
+    (again,) = loop.subabilities
+    assert again.tokens == ["Effect=Mill", "SubAbility=<ref>"]
+    assert again.subabilities == []
 
 
 def test_keyword_parameter_naming_svars_inlines_them():
@@ -254,11 +275,16 @@ def test_st_line_is_an_activated_ability(script):
     assert ("Cost", 0) in numbers(st)
 
 
-def test_st_svar_body_is_an_ability_reference(script):
+def test_st_svar_body_inlines_as_an_activated_ability(script):
     (trigger,) = abilities(script("glass_asp"))
     (effect,) = trigger.subabilities
-    assert "Abilities=<ref>" in effect.tokens
-    assert "Abilities=PayUp" not in effect.tokens
+    assert not any(t.startswith("Abilities=") for t in effect.tokens)
+    draw_trigger, pay_up = effect.subabilities
+    assert draw_trigger.kind == "trigger"
+    assert "Execute=<ref>" in draw_trigger.tokens
+    assert pay_up.kind == "activated"
+    assert pay_up.tokens[0] == "Effect=ChangeZone"
+    assert numbers(pay_up) == [("Cost", 2)]
 
 
 # --- ResultSubAbilities$: die results ------------------------------------------
@@ -281,8 +307,20 @@ def test_else_die_result_is_a_token_on_its_sub_ability(script):
     assert scry.tokens[:2] == ["Effect=Scry", "ResultSubAbilities=Else"]
 
 
-def test_die_results_past_the_inline_depth_are_refs(script):
+def test_a_single_die_result_is_its_own_min_and_max(script):
     trigger = abilities(script("arden_angel"))[1]
     (roll,) = trigger.subabilities
-    assert roll.tokens == ["Effect=RollDice", "ResultSubAbilities=<ref>"]
+    assert roll.tokens == ["Effect=RollDice"]
     assert numbers(roll) == [("Sides", 4)]
+    (back,) = roll.subabilities
+    assert back.tokens[0] == "Effect=ChangeZone"
+    assert numbers(back) == [("ResultSubAbilities.min", 1), ("ResultSubAbilities.max", 1)]
+
+
+def test_die_results_past_the_inline_depth_are_refs(script):
+    (trigger,) = abilities(script("aberrant_mind_sorcerer"))
+    (pump,) = trigger.subabilities
+    (roll,) = pump.subabilities
+    assert roll.tokens == ["Effect=RollDice", "ResultSubAbilities=<ref>", "ResultSubAbilities=<ref>"]
+    assert numbers(roll) == [("Sides", 20)]
+    assert roll.subabilities == []

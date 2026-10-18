@@ -113,7 +113,7 @@ def test_min_count_below_one_is_rejected(cards):
 
 
 def test_var_and_ref_tokens_above_the_cutoff_keep_their_own_index(cards):
-    vocab = build_vocabulary(cards("deaths_shadow", "thassas_oracle"))
+    vocab = build_vocabulary(cards("deaths_shadow", "mayaels_aria"))
     assert vocab.index("AddPower=<var>") > 2
     assert vocab.index("SubAbility=<ref>") > 2
 
@@ -125,7 +125,7 @@ def test_rare_var_token_falls_back_to_the_var_marker_not_unk(cards):
 
 
 def test_rare_ref_token_falls_back_to_the_ref_marker_not_unk(cards):
-    vocab = build_vocabulary(cards("thassas_oracle", "lightning_bolt"), min_count=2)
+    vocab = build_vocabulary(cards("mayaels_aria", "lightning_bolt"), min_count=2)
     assert "SubAbility=<ref>" not in vocab.tokens
     assert vocab.index("SubAbility=<ref>") == vocab.index(REF) == 2
 

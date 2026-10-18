@@ -163,7 +163,7 @@ RESULT_KEY = "ResultSubAbilities"
 _RESULT_RANGE = re.compile(r"(\d+)(?:-(\d+))?")
 
 # How many SVar references deep a body is inlined. Past this, `Key=<ref>`.
-INLINE_DEPTH = 1
+INLINE_DEPTH = 2
 
 # Values that are runtime quantities even with no SVar behind them.
 BARE_VARS = frozenset({"X", "Y", "Z"})
