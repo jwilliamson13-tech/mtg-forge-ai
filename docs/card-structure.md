@@ -267,7 +267,7 @@ A face that is only `CopyFaceFrom:<face name>` takes its rules from another scri
 
 `SVar:Name:Body` lines never become abilities on their own. A value that names one pulls the body in. An SVar nobody names (`PlayMain1`, `NeedsToPlayVar`, most AI hints) leaves no trace. Hint SVars on the drop list never resolve even when named (see Dropped). SVars are scoped to a face, and an SVar used above its definition still resolves. A name defined twice keeps the last body, as Forge does.
 
-### Inlining, one level
+### Inlining, two levels
 
 Snapcaster Mage:
 
@@ -300,15 +300,28 @@ The sub-ability's kind comes from its body's first key:
 | `Event$` | `replacement` |
 | `Mode$` | `static` under `StaticAbilities`, `AddStaticAbility` and the other static keys; `trigger` otherwise |
 
-Depth is fixed at 1. A top-level ability inlines what it names. An inlined body does not: each reference inside it becomes the token `Key=<ref>`, one per named SVar. Thassa's Oracle shows the cutoff:
+Depth is fixed at 2. A top-level ability inlines what it names, and so does each body it inlines. A body two levels down does not: each reference inside it becomes the token `Key=<ref>`, one per named SVar. `Execute$` counts as a level like any other reference key. Thassa's Oracle fits inside the limit:
 
 ```
 T:Mode$ ChangesZone | ... | Execute$ TrigDig
 SVar:TrigDig:DB$ Dig | DigNum$ X | ChangeNum$ 1 | ... | SubAbility$ DBWin
-SVar:DBWin:DB$ WinsGame | ...
+SVar:DBWin:DB$ WinsGame | Defined$ You | ConditionCheckSVar$ Y | ConditionSVarCompare$ LEX
 ```
 
-The trigger's one sub-ability is the `Dig`, and its tokens include `SubAbility=<ref>`. `WinsGame` appears nowhere. About 13% of Forge's abilities chain deeper than one level, so `<ref>` is common. The cap also means a self-referencing SVar can't loop.
+The trigger's one sub-ability is the `Dig`. The `Dig` has no `SubAbility=` token. Its one sub-ability is the win, with tokens `Effect=WinsGame Defined=You ConditionCheckSVar=<var> ConditionSVarCompare=LEX`.
+
+Mayael's Aria chains one level further and shows the cutoff:
+
+```
+T:Mode$ Phase | Phase$ Upkeep | ... | Execute$ TrigPutCounterAll
+SVar:TrigPutCounterAll:DB$ PutCounterAll | ... | SubAbility$ DBGainLife
+SVar:DBGainLife:DB$ GainLife | LifeAmount$ 10 | ... | SubAbility$ DBWinGame
+SVar:DBWinGame:DB$ WinsGame | ...
+```
+
+The trigger inlines the `PutCounterAll`, which inlines the `GainLife`. The `GainLife`'s tokens end in `SubAbility=<ref>`, and `WinsGame` appears nowhere.
+
+The depth was 1 until the 2026-10-17 sweep. At depth 1, 8,143 of Forge's 63,336 abilities (12.9%) held a `<ref>`, and Thassa's Oracle lost its win. At depth 2 that drops to 3,427 (5.4%). Of the 43 scripts that mention `WinsGame`, 42 now show it. Mayael's Aria is the one left. The cap also means a self-referencing SVar can't loop.
 
 ### `<var>`: runtime quantities
 
