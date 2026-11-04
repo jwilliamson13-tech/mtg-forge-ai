@@ -79,7 +79,7 @@ The user's rule: no cheating AI, anywhere. Checked in source 2026-10-16:
 - **Clock**: `forge sim -c` is wall-clock seconds, default 120. Use `-c 2400` as a safety net plus a turn cap of 50 enforced in the logging hook. Games hitting either are marked draws and dropped. Log draw rate per deck pair; above 5% means a loop the AI can't exit, which is a Forge bug or a deck to exclude. Both numbers tunable.
 - **On disk**: one gzip'd JSONL file per game, named by seed and deck pair, written from Java (Gson is already in Forge). Python converts to Parquet nightly.
 - **Schedule**: nightly window on the user's 1080 Ti machine (e.g. 23:00 to 07:00) with a scheduled hard stop; cores minus 2 parallel `forge sim` JVMs; `-s` seeds for reproducibility, `-q` quiet. The machine is in use mornings; don't overload it.
-- **Decks**: format is Legacy. Training set is all of Forge's shipped `GAL_*` decks (`forge-gui/res/geneticaidecks/`, AI-generated Legacy lists) plus 30 of 40 real lists pulled once from MTGGoldfish's Legacy metagame page (one per archetype, converted to `.dck`). The other 10 real lists are held out and never trained on; the four tracked matchups come from them.
+- **Decks**: format is Legacy. The pool is MTGGoldfish lists only (decided 2026-11-04): the top 40 archetypes by metagame share, 3 lists each, up to 120 lists pulled once and converted to `.dck`. Forge's shipped genetic decks are out of the pool; only 7 are `GAL_`. 10 whole archetypes, with all their lists, are held out and never trained on, so no near-copy of a held-out list sits in training; the four tracked matchups come from them.
 - **Splits**: by `game_id` always, never by row; held-out decks as above. One-vs-one only, no Commander.
 
 ### Forge integration
@@ -109,7 +109,7 @@ Paths under `forge-ai/src/main/java/forge/ai/` unless noted. Line numbers drift;
 - `simulation/GameStateEvaluator.java`: the hand-tuned score the model replaces. ~+4 per own hand card, ±2 per life point, mana-base score, per-card `evalCard` values. `Score { int value; int availableValue; }`.
 - `simulation/GameCopier.java`: `PRUNE_HIDDEN_INFO` details above. `ZONES = {Battlefield, Hand, Graveyard, Library, Exile, Stack, Command}` all copied in full.
 - `forge-gui-desktop/.../view/SimulateMatch.java`, `forge sim` flags as shipped: `-d` decks, `-D` deck dir (works outside tournament mode), `-n` games, `-m` best-of, `-t` Bracket/RoundRobin/Swiss, `-p` players, `-f` format (default Constructed), `-s` RNG seed, `-a` AI profile per side (positional; Cautious/Default/Experimental/Reckless), `-c` clock seconds, `-q` quiet. Deck names ending `.dck` resolve as files under `-D` or the user deck folder.
-- Shipped decks under `forge-gui/res/`: `quest/precons/` (~450 WotC precons, weak), `geneticaidecks/` (~600 AI-generated, prefixed `GAL_` Legacy / `GAM_` Modern / `GAS_` Standard / `GAV_` Vintage), `quest/duels/` (~1,145 themed quest decks). `.dck` format is INI-style: `[metadata]` `Name=`, then `[Main]` with `N Card Name|SET` lines. Counts are estimates.
+- Shipped decks under `forge-gui/res/`: `quest/precons/` (~450 WotC precons, weak), `geneticaidecks/` (786 AI-generated, counted 2026-11-04: 7 `GAL_` Legacy, 326 `GAM_` Modern, 442 `GAS_` Standard, 9 `GAP_`, 2 `GAV_` Vintage), `quest/duels/` (~1,145 themed quest decks). `.dck` format is INI-style: `[metadata]` `Name=`, then `[Main]` with `N Card Name|SET` lines. Counts are estimates.
 - Card scripts: 34,086 files under `cardsfolder/` (tree API count, 2026-10-16).
 
 ## Environment pins
@@ -126,7 +126,7 @@ Paths under `forge-ai/src/main/java/forge/ai/` unless noted. Line numbers drift;
 5. **Fake evaluator** through the new seam in place of `GameStateEvaluator`. Confirm the full-sim AI still finishes games headless (needs the `SimulateMatch` flag).
 6. **Combat diagnostic** on the stock AI, 20 games.
 7. **Finish `PRUNE_HIDDEN_INFO`** for the search path.
-8. **Pull the 40 MTGGoldfish Legacy lists**, convert to `.dck`, split 30/10. User names the four tracked matchups.
+8. **Pull the MTGGoldfish Legacy lists** (top 40 archetypes, 3 lists each), convert to `.dck`, split 30/10 by archetype. User names the four tracked matchups.
 9. **Generate gen-0 data, train, ablate, pair-test, export ONNX, load in Forge.**
 10. **Harness**: win rate with CI, resolution parameter, seat swapping. Run the Elo ladder and the four tracked matchups. Train gen 1 on gen 0's games; check convergence.
 
