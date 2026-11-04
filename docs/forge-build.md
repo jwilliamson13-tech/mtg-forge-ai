@@ -103,7 +103,7 @@ Read from `SimulateMatch.java` at the commit above:
 - `-n` is the game count, default 1.
 - `-s` is the RNG seed. Two runs with seed 42 produced the same game log, line for line, once the startup banner's timestamps and the timing lines were removed.
 - `-a` is an AI profile per seat, in deck order, such as `-a Default Reckless`. An unknown name prints the valid ones and stops.
-- `-c` is the clock in seconds before the game is called a draw, default 120.
+- `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
 
@@ -114,8 +114,89 @@ In tournament mode (`-t`), `-D` works differently: it loads every `.dck` in the 
 - **Run from `forge-gui`.** The jar's version string doesn't contain "git", so Forge looks for `res\` and `forge.profile.properties` in the working directory. From anywhere else it can't find either one, and it falls back to the real user profile. This comes from reading `GuiDesktop.getAssetsDir()`. I didn't run it that way, to keep the real profile clean.
 - **Quote `-D` properties in Windows PowerShell.** Version 5.1 splits an unquoted `-Dfile.encoding=UTF-8` at the dot, and Java fails with `Could not find or load main class .encoding=UTF-8`.
 - **Keep `-Dsentry.enabled=false`.** `Main` starts Sentry with a DSN on the Forge team's server. Reports are off by default through the `USE_SENTRY` preference, and with this property Sentry doesn't start at all. Batches of bot games shouldn't reach that server.
-- **The exit code doesn't mean the game worked.** `Main` always ends with `System.exit(0)`, even after `Could not load deck`. A game that throws prints a stack trace and is recorded as a draw, and a game past the clock prints `Stopping slow match as draw`. Read the `Game Result:` line instead.
+- **The exit code doesn't mean the game worked.** `Main` always ends with `System.exit(0)`, even after `Could not load deck`. Only a `Game Result:` line proves a game was played.
+- **A stopped game prints a winner.** A game past the clock prints `Stopping slow match as draw`, then `Game Result: ... has won!` for an arbitrary seat. `SimulateMatch` calls `setGameOver(Draw)`, but `Player.onGameOver` marks everyone who hasn't lost as a winner, so both `Game Outcome:` lines say "has won" and `isDraw()` is false. The running score in `Match Result:` counts these fake wins too. I saw this on a real run with `-c 1`. By the source, a game that throws ends the same way, without the clock's line. The sim-runner counts both as draws.
 - **Some noise is normal.** Startup prints about 20 `was not assigned to any set` lines. `Did not have activator set` is a `println` in `SpellAbilityRestriction.java`, where Forge fills in the missing activator and carries on.
+
+## Running batches
+
+`simrunner` plays two decks against each other across parallel `forge sim` JVMs and reports throughput. It needs Python 3.11 or newer and nothing outside the standard library.
+
+```powershell
+$decks = "..\forge\forge-gui\res\geneticaidecks"
+python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
+```
+
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, or if a worker left no log in its throwaway profile.
+
+### What the report counts
+
+- **Attempted** is what you asked for. **Finished** is every game with a `Game Result:` line. Games not finished is the difference, and covers a deck that won't load, an unknown AI profile and a JVM that died.
+- **Wins** come from the `Ai(n)-` prefix, so they are per seat, and seat n holds deck n for the whole batch.
+- **Draws by rules** are games Forge printed as a draw. In the runs below that meant both players lost.
+- **Draws by clock** are games with the `Stopping slow match as draw` line. **Draws by exception** are games where both `Game Outcome:` lines say "has won" without that line. Both print a fake winner, and neither counts as a win.
+- **Usable** means decisive, because draws get dropped before training.
+- **Startup** runs from launching the JVM to Forge printing its match header. **Steady-state games per hour** is each worker's games divided by the time from that header to its last result, summed over workers.
+- **AI decision timeouts** counts the `AI eval thread at timeout:` lines. **Result digest** is a hash of every game's seat, turn and draw cause. Two runs with the same digest played the same games.
+
+The output can't separate everything:
+
+- A game that threw after one player had already lost looks like a normal win on stdout. Only `stack traces on stderr` hints at it, and that count is per worker, not per game, because stdout and stderr have to stay on separate pipes. On one pipe a stopped game's stack trace lands in the middle of the `Game Result:` line.
+- The exception signature comes from the source. I could not force a throw without patching Forge, so it is only tested against the stub. The clock signature comes from real runs with `--clock 1`.
+- A draw by the turn cap doesn't exist yet, and neither does a per-game end reason. Those arrive with the game records.
+
+### Seeds
+
+Each worker's `-s` is a SHA-256 hash of the batch seed and worker index, cut to the 48 bits `java.util.Random` keeps. Plain `seed + index` would give neighboring seeds, and those give correlated first draws.
+
+Forge calls `MyRandom.setRandom(new Random(seed))` once, before the first game, and nothing reseeds between games. So all the games in one JVM draw from one stream, and these things follow:
+
+- A batch replays as a whole. You can't replay game 4 of a worker without games 1 to 3.
+- The same batch seed, game count and worker count give the same games. A different worker count gives a different split and different games.
+- A worker's first k games are the same in a longer run. A 20-game batch with seed 1 matched the first two games of all ten workers in the 50-game batch, 20 of 20, on winner and turn, with ten JVMs running.
+- Games in one JVM aren't independent. Game 1's starting player is random, and after that the loser of the last game goes first (`GameAction.determineFirstTurnPlayer`).
+
+Two wall clocks can break replay, and both depend on machine load. `-c` stops a game, and its thread can keep drawing from the shared stream until it notices the interrupt. `Game.AI_TIMEOUT` gives each AI decision 5 seconds. That one is only partly visible: `AI decision timeouts` counts the eval timeout, while `AITimeoutTracker.Expired` cuts a decision short without printing anything. The 20 of 20 match above suggests neither mattered in those runs.
+
+AI sideboarding is off in a sim (`GameRules.AISideboardingEnabled` defaults to false), so decks don't change between games of a `-n` run.
+
+### Why each worker has its own profile
+
+Reading the source, sharing almost works. `ExceptionHandler` gives each JVM its own log slot with `CREATE_NEW` and a `FileLock`, and a sim only reads preferences. But `FModel.initialize` checks `isDirectory()`, then throws if `mkdirs()` returns false, and `mkdirs()` returns false when another JVM got there first. So ten JVMs starting on an empty profile, which is what `mvn clean` leaves, can crash each other. Later tickets will also write more files during a run. One profile each costs a few folders, so each worker gets one.
+
+Forge reads `forge.profile.properties` from its working directory and no flag moves it, so a separate profile needs a separate working directory. Each worker therefore runs in `runs\<batch>\worker-NN\`, not in `forge-gui`, with:
+
+- its own `forge.profile.properties`, pointing at `user\` and `cache\` inside that folder,
+- `res`, a junction to `forge-gui\res`, because Forge finds it through the working directory too,
+- copies of the two decks as `decks\seat1.dck` and `decks\seat2.dck`, so they can start in different folders,
+- `APPDATA` and `LOCALAPPDATA` set to folders inside it. If the properties file were ever not read, Forge's fallback would still land here.
+
+After the JVM exits, the runner checks for a Forge log in the worker's `user\` folder as proof it used the profile. It then unlinks `res` and deletes the worker folder. `--keep-profiles` keeps them for debugging.
+
+A run killed hard can leave a worker folder behind with the junction in it. Remove the junction first (`cmd /c rmdir runs\<batch>\worker-00\res`), because some delete tools follow junctions. The runner refuses a run folder inside the Forge clone so that `mvn clean` can never meet one.
+
+The `java` on PATH here is Oracle's launcher, which starts the real JVM as a child process. So the runner kills a hung worker with `taskkill /T`, because killing the launcher alone leaves the JVM running.
+
+### Measured throughput
+
+Run 2026-11-04 on the build machine: i5-10600K, 12 logical cores, 32 GB, 10 workers, stock heuristic AI, `--clock 600`.
+
+| | Burn vs Merfolk, seed 1 | Sneak Show vs Slivers, seed 2 |
+|---|---|---|
+| Games finished | 50 of 50 | 50 of 50 |
+| Wins, seat 1 and seat 2 | 23 and 25 | 17 and 33 |
+| Draws | 2, by rules | 0 |
+| Wall time | 219.5 s | 118.4 s |
+| Startup per worker, mean | 158.9 s | 70.3 s |
+| Games per hour, startup included | 820 | 1521 |
+| Steady-state games per hour | 3140 | 4056 |
+| Usable games in 8 hours, steady rate | 23985 | 32368 |
+
+Startup is the expensive part of a small batch. It was 15 to 20 seconds for one JVM alone and 45 to 50 for two. For ten it was 159, 142 and 70 seconds across three batches, and I don't know why it varied that much. Peak memory across ten JVMs was 6.9 GB, and under 700 MB for any one.
+
+Each worker played five games, so the JVMs were never warm. In the first batch, mean game time fell from 18.4 seconds for each worker's first game to 5.2 for its fifth, though some of that is other workers finishing. A long run may be faster than these rates. No run here lasted long enough to say.
+
+These numbers are the stock heuristic AI with no snapshot hook, no tripwire and shipped `GAL_` decks. They say nothing about full-simulation mode.
 
 ## The decks
 

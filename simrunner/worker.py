@@ -1,0 +1,190 @@
+"""One worker: its throwaway Forge profile, its JVM and what it printed.
+
+Each worker runs in its own folder, so that no two JVMs share a profile and no JVM
+can reach the real one in `%APPDATA%/Forge`:
+
+- Forge reads `forge.profile.properties` from its working directory, and nothing
+  on the command line can move that file. So the working directory is the worker
+  folder, not `forge-gui`, and it holds its own properties file.
+- Forge finds `res/` through the same working directory, so the worker folder links
+  to the real one. A copy would be 35,000 files per worker.
+- `APPDATA` and `LOCALAPPDATA` point inside the worker folder as well. If the
+  properties file were ever not read, Forge's fallback would still be throwaway.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import threading
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, GameResult, count_stack_traces,
+                              find_fatal, parse_games)
+
+JVM_PROPERTIES = ("-Dfile.encoding=UTF-8", "-Dsentry.enabled=false")
+PROFILE_FILE = "forge.profile.properties"
+DEFAULT_AI_PROFILE = "Default"
+DECK_NAMES = ("seat1.dck", "seat2.dck")
+
+# Past this, a worker is hung rather than slow, and gets killed. The clock already
+# bounds each game, so this is a backstop for a JVM that stops responding.
+STARTUP_ALLOWANCE_S = 300
+PER_GAME_ALLOWANCE_S = 60
+
+
+@dataclass(frozen=True)
+class Seat:
+    """One side of the table. Per-seat settings for later modes belong here."""
+
+    deck: Path
+    ai_profile: str | None = None
+
+
+@dataclass(frozen=True)
+class WorkerPlan:
+    index: int
+    seed: int
+    games: int
+
+
+@dataclass
+class WorkerResult:
+    plan: WorkerPlan
+    exit_code: int | None = None
+    timed_out: bool = False
+    profile_used: bool = False
+    ready_s: float | None = None  # seconds from launch until Forge printed its match header
+    last_result_s: float | None = None  # seconds from launch until the last Game Result line
+    games: list[GameResult] = field(default_factory=list)
+    ai_timeouts: int = 0
+    stderr_traces: int = 0
+    fatal: str | None = None
+
+
+def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int) -> list[str]:
+    """Return the `forge sim` arguments for one worker."""
+    args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
+            "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
+    if any(seat.ai_profile for seat in seats):
+        # `-a` fills seats in order and can't take an empty name, so name both.
+        args += ["-a", *(seat.ai_profile or DEFAULT_AI_PROFILE for seat in seats)]
+    return args
+
+
+def link_folder(link: Path, target: Path) -> None:
+    """Make `link` point at `target`. A Windows junction needs no special privilege."""
+    if os.name == "nt":
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                       check=True, capture_output=True)
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def prepare_folder(folder: Path, forge_gui: Path, seats: tuple[Seat, Seat]) -> Path:
+    """Build a worker folder and return its deck folder."""
+    folder.mkdir(parents=True)
+    link_folder(folder / "res", forge_gui / "res")
+    root = folder.resolve().as_posix()  # a .properties file treats a backslash as an escape
+    (folder / PROFILE_FILE).write_text(f"userDir={root}/user/\ncacheDir={root}/cache/\n", encoding="utf-8")
+    deck_dir = folder / "decks"
+    deck_dir.mkdir()
+    for seat, name in zip(seats, DECK_NAMES):
+        shutil.copyfile(seat.deck, deck_dir / name)
+    return deck_dir.resolve()
+
+
+def remove_folder(folder: Path) -> None:
+    """Delete a worker folder, unlinking `res` first so the delete can't reach the real one."""
+    link = folder / "res"
+    if os.path.lexists(link):
+        os.unlink(link)
+    shutil.rmtree(folder, ignore_errors=True)
+
+
+def profile_was_used(folder: Path) -> bool:
+    """Forge opens a log in its user folder at startup, so a log there proves it read the profile."""
+    return any((folder / "user").glob("forge*.log"))
+
+
+def worker_env(folder: Path) -> dict[str, str]:
+    root = folder.resolve()
+    return {**os.environ, "APPDATA": str(root / "appdata"), "LOCALAPPDATA": str(root / "localappdata")}
+
+
+def kill_tree(process: subprocess.Popen) -> None:
+    """Kill a worker and its children.
+
+    On Windows the `java` on PATH can be Oracle's launcher, which starts the real
+    JVM as a child. Killing the launcher alone would leave that JVM running.
+    """
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True)
+    process.kill()
+    process.wait()
+
+
+def deadline_s(games: int, clock_s: int) -> int:
+    return STARTUP_ALLOWANCE_S + games * (clock_s + PER_GAME_ALLOWANCE_S)
+
+
+def _pump(stream, log_path: Path, launched: float, lines: list[tuple[float, str]]) -> None:
+    """Read one pipe to its end, stamping each line as it arrives."""
+    with open(log_path, "w", encoding="utf-8", newline="\n") as log:
+        for raw in stream:
+            line = raw.rstrip("\n")
+            lines.append((time.monotonic() - launched, line))
+            log.write(line + "\n")
+            log.flush()
+
+
+def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Path,
+               clock_s: int, started: list[subprocess.Popen]) -> WorkerResult:
+    """Run one JVM to its end and read the results out of what it printed.
+
+    stdout and stderr stay on separate pipes. On one pipe, the stack trace from a
+    stopped game's thread lands in the middle of the `Game Result:` line.
+    """
+    launched = time.monotonic()
+    process = subprocess.Popen(command, cwd=folder, env=worker_env(folder), stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True, encoding="utf-8", errors="replace")
+    started.append(process)
+    out_lines: list[tuple[float, str]] = []
+    err_lines: list[tuple[float, str]] = []
+    out_log = log_stem.with_name(log_stem.name + ".out.log")
+    err_log = log_stem.with_name(log_stem.name + ".err.log")
+    pumps = [threading.Thread(target=_pump, args=(process.stdout, out_log, launched, out_lines)),
+             threading.Thread(target=_pump, args=(process.stderr, err_log, launched, err_lines))]
+    for pump in pumps:
+        pump.start()
+
+    result = WorkerResult(plan)
+    try:
+        process.wait(timeout=deadline_s(plan.games, clock_s))
+    except subprocess.TimeoutExpired:
+        result.timed_out = True
+        kill_tree(process)
+    for pump in pumps:
+        pump.join()
+
+    result.exit_code = process.returncode
+    result.profile_used = profile_was_used(folder)
+    result.stderr_traces = count_stack_traces(line for _, line in err_lines)
+    _read_stdout(result, out_lines)
+    return result
+
+
+def _read_stdout(result: WorkerResult, lines: list[tuple[float, str]]) -> None:
+    text = [line for _, line in lines]
+    result.games = parse_games(text)
+    result.fatal = find_fatal(text)
+    result.ai_timeouts = text.count(AI_TIMEOUT_LINE)
+    for stamp, line in lines:
+        if result.ready_s is None and HEADER_LINE.match(line):
+            result.ready_s = stamp
+        if line.startswith("Game Result:"):
+            result.last_result_s = stamp
