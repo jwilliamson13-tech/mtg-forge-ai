@@ -1,0 +1,78 @@
+"""The batch report: one summary table, then one row per worker."""
+
+from __future__ import annotations
+
+from simrunner.batch import BatchResult
+from simrunner.output import DrawCause
+from simrunner.worker import WorkerResult
+
+# HANDOFF.md: the nightly window is 23:00 to 07:00, and kill criterion 1 is about 500 usable games a night.
+OVERNIGHT_HOURS = 8
+KILL_CRITERION_GAMES = 500
+
+
+def _table(rows: list[tuple[str, ...]]) -> str:
+    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
+    return "\n".join("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip()
+                     for row in rows) + "\n"
+
+
+def format_summary(batch: BatchResult) -> str:
+    config = batch.config
+    startups = batch.startup_times
+    startup_mean = sum(startups) / len(startups) if startups else 0.0
+    overnight = batch.steady_usable_per_hour * (OVERNIGHT_HOURS - startup_mean / 3600)
+    rows = [
+        ("seat 1", f"{config.seats[0].deck.stem} (AI {config.seats[0].ai_profile or 'default'})"),
+        ("seat 2", f"{config.seats[1].deck.stem} (AI {config.seats[1].ai_profile or 'default'})"),
+        ("batch seed", str(config.batch_seed)),
+        ("workers", str(len(batch.workers))),
+        ("clock", f"{config.clock_s} s"),
+        ("games attempted", str(batch.attempted)),
+        ("games finished", str(batch.finished)),
+        ("games not finished", str(batch.not_finished)),
+        ("wins seat 1", str(batch.wins(1))),
+        ("wins seat 2", str(batch.wins(2))),
+        ("draws", str(batch.draw_count)),
+    ]
+    rows += [(f"  by {cause.value}", str(batch.draws(cause))) for cause in DrawCause]
+    rows += [
+        ("wall time", f"{batch.wall_s:.1f} s"),
+        ("games per hour", f"{batch.games_per_hour:.0f}"),
+        ("usable games per hour", f"{batch.usable_per_hour:.0f}"),
+        ("startup per worker", f"mean {startup_mean:.1f} s, max {max(startups, default=0.0):.1f} s"),
+        ("steady-state games per hour", f"{batch.steady_games_per_hour:.0f}"),
+        (f"usable games in {OVERNIGHT_HOURS} h, steady rate",
+         f"{overnight:.0f} (kill criterion 1 needs about {KILL_CRITERION_GAMES})"),
+        ("AI decision timeouts", str(sum(worker.ai_timeouts for worker in batch.workers))),
+        ("stack traces on stderr", str(sum(worker.stderr_traces for worker in batch.workers))),
+        ("result digest", batch.digest),
+    ]
+    return _table(rows)
+
+
+def _worker_note(worker: WorkerResult) -> str:
+    notes = []
+    if worker.timed_out:
+        notes.append("killed at deadline")
+    if not worker.profile_used:
+        notes.append("no log in its throwaway profile")
+    if worker.fatal:
+        notes.append(worker.fatal)
+    return "; ".join(notes)
+
+
+def format_workers(batch: BatchResult) -> str:
+    rows = [("worker", "seed", "games", "finished", "startup s", "last game s", "exit", "note")]
+    for worker in batch.workers:
+        rows.append((
+            str(worker.plan.index), str(worker.plan.seed), str(worker.plan.games), str(len(worker.games)),
+            "-" if worker.ready_s is None else f"{worker.ready_s:.1f}",
+            "-" if worker.last_result_s is None else f"{worker.last_result_s:.1f}",
+            str(worker.exit_code), _worker_note(worker),
+        ))
+    return _table(rows)
+
+
+def format_report(batch: BatchResult) -> str:
+    return format_summary(batch) + "\n" + format_workers(batch)

@@ -18,7 +18,17 @@ Parse Forge's card and token folders, print coverage and the top failure causes,
 python -m cardscript sweep path/to/cardsfolder path/to/tokenscripts --out cards.jsonl --min-coverage 95
 ```
 
-Run the tests. The package itself needs nothing outside the standard library; `requirements-dev.txt` holds the test runner:
+## Sim-runner
+
+`simrunner` runs batches of headless `forge sim` games in parallel, each worker in its own throwaway Forge profile, and reports games finished, draws by cause, wins per seat and games per hour. `docs/forge-build.md` has the build, the command and the measured rates.
+
+```
+python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
+```
+
+## Tests
+
+The packages need nothing outside the standard library; `requirements-dev.txt` holds the test runner:
 
 ```
 pip install -r requirements-dev.txt
