@@ -66,7 +66,10 @@ def print_ai_limits(argv: list[str], scenario: str, seed: int, n: int) -> None:
         if scenario not in ("stale_jar", "no_budget_jar"):
             expiries = 2 if scenario == "deadlines" else 0
             stops = 1 if scenario == "budget_stops" else 0
-            print(f"AI limits: {expiries} deadline expiries, {stops} budget stops, {seed % 1000 + n} random draws")
+            line = f"AI limits: {expiries} deadline expiries, {stops} budget stops, {seed % 1000 + n} random draws"
+            if scenario == "stops":
+                line += ", 3 stops played, 1 stops passed, 2 stops with a land, 1 land drops missed"
+            print(line)
 
 
 def play_win(n: int, players: list[str], rng: random.Random) -> None:
