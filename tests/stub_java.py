@@ -60,6 +60,15 @@ def outcome_lines(turn: int, first: str, second: str) -> None:
     print(f"Game Outcome: {second}")
 
 
+def print_ai_limits(argv: list[str], scenario: str, seed: int, n: int) -> None:
+    """Forge prints this per game with `-sim` or `-budget`, and a stale jar never does."""
+    if "-sim" in argv or "-budget" in argv:
+        if scenario not in ("stale_jar", "no_budget_jar"):
+            expiries = 2 if scenario == "deadlines" else 0
+            stops = 1 if scenario == "budget_stops" else 0
+            print(f"AI limits: {expiries} deadline expiries, {stops} budget stops, {seed % 1000 + n} random draws")
+
+
 def play_win(n: int, players: list[str], rng: random.Random) -> None:
     winner = rng.randrange(2)
     won = f"{players[winner]} {WON}"
@@ -119,6 +128,7 @@ def main() -> int:
 
     rng = random.Random(seed)
     for n in range(1, games + 1):
+        print_ai_limits(argv, scenario, seed, n)
         if scenario == "hang":
             time.sleep(600)
         elif scenario == "hang_in_child":

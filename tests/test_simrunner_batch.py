@@ -1,5 +1,6 @@
 """Batches run against `tests/stub_java.py`, so nothing here needs Java or a built Forge."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -11,10 +12,10 @@ import pytest
 from simrunner import worker as worker_module
 from simrunner.__main__ import main
 from simrunner.batch import BatchConfig, BatchResult, SetupError, run_batch
-from simrunner.output import DrawCause, GameResult
+from simrunner.output import AiLimits, DrawCause, GameResult
 from simrunner.report import format_report, format_summary, format_workers
 from simrunner.seeds import derive_seed
-from simrunner.worker import Seat, WorkerPlan, WorkerResult
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, Seat, WorkerPlan, WorkerResult
 
 STUB = Path(__file__).parent / "stub_java.py"
 REPO = Path(__file__).parents[1]
@@ -126,6 +127,38 @@ def test_no_sim_mode_leaves_the_flag_out(config, records):
     assert all("-sim" not in run["argv"] for run in records().values())
 
 
+def test_a_seat_that_searches_gets_the_default_budget(config, records):
+    run_batch(config(modes=("full", None)))
+    for run in records().values():
+        assert run["argv"][run["argv"].index("-budget") + 1] == str(DEFAULT_SEARCH_BUDGET)
+
+
+def test_a_heuristic_batch_gets_no_budget(config, records):
+    run_batch(config(modes=("heuristic", "heuristic")))
+    assert all("-budget" not in run["argv"] for run in records().values())
+
+
+def test_no_sim_mode_gets_no_budget(config, records):
+    run_batch(config())
+    assert all("-budget" not in run["argv"] for run in records().values())
+
+
+def test_an_asked_for_budget_passes_through(config, records):
+    run_batch(config(modes=("full", "full"), search_budget=50))
+    assert all(run["argv"][run["argv"].index("-budget") + 1] == "50" for run in records().values())
+
+
+def test_a_budget_of_zero_leaves_the_flag_off(config, records):
+    run_batch(config(modes=("full", None), search_budget=0))
+    assert all("-budget" not in run["argv"] for run in records().values())
+
+
+def test_a_negative_budget_stops_the_batch(config, records):
+    with pytest.raises(SetupError):
+        run_batch(config(modes=("full", None), search_budget=-1))
+    assert records() == {}
+
+
 def test_each_worker_gets_its_own_throwaway_profile(config, records, tmp_path):
     run_batch(config(workers=3))
     runs = list(records().values())
@@ -224,6 +257,57 @@ def test_a_jar_that_ignores_the_flag_fails_the_batch(config, monkeypatch):
     assert batch.finished == 6
     assert not batch.clean
     assert "did not name the sim modes" in format_workers(batch)
+
+
+def test_a_jar_that_ignores_the_budget_fails_the_batch(config, monkeypatch):
+    # The sim modes come back fine, so only the missing AI limits line gives this jar away.
+    monkeypatch.setenv("STUB_SCENARIO", "no_budget_jar")
+    batch = run_batch(config(modes=("full", None)))
+    assert batch.finished == 6
+    assert not batch.clean
+    assert "did not report on the search budget" in format_workers(batch)
+
+
+def test_without_a_budget_the_missing_line_is_not_a_failure(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_budget_jar")
+    batch = run_batch(config(modes=("full", None), search_budget=0))
+    assert batch.clean
+
+
+def test_deadline_expiries_are_summed_over_every_game(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "deadlines")
+    batch = run_batch(config(modes=("full", None), search_budget=0))
+    assert batch.deadline_expiries == 12
+    assert "AI deadline expiries              12\n" in format_summary(batch)
+
+
+def test_budget_stops_are_summed_over_every_game(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "budget_stops")
+    batch = run_batch(config(modes=("full", None)))
+    assert batch.budget_stops == 6
+    assert "AI search budget stops            6\n" in format_summary(batch)
+
+
+def test_a_run_forge_did_not_report_on_says_so(config):
+    report = format_summary(run_batch(config()))
+    assert "AI deadline expiries              not reported\n" in report
+    assert "AI search budget stops            not reported\n" in report
+
+
+def test_the_digest_covers_forges_random_draws():
+    def digest(draws):
+        game = GameResult(1, 3000, 7, winner_seat=1, ai_limits=AiLimits(0, 0, draws))
+        return BatchResult(finished_batch().config, [WorkerResult(WorkerPlan(0, 111, 1), games=[game])], 1.0).digest
+
+    # Same winner, same final turn: the two seed 1 runs in issue 50 agreed on those and still differed.
+    assert digest(100) != digest(101)
+
+
+def test_the_digest_of_a_run_without_draws_is_what_it_always_was():
+    game = GameResult(1, 3000, 7, winner_seat=1)
+    batch = BatchResult(finished_batch().config, [WorkerResult(WorkerPlan(0, 111, 1), games=[game])], 1.0)
+    row = "0:1:1:None:7"
+    assert batch.digest == hashlib.sha256(row.encode("ascii")).hexdigest()[:12]
 
 
 def test_a_worker_that_dies_midway_keeps_the_games_it_finished(config, monkeypatch):
@@ -353,6 +437,7 @@ def test_the_report_table():
         "batch seed                        42\n"
         "workers                           2\n"
         "clock                             600 s\n"
+        "search budget                     off\n"
         "games attempted                   6\n"
         "games finished                    5\n"
         "games not finished                1\n"
@@ -369,6 +454,8 @@ def test_the_report_table():
         "steady-state games per hour       1800\n"
         "usable games in 8 h, steady rate  8631 (kill criterion 1 needs about 500)\n"
         "AI decision timeouts              2\n"
+        "AI deadline expiries              not reported\n"
+        "AI search budget stops            not reported\n"
         "stack traces on stderr            1\n"
         f"result digest                     {finished_batch().digest}\n"
     )
@@ -382,6 +469,15 @@ def test_the_report_names_each_seats_sim_mode():
     report = format_summary(BatchResult(config, [], wall_s=0.0))
     assert "burn (AI default, sim full)\n" in report
     assert "merfolk (AI Reckless, sim hybrid)\n" in report
+
+
+def test_the_report_names_the_budget():
+    config = BatchConfig(
+        seats=(Seat(Path("burn.dck"), None, "full"), Seat(Path("merfolk.dck"))),
+        games=1, batch_seed=1, workers=1, forge_root=Path("forge"), run_dir=Path("run"),
+    )
+    report = format_summary(BatchResult(config, [], wall_s=0.0))
+    assert f"search budget                     {DEFAULT_SEARCH_BUDGET} steps per decision\n" in report
 
 
 def test_the_worker_table_shows_seed_and_timing():
@@ -438,6 +534,12 @@ def test_the_sim_mode_flag_takes_one_mode_per_seat(decks, forge, tmp_path, recor
     for run in records().values():
         argv = run["argv"]
         assert argv[argv.index("-sim") + 1:argv.index("-sim") + 3] == ["full", "heuristic"]
+
+
+def test_the_search_budget_flag_reaches_forge(decks, forge, tmp_path, records):
+    args = cli_args(decks, forge, tmp_path / "run", "--sim-mode", "full", "heuristic", "--search-budget", "75")
+    assert main(args) == 0
+    assert all(run["argv"][run["argv"].index("-budget") + 1] == "75" for run in records().values())
 
 
 def test_the_sim_mode_flag_refuses_an_unknown_mode(decks, forge, tmp_path, capsys):
