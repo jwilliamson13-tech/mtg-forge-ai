@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from simrunner.batch import BatchResult
 from simrunner.output import DrawCause
-from simrunner.worker import WorkerResult
+from simrunner.worker import DEFAULT_SIM_MODE, Seat, WorkerResult
 
 # HANDOFF.md: the nightly window is 23:00 to 07:00, and kill criterion 1 is about 500 usable games a night.
 OVERNIGHT_HOURS = 8
@@ -17,14 +17,18 @@ def _table(rows: list[tuple[str, ...]]) -> str:
                      for row in rows) + "\n"
 
 
+def _seat(seat: Seat) -> str:
+    return f"{seat.deck.stem} (AI {seat.ai_profile or 'default'}, sim {seat.sim_mode or DEFAULT_SIM_MODE})"
+
+
 def format_summary(batch: BatchResult) -> str:
     config = batch.config
     startups = batch.startup_times
     startup_mean = sum(startups) / len(startups) if startups else 0.0
     overnight = batch.steady_usable_per_hour * (OVERNIGHT_HOURS - startup_mean / 3600)
     rows = [
-        ("seat 1", f"{config.seats[0].deck.stem} (AI {config.seats[0].ai_profile or 'default'})"),
-        ("seat 2", f"{config.seats[1].deck.stem} (AI {config.seats[1].ai_profile or 'default'})"),
+        ("seat 1", _seat(config.seats[0])),
+        ("seat 2", _seat(config.seats[1])),
         ("batch seed", str(config.batch_seed)),
         ("workers", str(len(batch.workers))),
         ("clock", f"{config.clock_s} s"),
@@ -51,12 +55,14 @@ def format_summary(batch: BatchResult) -> str:
     return _table(rows)
 
 
-def _worker_note(worker: WorkerResult) -> str:
+def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
     notes = []
     if worker.timed_out:
         notes.append("killed at deadline")
     if not worker.profile_used:
         notes.append("no log in its throwaway profile")
+    if worker.ready_s is not None and not batch.played_requested_modes(worker):
+        notes.append("Forge did not name the sim modes asked for, so the jar may be stale")
     if worker.fatal:
         notes.append(worker.fatal)
     return "; ".join(notes)
@@ -69,7 +75,7 @@ def format_workers(batch: BatchResult) -> str:
             str(worker.plan.index), str(worker.plan.seed), str(worker.plan.games), str(len(worker.games)),
             "-" if worker.ready_s is None else f"{worker.ready_s:.1f}",
             "-" if worker.last_result_s is None else f"{worker.last_result_s:.1f}",
-            str(worker.exit_code), _worker_note(worker),
+            str(worker.exit_code), _worker_note(batch, worker),
         ))
     return _table(rows)
 

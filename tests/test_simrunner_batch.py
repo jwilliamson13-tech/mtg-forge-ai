@@ -58,9 +58,9 @@ def records(tmp_path, monkeypatch):
 
 @pytest.fixture
 def config(forge, decks, tmp_path):
-    def build(games=6, workers=2, seed=42, profiles=(None, None), **overrides):
+    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None), **overrides):
         settings = dict(
-            seats=(Seat(decks[0], profiles[0]), Seat(decks[1], profiles[1])),
+            seats=(Seat(decks[0], profiles[0], modes[0]), Seat(decks[1], profiles[1], modes[1])),
             games=games, batch_seed=seed, workers=workers, forge_root=forge,
             run_dir=tmp_path / "run", clock_s=60, java=(sys.executable, str(STUB)),
         )
@@ -105,6 +105,25 @@ def test_one_named_seat_still_gives_forge_both_profiles(config, records):
 def test_no_profile_leaves_the_flag_out(config, records):
     run_batch(config())
     assert all("-a" not in run["argv"] for run in records().values())
+
+
+def test_the_sim_mode_passes_through_per_seat(config, records):
+    run_batch(config(modes=("full", "hybrid")))
+    for run in records().values():
+        argv = run["argv"]
+        assert argv[argv.index("-sim") + 1:argv.index("-sim") + 3] == ["full", "hybrid"]
+
+
+def test_one_named_seat_still_gives_forge_both_modes(config, records):
+    run_batch(config(modes=(None, "full")))
+    for run in records().values():
+        argv = run["argv"]
+        assert argv[argv.index("-sim") + 1:argv.index("-sim") + 3] == ["heuristic", "full"]
+
+
+def test_no_sim_mode_leaves_the_flag_out(config, records):
+    run_batch(config())
+    assert all("-sim" not in run["argv"] for run in records().values())
 
 
 def test_each_worker_gets_its_own_throwaway_profile(config, records, tmp_path):
@@ -184,6 +203,27 @@ def test_an_unknown_ai_profile_finishes_nothing_despite_exit_code_zero(config):
     assert batch.finished == 0
     assert batch.workers[0].fatal.startswith("Unknown AI profile - Bogus")
     assert not batch.clean
+
+
+def test_an_unknown_sim_mode_finishes_nothing_despite_exit_code_zero(config):
+    batch = run_batch(config(modes=("Bogus", "full")))
+    assert batch.finished == 0
+    assert all(worker.fatal.startswith("Unknown simulation mode") for worker in batch.workers)
+
+
+def test_a_batch_where_forge_names_the_modes_is_clean(config):
+    batch = run_batch(config(modes=("full", None)))
+    assert batch.clean
+    assert all(worker.sim_modes == ("full", "heuristic") for worker in batch.workers)
+
+
+def test_a_jar_that_ignores_the_flag_fails_the_batch(config, monkeypatch):
+    # Forge skips flags it doesn't know, so a stale jar plays heuristic games and looks fine.
+    monkeypatch.setenv("STUB_SCENARIO", "stale_jar")
+    batch = run_batch(config(modes=("full", None)))
+    assert batch.finished == 6
+    assert not batch.clean
+    assert "did not name the sim modes" in format_workers(batch)
 
 
 def test_a_worker_that_dies_midway_keeps_the_games_it_finished(config, monkeypatch):
@@ -308,8 +348,8 @@ def finished_batch():
 
 def test_the_report_table():
     assert format_summary(finished_batch()) == (
-        "seat 1                            burn (AI Default)\n"
-        "seat 2                            merfolk (AI default)\n"
+        "seat 1                            burn (AI Default, sim heuristic)\n"
+        "seat 2                            merfolk (AI default, sim heuristic)\n"
         "batch seed                        42\n"
         "workers                           2\n"
         "clock                             600 s\n"
@@ -332,6 +372,16 @@ def test_the_report_table():
         "stack traces on stderr            1\n"
         f"result digest                     {finished_batch().digest}\n"
     )
+
+
+def test_the_report_names_each_seats_sim_mode():
+    config = BatchConfig(
+        seats=(Seat(Path("burn.dck"), None, "full"), Seat(Path("merfolk.dck"), "Reckless", "hybrid")),
+        games=1, batch_seed=1, workers=1, forge_root=Path("forge"), run_dir=Path("run"),
+    )
+    report = format_summary(BatchResult(config, [], wall_s=0.0))
+    assert "burn (AI default, sim full)\n" in report
+    assert "merfolk (AI Reckless, sim hybrid)\n" in report
 
 
 def test_the_worker_table_shows_seed_and_timing():
@@ -381,6 +431,20 @@ def test_the_ai_flag_takes_one_profile_per_seat(decks, forge, tmp_path, records)
     for run in records().values():
         argv = run["argv"]
         assert argv[argv.index("-a") + 1:argv.index("-a") + 3] == ["Cautious", "Reckless"]
+
+
+def test_the_sim_mode_flag_takes_one_mode_per_seat(decks, forge, tmp_path, records):
+    assert main(cli_args(decks, forge, tmp_path / "run", "--sim-mode", "full", "heuristic")) == 0
+    for run in records().values():
+        argv = run["argv"]
+        assert argv[argv.index("-sim") + 1:argv.index("-sim") + 3] == ["full", "heuristic"]
+
+
+def test_the_sim_mode_flag_refuses_an_unknown_mode(decks, forge, tmp_path, capsys):
+    with pytest.raises(SystemExit) as stop:
+        main(cli_args(decks, forge, tmp_path / "run", "--sim-mode", "fast", "heuristic"))
+    assert stop.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
 
 
 def test_a_setup_error_is_a_usage_error(decks, forge, tmp_path, capsys):

@@ -12,7 +12,7 @@ The fork is https://github.com/jwilliamson13-tech/forge. All work goes on its `m
 | Maven | 3.10.0, from scoop |
 | Forge version | 2.0.16-SNAPSHOT |
 | Upstream commit | `da66fb1ac4be7957461477bc8bd26628a439c747` (2026-11-04) |
-| Fork branch | `mtg-forge-ai`, no commits on top of that upstream commit yet |
+| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. The first adds `-sim` (issue #17) |
 | Jar | `forge-gui-desktop\target\forge-gui-desktop-2.0.16-SNAPSHOT-jar-with-dependencies.jar` |
 
 Forge's pom requires Java 17 or newer and Maven 3.8.1 or newer. It compiles to release 17, so Java 21 works.
@@ -47,7 +47,7 @@ git remote set-url --push upstream DISABLED
 
 The first clone took about 2.5 minutes and uses 1.1 GB for `.git`. `core.autocrlf=false` keeps files byte-for-byte as upstream has them, because this machine's system git config sets it to true. `core.longpaths=true` is insurance: the longest tracked path is about 170 characters here, so it only matters for a deeper clone folder. The disabled push URL makes a push to upstream fail.
 
-To rebuild exactly the commit in the table after the branch has moved, run `git checkout da66fb1ac4be7957461477bc8bd26628a439c747`.
+To rebuild the upstream commit in the table without the fork's patches, run `git checkout da66fb1ac4be7957461477bc8bd26628a439c747`. That build has no `-sim` flag, so a sim-runner batch with `--sim-mode` fails against it.
 
 ### 3. Build
 
@@ -96,13 +96,14 @@ Steps 2 to 5, run exactly as written here in a new clone with a warm Maven cache
 
 ## The flags
 
-Read from `SimulateMatch.java` at the commit above:
+Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 
 - `-D DIR` is the deck directory. The file names passed to `-d` resolve under it. Use an absolute path, as Forge's own help says.
 - `-d A.dck B.dck` takes the deck file names, which must end in a three-character extension to count as files. The `GAL_` names contain spaces, so quote them.
 - `-n` is the game count, default 1.
 - `-s` is the RNG seed. Two runs with seed 42 produced the same game log, line for line, once the startup banner's timestamps and the timing lines were removed.
 - `-a` is an AI profile per seat, in deck order, such as `-a Default Reckless`. An unknown name prints the valid ones and stops.
+- `-sim` is the simulation mode per seat, in deck order, such as `-sim full heuristic`. The modes are `heuristic`, `hybrid` and `full`, the same three as the desktop lobby's menu. Seats left out stay heuristic. With the flag, each player name ends in `[sim=mode]`, so every result line names the mode. Without it, the output is what stock Forge prints. An unknown mode prints the valid ones and stops, and so does `-sim` with `-t`.
 - `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
@@ -116,7 +117,8 @@ In tournament mode (`-t`), `-D` works differently: it loads every `.dck` in the 
 - **Keep `-Dsentry.enabled=false`.** `Main` starts Sentry with a DSN on the Forge team's server. Reports are off by default through the `USE_SENTRY` preference, and with this property Sentry doesn't start at all. Batches of bot games shouldn't reach that server.
 - **The exit code doesn't mean the game worked.** `Main` always ends with `System.exit(0)`, even after `Could not load deck`. Only a `Game Result:` line proves a game was played.
 - **A stopped game prints a winner.** A game past the clock prints `Stopping slow match as draw`, then `Game Result: ... has won!` for an arbitrary seat. `SimulateMatch` calls `setGameOver(Draw)`, but `Player.onGameOver` marks everyone who hasn't lost as a winner, so both `Game Outcome:` lines say "has won" and `isDraw()` is false. The running score in `Match Result:` counts these fake wins too. I saw this on a real run with `-c 1`. By the source, a game that throws ends the same way, without the clock's line. The sim-runner counts both as draws.
-- **Some noise is normal.** Startup prints about 20 `was not assigned to any set` lines. `Did not have activator set` is a `println` in `SpellAbilityRestriction.java`, where Forge fills in the missing activator and carries on.
+- **Forge skips flags it doesn't know.** A jar built before `-sim` plays a heuristic game with `-sim full` and doesn't complain. So the `[sim=mode]` tag in the output is the proof that a mode took effect, not the flag on the command line.
+- **Some noise is normal.** Startup prints about 20 `was not assigned to any set` lines. `Did not have activator set` is a `println` in `SpellAbilityRestriction.java`, where Forge fills in the missing activator and carries on. In full sim, `Simulation: SA not found!` on stderr comes from `GameSimulator`: the search couldn't find that ability on its copy of the game, scored it as a failed simulation and moved on. It isn't a crash, but the search can't choose that ability. On the Burn deck it is Suspend.
 
 ## Running batches
 
@@ -127,10 +129,11 @@ $decks = "..\forge\forge-gui\res\geneticaidecks"
 python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
 ```
 
-Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, or if a worker left no log in its throwaway profile.
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, or if a batch with `--sim-mode` doesn't get those modes back in Forge's match header. That last one means a stale jar, and the worker table says so.
 
 ### What the report counts
 
+- **Seat 1** and **seat 2** give the deck, AI profile and simulation mode.
 - **Attempted** is what you asked for. **Finished** is every game with a `Game Result:` line. Games not finished is the difference, and covers a deck that won't load, an unknown AI profile and a JVM that died.
 - **Wins** come from the `Ai(n)-` prefix, so they are per seat, and seat n holds deck n for the whole batch.
 - **Draws by rules** are games Forge printed as a draw. In the runs below that meant both players lost.
@@ -157,6 +160,8 @@ Forge calls `MyRandom.setRandom(new Random(seed))` once, before the first game, 
 - Games in one JVM aren't independent. Game 1's starting player is random, and after that the loser of the last game goes first (`GameAction.determineFirstTurnPlayer`).
 
 Two wall clocks can break replay, and both depend on machine load. `-c` stops a game, and its thread can keep drawing from the shared stream until it notices the interrupt. `Game.AI_TIMEOUT` gives each AI decision 5 seconds. That one is only partly visible: `AI decision timeouts` counts the eval timeout, while `AITimeoutTracker.Expired` cuts a decision short without printing anything. The 20 of 20 match above suggests neither mattered in those runs.
+
+Full sim replays less exactly. Two runs of the 10-game smoke batch with seed 1 agreed on all ten winners and on nine of the ten final turns. Game 8 ended on turn 5 in one run and turn 6 in the other, and I didn't find out why. The search's time limits are the first place to look. So don't count on a full-sim result digest matching between runs.
 
 AI sideboarding is off in a sim (`GameRules.AISideboardingEnabled` defaults to false), so decks don't change between games of a `-n` run.
 
@@ -194,9 +199,42 @@ Run 2026-11-04 on the build machine: i5-10600K, 12 logical cores, 32 GB, 10 work
 
 Startup is the expensive part of a small batch. It was 15 to 20 seconds for one JVM alone and 45 to 50 for two. For ten it was 159, 142 and 70 seconds across three batches, and I don't know why it varied that much. Peak memory across ten JVMs was 6.9 GB, and under 700 MB for any one.
 
-Each worker played five games, so the JVMs were never warm. In the first batch, mean game time fell from 18.4 seconds for each worker's first game to 5.2 for its fifth, though some of that is other workers finishing. A long run may be faster than these rates. No run here lasted long enough to say.
+Each worker played five games, so the JVMs were never warm. In the first batch, mean game time fell from 18.4 seconds for each worker's first game to 5.2 for its fifth, though some of that is other workers finishing. The longer runs under "Full simulation" below show that a warm JVM is much faster, so treat these rates as a floor.
 
-These numbers are the stock heuristic AI with no snapshot hook, no tripwire and shipped `GAL_` decks. They say nothing about full-simulation mode.
+These numbers are the stock heuristic AI with no snapshot hook, no tripwire and shipped `GAL_` decks.
+
+### Full simulation
+
+Run 2026-11-05 on the same machine: Burn vs Merfolk, 4 workers, `--clock 600`, the default 2048m heap, below-normal priority, on a machine that was not kept idle, so CPU figures include whatever else was running. Each leg stopped at a fixed wall time rather than a game count, and the three legs took 28 minutes in all. The heuristic leg is a control. The table above used 10 cold workers, so it can't be compared with these directly.
+
+| | Full on seat 1 (Burn) | Full on both seats | Heuristic control |
+|---|---|---|---|
+| Wall time | 720 s | 720 s | 240 s |
+| Games finished | 147 | 67 | 414 |
+| Wins, seat 1 and seat 2 | 65 and 82 | 33 and 34 | 167 and 242 |
+| Draws | 0 | 0 | 5, by rules |
+| Draws by clock or exception | 0 | 0 | 0 |
+| Steady-state games per hour, per worker | 201 | 97 | 2233 |
+| Mean game | 17.9 s | 37.1 s | 1.6 s |
+| Median game | 12.5 s | 27.0 s | 1.4 s |
+| Worst game | 81.3 s | 149.4 s | 10.4 s |
+| Mean turns, worst | 6.3, 14 | 6.0, 16 | 6.9, 16 |
+| Usable games in 8 hours, 4 workers | 6439 | 3093 | 70405 |
+| Mean machine CPU | 56% | 66% | 68% |
+
+Full sim on one seat is about 11 times slower than the control, and on both seats about 23 times slower. Kill criterion 1 needs about 500 usable games a night. Four workers clear that by 13 times with one seat and 6 times with both, on this matchup.
+
+Scaling to 10 workers is an extrapolation, because no 10-worker full-sim run exists. Multiplying by 2.5 gives about 16,000 a night for one seat and 7,700 for both. That is the high end, because each JVM used more than one core: 4 workers already took 56% to 66% of a 12-thread machine. Stopping at 100% CPU gives about 11,500 and 4,700.
+
+What this doesn't cover:
+
+- Burn vs Merfolk games last about 6 turns. Search time grows with the choices on offer, so a slower matchup will run below these rates. No other deck pair was timed.
+- Each leg killed its workers at the deadline, so 4 games per leg in progress at that moment aren't counted. The worst game could be longer than the table shows.
+- No game came near the clock or turn 50. Forge has no turn cap yet, so that one was read from the `Turn` line.
+- Full on seat 1 won 65 of 147, and the same deck with the heuristic AI won 167 of 414. That is 44% against 41%, inside the noise, so these runs show no strength gain from full sim. They weren't built to measure one.
+- `PRUNE_HIDDEN_INFO` is still off, so the search sees the opponent's hand and library. The hook and tripwire aren't in yet either, and both will add cost.
+
+Memory peaked at 5.2 GB across 4 JVMs. No run produced a stack trace.
 
 ## The decks
 
