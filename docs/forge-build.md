@@ -12,7 +12,7 @@ The fork is https://github.com/jwilliamson13-tech/forge. All work goes on its `m
 | Maven | 3.10.0, from scoop |
 | Forge version | 2.0.16-SNAPSHOT |
 | Upstream commit | `da66fb1ac4be7957461477bc8bd26628a439c747` (2026-11-04) |
-| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. They add `-sim` (issue #17) and `-budget` (issue #50) |
+| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. They add `-sim` (issue #17), `-budget` (issue #50) and the search changes of issue #51 |
 | Jar | `forge-gui-desktop\target\forge-gui-desktop-2.0.16-SNAPSHOT-jar-with-dependencies.jar` |
 
 Forge's pom requires Java 17 or newer and Maven 3.8.1 or newer. It compiles to release 17, so Java 21 works.
@@ -104,7 +104,7 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-s` is the RNG seed. Two runs with seed 42 produced the same game log, line for line, once the startup banner's timestamps and the timing lines were removed.
 - `-a` is an AI profile per seat, in deck order, such as `-a Default Reckless`. An unknown name prints the valid ones and stops.
 - `-sim` is the simulation mode per seat, in deck order, such as `-sim full heuristic`. The modes are `heuristic`, `hybrid` and `full`, the same three as the desktop lobby's menu. Seats left out stay heuristic. With the flag, each player name ends in `[sim=mode]`, so every result line names the mode. Without it, the output is what stock Forge prints. An unknown mode prints the valid ones and stops, and so does `-sim` with `-t`.
-- `-budget` is the number of search steps an AI decision may take, such as `-budget 100`. A step is one game copied for the search. With it, the wall-clock limit on AI decisions stops mattering, so a run replays from its seed on a busy machine too. A decision that runs out passes priority, as one that runs out of time does. Without the flag the limit stays at 5 seconds. Only `forge sim` sets a budget.
+- `-budget` is the number of search steps an AI decision may take, such as `-budget 100`. A step is one game copied for the search. With it, the wall-clock limit on AI decisions stops mattering, so a run replays from its seed on a busy machine too. What a decision that runs out does is under "Stopped decisions" below. Without the flag the limit stays at 5 seconds. Only `forge sim` sets a budget.
 - `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
@@ -112,10 +112,10 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 With `-sim` or `-budget`, each game prints one more line before its `Game Result:` line. Without them, the output is what stock Forge prints.
 
 ```
-AI limits: 2 deadline expiries, 0 budget stops, 5120 random draws
+AI limits: 0 deadline expiries, 2 budget stops, 5120 random draws, 2 stops played, 0 stops passed, 1 stops with a land, 0 land drops missed
 ```
 
-Deadline expiries and budget stops count the decisions the clock or the budget cut short in that game. Random draws is every draw from `MyRandom` in that game, including the ones the search makes, so two games that played differently almost never share it.
+Deadline expiries and budget stops count the decisions the clock or the budget cut short in that game. Random draws is every draw from `MyRandom` in that game, including the ones the search makes, so two games that played differently almost never share it. The last four numbers say what those stopped decisions did, and only count when a seat is `hybrid` or `full`. A stop played a line or passed. A stop with a land had a land among its candidates. A land drop missed is a turn that ended with no land played after such a stop.
 
 In tournament mode (`-t`), `-D` works differently: it loads every `.dck` in the folder, and names passed to `-d` no longer resolve under it.
 
@@ -127,7 +127,7 @@ In tournament mode (`-t`), `-D` works differently: it loads every `.dck` in the 
 - **The exit code doesn't mean the game worked.** `Main` always ends with `System.exit(0)`, even after `Could not load deck`. Only a `Game Result:` line proves a game was played.
 - **A stopped game prints a winner.** A game past the clock prints `Stopping slow match as draw`, then `Game Result: ... has won!` for an arbitrary seat. `SimulateMatch` calls `setGameOver(Draw)`, but `Player.onGameOver` marks everyone who hasn't lost as a winner, so both `Game Outcome:` lines say "has won" and `isDraw()` is false. The running score in `Match Result:` counts these fake wins too. I saw this on a real run with `-c 1`. By the source, a game that throws ends the same way, without the clock's line. The sim-runner counts both as draws.
 - **Forge skips flags it doesn't know.** A jar built before `-sim` plays a heuristic game with `-sim full` and doesn't complain. So the `[sim=mode]` tag in the output is the proof that a mode took effect, not the flag on the command line. The same goes for `-budget`, where the proof is the `AI limits:` line.
-- **Some noise is normal.** Startup prints about 20 `was not assigned to any set` lines. `Did not have activator set` is a `println` in `SpellAbilityRestriction.java`, where Forge fills in the missing activator and carries on. In full sim, `Simulation: SA not found!` on stderr comes from `GameSimulator`: the search couldn't find that ability on its copy of the game, scored it as a failed simulation and moved on. It isn't a crash, but the search can't choose that ability. On the Burn deck it is Suspend.
+- **Some noise is normal.** Startup prints about 20 `was not assigned to any set` lines. `Did not have activator set` is a `println` in `SpellAbilityRestriction.java`, where Forge fills in the missing activator and carries on. In full sim, `Simulation: SA not found!` on stderr comes from `GameSimulator`: the search couldn't find that ability on its copy of the game, scored it as a failed simulation and moved on. It isn't a crash. On Merfolk it is Merfolk Sovereign's `{T}` ability, which is expected. See "Stopped decisions" below.
 
 ## Running batches
 
@@ -150,6 +150,7 @@ Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Defa
 - **Usable** means decisive, because draws get dropped before training.
 - **Startup** runs from launching the JVM to Forge printing its match header. **Steady-state games per hour** is each worker's games divided by the time from that header to its last result, summed over workers.
 - **Search budget** is the steps per decision, or off.
+- **AI stops that played a line**, **AI stops that passed**, **AI stops with a land candidate** and **AI land drops missed on stops** add up the last four numbers of the `AI limits:` lines. They say `not reported` for a jar from before issue #51.
 - **AI decision timeouts** counts the `AI eval thread at timeout:` lines, one narrow kind of expiry that the heuristic AI prints. **AI deadline expiries** counts every decision the clock cut short, and includes those. **AI search budget stops** counts the decisions the budget cut short. The last two come from the `AI limits:` lines and say `not reported` for a run without `-sim` or `-budget`.
 - **Result digest** is a hash of every game's seat, turn, draw cause and, when Forge prints it, random draws. Two runs with the same digest played the same games. Winner and turn alone aren't enough: the two runs that opened issue #50 agreed on all ten winners.
 
@@ -194,9 +195,9 @@ Nothing printed any of this. The `AI decision timeouts` row read 0 on every run,
 
 **So a sim can count steps instead.** With `-budget`, a decision stops after that many game copies, and `AI_TIMEOUT` is set to the game clock, which leaves `-c` as the only wall clock. A step count doesn't depend on load, so the search stops at the same place every time.
 
-Why 100: over 7 games the 219 decisions that searched took a median of 5 steps, a 99th percentile of 76, and 96 at most apart from the 335. It has to stay well under what runs out of heap. A stop is the same as an expiry for the AI, and it costs about as much play as the old limit did: on the same seeds the budget stopped 35 decisions where the clock cut 32 and 29, and in the both-seats batch below it stopped 22 where the clock cut 63. These counts come from Burn vs Merfolk and one short batch of Sneak Show vs Slivers. A deck with bigger boards costs more per step, in both time and memory, so check the heap before raising the number.
+Why 100: over 7 games the 219 decisions that searched took a median of 5 steps, a 99th percentile of 76, and 96 at most apart from the 335. It has to stay well under what runs out of heap. At the time a stop passed priority, as an expiry did, and it cost about as much play as the old limit: on the same seeds the budget stopped 35 decisions where the clock cut 32 and 29, and in the both-seats batch below it stopped 22 where the clock cut 63. These counts come from Burn vs Merfolk and one short batch of Sneak Show vs Slivers. A deck with bigger boards costs more per step, in both time and memory, so check the heap before raising the number.
 
-A stop leaves `MyRandom` on the search's stream, as an expiry does. That no longer harms replay, because the stream then depends only on the seed. I left it alone because fixing it changes default play.
+Issue #51 changed what a stop does to `MyRandom`. See "Stopped decisions" below. The replay runs in the table here were made before it, so their digests no longer come out of the current jar.
 
 Replay runs, 2026-11-05, 4 workers, below-normal priority, `--clock 600`, 2 GB heaps, each compared by digest and line by line on winner, turn, stops and draws:
 
@@ -229,6 +230,64 @@ What this doesn't cover:
 - Hybrid mode gets the budget from the runner, but no hybrid batch was run, and its one-step checks run on the evaluation thread, where a budget doesn't count them.
 - The win split says nothing about strength. Seat 1 won 1 of 12 with the budget and 3 of 12 without it on seed 2, against 33 of 67 in the timing run below on another seed. Twelve games can't separate those.
 - I did not find what holds the memory in a long search.
+
+### Stopped decisions
+
+Issue #51 changed three things in full sim. All three are behind `Game.AI_SIM_SEARCH`, which `forge sim` sets only when a seat is `hybrid` or `full`, so default play and heuristic seats don't see them.
+
+**A stop plays the best line found.** A decision cut short by the budget or the clock used to pass priority and lose what the search had found. Now the search notes each line once its last action has been simulated and scored, before it looks deeper. At a stop it takes the best of those by value, and plays it only if it raises the available value, which is the rule a finished search uses in `chooseSpellAbilityToPlayImpl`. If it doesn't, or if nothing was scored yet, the decision passes. A line can be several actions long, and the later ones run as an ordinary plan. Only the real decision does this. An AI inside a simulated game still passes on a stop, and any score made after the stop is left out, because that AI may have been cut short while making it.
+
+A stop no longer leaves the game on the search's random stream: the stopped decision puts `MyRandom` back, and the stream stays a function of the seed either way. `evaluateSa` itself is unchanged, so default play keeps the old behavior. The stopped decision also clears the `castSA` that `canPlay` leaves on its candidates, as `AiController` does after its own checks. A finished decision in the picker still leaves it there, which is how stock Forge behaves.
+
+**Suspend isn't retried at declare blockers.** After planning, `SpellAbilityPicker` asks of each ability not at sorcery speed whether it would do better after blockers. Suspend is neither a spell nor an activated ability, so `SpellAbilityAi.isSorcerySpeed` says false, and the retry looks for it in a copy of the game where a sorcery can't be suspended. With a trace on the failure, all 136 errors in the batch below came from that retry: the real game in main phase 1, the copy at declare blockers. The picker now leaves Suspend out of the retry unless its card has flash. `isSorcerySpeed` itself is unchanged, because the heuristic AI uses it.
+
+**A suspended card is worth 6.** `GameStateEvaluator` gives a card in hand 5 points and a card in exile none, so suspending always scored 5 below not suspending, whatever came of it. Stops weren't the cause: with stops fixed and the evaluator not, full sim suspended 0 times in 48 games. The value is one point above a card in hand, because the card still comes and its cost is paid. It was picked by that reasoning and not tuned, and it ties with hard-casting Rift Bolt at the opponent's face. `GameCopier` keeps counters only on the battlefield, so it now keeps them on suspended cards too. Without that, every score made in a copy comes out 6 short of the real game's.
+
+**`Simulation: SA not found!` on Merfolk isn't a bug.** The same retry asks about Merfolk Sovereign's `{T}` ability, and in the copy the Sovereign has attacked. All 16 of those errors in the both-seats batch had it tapped and attacking. If it attacks it can't use the ability, so scoring that retry as a failure is the right answer, and it costs one search step. The line still prints. It will on any creature with a tap ability that the AI attacks with.
+
+Burn vs Merfolk, budget 100, 4 workers, below-normal priority, `--clock 600`, 2 GB heaps, 2026-11-05. "Before" is the jar with only the counters added, and its first 6 games per worker came out as the `79babf2958ec` of issue #50, so the counters and the flag don't change play. "Stops only" has the Suspend timing and stop fixes but not the evaluator change.
+
+| Burn full, Merfolk heuristic, seed 1 | Before | Stops only | After | Heuristic control |
+|---|---|---|---|---|
+| Games | 96 | 48 | 96 | 96 |
+| Rift Bolt suspended | 2, in 1 game | 0 | 46, in 40 games | 52, in 44 games |
+| Rift Bolt hard-cast, about | 53 | 25 | 24 | 30 |
+| `SA not found`, all Suspend | 136 | 0 | 0 | 0 |
+| Budget stops | 145 | 47 | 46 | 0 |
+| Stops that played a line | 0 | 27 | 42 | 0 |
+| Stops that passed | 145 | 20 | 4 | 0 |
+| Stops with a land candidate | 100 | 21 | 34 | 0 |
+| Land drops missed on stops | 43 | 1 | 0 | 0 |
+| Wins, seat 1 and seat 2 | 39 and 57 | 17 and 31 | 47 and 49 | 41 and 53, 2 draws |
+| Mean game | 27.1 s | 31.4 s | 24.4 s | 3.0 s |
+| Steady-state games per hour | 539 | 464 | 592 | 4711 |
+
+| Both seats full, seed 2, 24 games | Before | After |
+|---|---|---|
+| Rift Bolt suspended | 0 | 9 |
+| `SA not found` | 30 Suspend, 16 Merfolk Sovereign | 7 Merfolk Sovereign |
+| Budget stops | 41 | 22 |
+| Stops that played a line | 0 | 21 |
+| Stops that passed | 41 | 1 |
+| Land drops missed on stops | 12 | 0 |
+| Wins, seat 1 and seat 2 | 9 and 15 | 7 and 17 |
+| Mean game | 49.3 s | 70.8 s |
+| Steady-state games per hour | 297 | 205 |
+
+Rift Bolt hard-casts are every cast line less the suspended count, so they are close, not exact.
+
+Fewer decisions stop after the change. I don't know how much of that is the Suspend retries no longer spending steps and how much is games going differently once the AI plays on.
+
+Replay still holds. The first 6 games of each worker in the 96-game "after" batch and a separate 24-game batch beside 4 CPU burners both gave `46c4d099b7c5`, and all 24 games matched on winner, turn, draw cause and every number on the `AI limits:` line. The two runs averaged 82% and 93% machine CPU. Heuristic output didn't change: 48 games with `--sim-mode heuristic heuristic` matched the first 12 games per worker of the "before" jar, `74aaf7d8dac2`, and 20 games with no `-sim` matched the logs in `runs\t16-real-burn-merfolk` 100 lines of 100, with no `AI limits:` line.
+
+What this doesn't cover:
+
+- The win rates say nothing yet. Seat 1 went from 39 of 96 to 47 of 96, which is 41% to 49% with 95% intervals of 31% to 51% and 39% to 59%. Those overlap, the change bundles three fixes, and the games were not played against the same draws. In the both-seats batch it went down, 9 to 7 of 24.
+- Throughput moved both ways. One seat went from 539 to 592 games per hour, but `mvn` builds and tests ran beside the "before" batch and not the "after" one. Both seats went from 297 to 205, a mean game of 49.3 s to 70.8 s, on 24 games each with about 20 s of a second batch beside the "after" run. That drop is too big to wave away. I didn't find its cause.
+- Only Rift Bolt and only this matchup. No other suspend card was played.
+- A stop by the clock takes the same path as one by the budget, in `--search-budget 0` runs, and no batch ran that way. The Forge tests stop searches with the budget only.
+- No batch had a hybrid seat. `AI_SIM_SEARCH` is on for hybrid, so the evaluator change reaches it through `OnePlaySafetyChecker`.
+- A search that a nested AI's catch let finish is treated as stopped, by reading the source. Both-seats games can reach that path, but no test forces it.
 
 ### Why each worker has its own profile
 

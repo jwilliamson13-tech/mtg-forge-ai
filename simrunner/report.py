@@ -56,6 +56,10 @@ def format_summary(batch: BatchResult) -> str:
         ("AI decision timeouts", str(sum(worker.ai_timeouts for worker in batch.workers))),
         ("AI deadline expiries", _count(batch.deadline_expiries)),
         ("AI search budget stops", _count(batch.budget_stops)),
+        ("AI stops that played a line", _count(batch.stops_played)),
+        ("AI stops that passed", _count(batch.stops_passed)),
+        ("AI stops with a land candidate", _count(batch.stops_with_land)),
+        ("AI land drops missed on stops", _count(batch.land_drops_missed)),
         ("stack traces on stderr", str(sum(worker.stderr_traces for worker in batch.workers))),
         ("result digest", batch.digest),
     ]

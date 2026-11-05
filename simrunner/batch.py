@@ -104,8 +104,9 @@ class BatchResult:
 
     def _limit_total(self, field: str) -> int | None:
         """The sum over the games Forge reported on. None when it reported on none of them."""
-        reported = [game.ai_limits for game in self.games if game.ai_limits]
-        return sum(getattr(limits, field) for limits in reported) if reported else None
+        reported = [getattr(game.ai_limits, field) for game in self.games if game.ai_limits]
+        reported = [value for value in reported if value is not None]
+        return sum(reported) if reported else None
 
     @property
     def deadline_expiries(self) -> int | None:
@@ -114,6 +115,22 @@ class BatchResult:
     @property
     def budget_stops(self) -> int | None:
         return self._limit_total("budget_stops")
+
+    @property
+    def stops_played(self) -> int | None:
+        return self._limit_total("stops_played")
+
+    @property
+    def stops_passed(self) -> int | None:
+        return self._limit_total("stops_passed")
+
+    @property
+    def stops_with_land(self) -> int | None:
+        return self._limit_total("stops_with_land")
+
+    @property
+    def land_drops_missed(self) -> int | None:
+        return self._limit_total("land_drops_missed")
 
     @property
     def digest(self) -> str:

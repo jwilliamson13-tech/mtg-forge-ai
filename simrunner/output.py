@@ -23,7 +23,9 @@ TURN_LINE = re.compile(r"^Game Outcome: Turn (\d+)$")
 OUTCOME_WON_LINE = re.compile(r"^Game Outcome: Ai\(\d+\)-.* has won because all opponents have lost$")
 HEADER_LINE = re.compile(r"^Ai\(1\)-.* vs Ai\(2\)-.* seed (\d+)$")
 SIM_MODE_TAG = re.compile(r"\[sim=(\w+)\]")
-AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws$")
+AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws"
+                            r"(?:, (\d+) stops played, (\d+) stops passed, (\d+) stops with a land, "
+                            r"(\d+) land drops missed)?$")
 TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
 AI_TIMEOUT_LINE = "AI eval thread at timeout:"
@@ -38,11 +40,18 @@ class DrawCause(Enum):
 
 @dataclass(frozen=True)
 class AiLimits:
-    """What Forge prints per game with `-sim` or `-budget`. A run without either prints nothing."""
+    """What Forge prints per game with `-sim` or `-budget`. A run without either prints nothing.
+
+    The stop fields are None for a jar from before issue #51.
+    """
 
     deadline_expiries: int
     budget_stops: int
     random_draws: int
+    stops_played: int | None = None
+    stops_passed: int | None = None
+    stops_with_land: int | None = None
+    land_drops_missed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -70,7 +79,7 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
         if line == CLOCK_LINE:
             clock_stopped = True
         elif match := AI_LIMITS_LINE.match(line):
-            limits = AiLimits(int(match[1]), int(match[2]), int(match[3]))
+            limits = AiLimits(*(None if group is None else int(group) for group in match.groups()))
         elif match := TURN_LINE.match(line):
             turn = int(match[1])
         elif OUTCOME_WON_LINE.match(line):

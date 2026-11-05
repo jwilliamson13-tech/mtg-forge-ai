@@ -281,6 +281,21 @@ def test_deadline_expiries_are_summed_over_every_game(config, monkeypatch):
     assert "AI deadline expiries              12\n" in format_summary(batch)
 
 
+def test_what_stops_did_is_summed_over_every_game(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "stops")
+    batch = run_batch(config(modes=("full", None)))
+    assert (batch.stops_played, batch.stops_passed, batch.stops_with_land, batch.land_drops_missed) == (18, 6, 12, 6)
+    summary = format_summary(batch)
+    assert "AI stops that played a line       18\n" in summary
+    assert "AI land drops missed on stops     6\n" in summary
+
+
+def test_stop_counts_say_not_reported_without_them(config):
+    batch = run_batch(config(modes=("full", None)))
+    assert batch.budget_stops == 0
+    assert "AI stops that passed              not reported\n" in format_summary(batch)
+
+
 def test_budget_stops_are_summed_over_every_game(config, monkeypatch):
     monkeypatch.setenv("STUB_SCENARIO", "budget_stops")
     batch = run_batch(config(modes=("full", None)))
@@ -456,6 +471,10 @@ def test_the_report_table():
         "AI decision timeouts              2\n"
         "AI deadline expiries              not reported\n"
         "AI search budget stops            not reported\n"
+        "AI stops that played a line       not reported\n"
+        "AI stops that passed              not reported\n"
+        "AI stops with a land candidate    not reported\n"
+        "AI land drops missed on stops     not reported\n"
         "stack traces on stderr            1\n"
         f"result digest                     {finished_batch().digest}\n"
     )

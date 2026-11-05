@@ -157,5 +157,15 @@ def test_a_forced_end_keeps_its_ai_limits():
     assert parse(AI_LIMITS + FORCED_END)[0].ai_limits == AiLimits(3, 1, 5120)
 
 
+def test_the_ai_limits_line_can_report_what_stops_did():
+    line = ("AI limits: 0 deadline expiries, 5 budget stops, 5120 random draws, "
+            "3 stops played, 2 stops passed, 4 stops with a land, 1 land drops missed\n")
+    assert parse(line + WIN)[0].ai_limits == AiLimits(0, 5, 5120, 3, 2, 4, 1)
+
+
+def test_a_jar_from_before_the_stop_counts_reports_none():
+    assert parse(AI_LIMITS + WIN)[0].ai_limits.stops_played is None
+
+
 def test_a_game_without_the_line_has_no_ai_limits():
     assert parse(WIN)[0].ai_limits is None
