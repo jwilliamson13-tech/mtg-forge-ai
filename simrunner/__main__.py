@@ -10,7 +10,7 @@ from pathlib import Path
 
 from simrunner.batch import BatchConfig, SetupError, run_batch
 from simrunner.report import format_report
-from simrunner.worker import Seat
+from simrunner.worker import SIM_MODES, Seat
 
 CORES_RESERVED = 2
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,9 +20,10 @@ DEFAULT_RUNS = REPO_ROOT / "runs"
 
 def _batch(args: argparse.Namespace) -> int:
     profiles = args.ai or (None, None)
+    modes = args.sim_mode or (None, None)
     run_dir = args.run_dir or DEFAULT_RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-seed{args.seed}"
     config = BatchConfig(
-        seats=(Seat(Path(args.deck1), profiles[0]), Seat(Path(args.deck2), profiles[1])),
+        seats=(Seat(Path(args.deck1), profiles[0], modes[0]), Seat(Path(args.deck2), profiles[1], modes[1])),
         games=args.games, batch_seed=args.seed, workers=args.workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles,
@@ -56,6 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="parallel JVMs (default: logical cores minus 2)")
     batch.add_argument("--ai", nargs=2, metavar=("SEAT1", "SEAT2"),
                        help="AI profile per seat, such as Default Reckless")
+    batch.add_argument("--sim-mode", nargs=2, metavar=("SEAT1", "SEAT2"), choices=SIM_MODES,
+                       help="simulation mode per seat: heuristic, hybrid or full (default: heuristic)")
     batch.add_argument("--clock", type=int, default=2400, help="seconds before Forge stops a game (default: 2400)")
     batch.add_argument("--heap", default="2048m", help="-Xmx per JVM (default: 2048m)")
     batch.add_argument("--forge", default=str(DEFAULT_FORGE), help="Forge clone (default: ../forge)")

@@ -23,11 +23,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, GameResult, count_stack_traces,
-                              find_fatal, parse_games)
+                              find_fatal, parse_games, printed_sim_modes)
 
 JVM_PROPERTIES = ("-Dfile.encoding=UTF-8", "-Dsentry.enabled=false")
 PROFILE_FILE = "forge.profile.properties"
 DEFAULT_AI_PROFILE = "Default"
+SIM_MODES = ("heuristic", "hybrid", "full")
+DEFAULT_SIM_MODE = "heuristic"
 DECK_NAMES = ("seat1.dck", "seat2.dck")
 
 # Past this, a worker is hung rather than slow, and gets killed. The clock already
@@ -42,6 +44,7 @@ class Seat:
 
     deck: Path
     ai_profile: str | None = None
+    sim_mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,15 @@ class WorkerResult:
     ai_timeouts: int = 0
     stderr_traces: int = 0
     fatal: str | None = None
+    sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
+
+
+def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
+    """The `-sim` values for these seats. Empty means leave the flag out."""
+    if not any(seat.sim_mode for seat in seats):
+        return ()
+    # `-sim` fills seats in order, so name both.
+    return tuple(seat.sim_mode or DEFAULT_SIM_MODE for seat in seats)
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int) -> list[str]:
@@ -72,6 +84,8 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
     if any(seat.ai_profile for seat in seats):
         # `-a` fills seats in order and can't take an empty name, so name both.
         args += ["-a", *(seat.ai_profile or DEFAULT_AI_PROFILE for seat in seats)]
+    if modes := requested_sim_modes(seats):
+        args += ["-sim", *modes]
     return args
 
 
@@ -186,5 +200,6 @@ def _read_stdout(result: WorkerResult, lines: list[tuple[float, str]]) -> None:
     for stamp, line in lines:
         if result.ready_s is None and HEADER_LINE.match(line):
             result.ready_s = stamp
+            result.sim_modes = printed_sim_modes(line)
         if line.startswith("Game Result:"):
             result.last_result_s = stamp

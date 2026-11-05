@@ -6,7 +6,8 @@ Forge, so it follows the source: `simulateSingleMatch` ends a thrown game exactl
 it ends a clocked one, without the clock's line.
 """
 
-from simrunner.output import (DrawCause, count_stack_traces, find_fatal, parse_games)
+from simrunner.output import (DrawCause, HEADER_LINE, count_stack_traces, find_fatal, parse_games,
+                              printed_sim_modes)
 
 A = "Ai(1)-GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18"
 B = "Ai(2)-GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19"
@@ -99,6 +100,35 @@ def test_a_garbled_result_line_is_not_a_game_and_resets_the_state():
     garbled = "Stopping slow match as draw\nGame Result: Game 2 ended in \tat forge.ai\n"
     [game] = parse(garbled + WIN)
     assert game.winner_seat == 2
+
+
+def test_a_win_with_sim_modes_in_the_names_still_names_the_seat():
+    # The mode rides in the player name, as a real `-sim full heuristic` run prints it.
+    text = WIN.replace(A, f"{A} [sim=full]").replace(B, f"{B} [sim=heuristic]")
+    [game] = parse(text)
+    assert game.winner_seat == 2
+    assert game.turn == 7
+
+
+def test_a_forced_end_with_sim_modes_in_the_names_is_still_a_draw():
+    text = FORCED_END.replace(A, f"{A} [sim=full]").replace(B, f"{B} [sim=full]")
+    [game] = parse(text)
+    assert game.draw_cause is DrawCause.EXCEPTION
+
+
+def test_the_match_header_gives_the_mode_per_seat():
+    header = f"{A} [sim=full] vs {B} [sim=heuristic] - one game of Constructed seed 42"
+    assert HEADER_LINE.match(header)
+    assert printed_sim_modes(header) == ("full", "heuristic")
+
+
+def test_the_mode_is_found_beside_an_ai_profile():
+    header = f"{A} [sim=full] [Reckless] vs {B} [sim=hybrid] [Default] - 2 games of Constructed seed 42"
+    assert printed_sim_modes(header) == ("full", "hybrid")
+
+
+def test_a_header_without_the_flag_names_no_modes():
+    assert printed_sim_modes(f"{A} vs {B} - one game of Constructed seed 42") == ()
 
 
 def test_fatal_lines_are_found():

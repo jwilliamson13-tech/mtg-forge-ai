@@ -11,7 +11,7 @@ from pathlib import Path
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.worker import (JVM_PROPERTIES, Seat, WorkerPlan, WorkerResult, kill_tree,
-                              prepare_folder, remove_folder, run_worker, sim_args)
+                              prepare_folder, remove_folder, requested_sim_modes, run_worker, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
 
@@ -103,10 +103,15 @@ class BatchResult:
                 for worker in self.workers for game in worker.games]
         return hashlib.sha256("\n".join(rows).encode("ascii")).hexdigest()[:12]
 
+    def played_requested_modes(self, worker: WorkerResult) -> bool:
+        """Forge skips flags it doesn't know, so only its own header proves the modes took effect."""
+        return worker.sim_modes == requested_sim_modes(self.config.seats)
+
     @property
     def clean(self) -> bool:
-        """True when every game was played and every worker provably stayed in its own profile."""
-        return self.not_finished == 0 and all(worker.profile_used for worker in self.workers)
+        """True when every game was played, in the modes asked for, and every worker stayed in its own profile."""
+        return self.not_finished == 0 and all(worker.profile_used and self.played_requested_modes(worker)
+                                              for worker in self.workers)
 
 
 def plan_workers(games: int, batch_seed: int, workers: int) -> list[WorkerPlan]:

@@ -1,7 +1,7 @@
 """A stand-in for `java -jar forge.jar sim ...`, so sim-runner tests need no Java.
 
-It prints what real `forge sim -q` prints, captured from Forge at commit da66fb1,
-and exits 0 whatever happened, as Forge does. Like Forge, it reads
+It prints what real `forge sim -q` prints, captured from Forge at commit da66fb1
+plus the `-sim` flag, and exits 0 whatever happened, as Forge does. Like Forge, it reads
 `forge.profile.properties` from its working directory, opens a log in the user
 folder, and refuses a deck file that won't load.
 
@@ -103,9 +103,18 @@ def main() -> int:
         print("Unknown AI profile - Bogus. Available profiles: Default, Reckless")
         return 0
 
+    modes = None
+    if "-sim" in argv and scenario != "stale_jar":
+        modes = option(argv, "-sim", 2)
+        if "Bogus" in modes:
+            print("Unknown simulation mode - Bogus. Available modes: heuristic, hybrid, full")
+            return 0
+
     games = int(option(argv, "-n")[0])
     seed = int(option(argv, "-s")[0])
     players = [f"Ai({seat})-{name}" for seat, name in enumerate(names, 1)]
+    if modes:
+        players = [f"{player} [sim={mode}]" for player, mode in zip(players, modes)]
     print(f"{players[0]} vs {players[1]} - {games} games of Constructed seed {seed}", flush=True)
 
     rng = random.Random(seed)
