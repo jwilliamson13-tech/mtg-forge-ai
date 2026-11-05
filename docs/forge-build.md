@@ -205,7 +205,7 @@ These numbers are the stock heuristic AI with no snapshot hook, no tripwire and 
 
 ### Full simulation
 
-Run 2026-11-05 on the same machine: Burn vs Merfolk, 4 workers, `--clock 600`, the default 2048m heap, below-normal priority, with the machine in normal daytime use. Each leg stopped at a fixed wall time rather than a game count, and the three legs took 28 minutes in all. The heuristic leg is a control. The table above used 10 cold workers, so it can't be compared with these directly.
+Run 2026-11-05 on the same machine: Burn vs Merfolk, 4 workers, `--clock 600`, the default 2048m heap, below-normal priority, on a machine that was not kept idle, so CPU figures include whatever else was running. Each leg stopped at a fixed wall time rather than a game count, and the three legs took 28 minutes in all. The heuristic leg is a control. The table above used 10 cold workers, so it can't be compared with these directly.
 
 | | Full on seat 1 (Burn) | Full on both seats | Heuristic control |
 |---|---|---|---|
