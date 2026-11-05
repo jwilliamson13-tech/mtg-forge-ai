@@ -11,7 +11,8 @@ from pathlib import Path
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.worker import (JVM_PROPERTIES, Seat, WorkerPlan, WorkerResult, kill_tree,
-                              prepare_folder, remove_folder, requested_sim_modes, run_worker, sim_args)
+                              prepare_folder, remove_folder, requested_sim_modes, resolve_search_budget,
+                              run_worker, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
 
@@ -32,6 +33,7 @@ class BatchConfig:
     heap: str = "2048m"
     java: tuple[str, ...] = ("java",)
     keep_profiles: bool = False
+    search_budget: int | None = None  # None picks the default for the seats, and 0 leaves it off
 
 
 @dataclass
@@ -97,21 +99,49 @@ class BatchResult:
         return self.steady_games_per_hour * self.usable / self.finished if self.finished else 0.0
 
     @property
+    def search_budget(self) -> int:
+        return resolve_search_budget(self.config.seats, self.config.search_budget)
+
+    def _limit_total(self, field: str) -> int | None:
+        """The sum over the games Forge reported on. None when it reported on none of them."""
+        reported = [game.ai_limits for game in self.games if game.ai_limits]
+        return sum(getattr(limits, field) for limits in reported) if reported else None
+
+    @property
+    def deadline_expiries(self) -> int | None:
+        return self._limit_total("deadline_expiries")
+
+    @property
+    def budget_stops(self) -> int | None:
+        return self._limit_total("budget_stops")
+
+    @property
     def digest(self) -> str:
-        """A fingerprint of who won what, leaving out timing. Same games, same digest."""
-        rows = [f"{worker.plan.index}:{game.number}:{game.winner_seat}:{game.draw_cause}:{game.turn}"
-                for worker in self.workers for game in worker.games]
+        """A fingerprint of who won what, leaving out timing. Same games, same digest.
+
+        Forge's random draw count goes in when it prints one. Two games can share a winner
+        and a final turn and still have played differently, but they can't share the draws.
+        """
+        rows = []
+        for worker in self.workers:
+            for game in worker.games:
+                row = f"{worker.plan.index}:{game.number}:{game.winner_seat}:{game.draw_cause}:{game.turn}"
+                rows.append(f"{row}:{game.ai_limits.random_draws}" if game.ai_limits else row)
         return hashlib.sha256("\n".join(rows).encode("ascii")).hexdigest()[:12]
 
     def played_requested_modes(self, worker: WorkerResult) -> bool:
         """Forge skips flags it doesn't know, so only its own header proves the modes took effect."""
         return worker.sim_modes == requested_sim_modes(self.config.seats)
 
+    def applied_search_budget(self, worker: WorkerResult) -> bool:
+        """Forge skips flags it doesn't know, so a jar without `-budget` would play on the wall clock."""
+        return not self.search_budget or all(game.ai_limits for game in worker.games)
+
     @property
     def clean(self) -> bool:
         """True when every game was played, in the modes asked for, and every worker stayed in its own profile."""
         return self.not_finished == 0 and all(worker.profile_used and self.played_requested_modes(worker)
-                                              for worker in self.workers)
+                                              and self.applied_search_budget(worker) for worker in self.workers)
 
 
 def plan_workers(games: int, batch_seed: int, workers: int) -> list[WorkerPlan]:
@@ -135,6 +165,8 @@ def _check(config: BatchConfig) -> None:
             raise SetupError(f"not a file: {seat.deck}")
     if config.games < 1 or config.workers < 1:
         raise SetupError("games and workers must both be at least 1")
+    if config.search_budget is not None and config.search_budget < 0:
+        raise SetupError("the search budget can't be negative")
     if config.forge_root.resolve() in config.run_dir.resolve().parents:
         # `mvn clean` could follow a leftover link into forge-gui/res.
         raise SetupError(f"the run folder must be outside the Forge clone: {config.run_dir}")
@@ -158,7 +190,8 @@ def run_batch(config: BatchConfig) -> BatchResult:
             folders.append(folder)
             deck_dir = prepare_folder(folder, forge_gui, config.seats)
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES, "-jar", str(jar),
-                       *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s)]
+                       *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
+                                 resolve_search_budget(config.seats, config.search_budget))]
             jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started))
 
         began = time.monotonic()

@@ -23,6 +23,7 @@ TURN_LINE = re.compile(r"^Game Outcome: Turn (\d+)$")
 OUTCOME_WON_LINE = re.compile(r"^Game Outcome: Ai\(\d+\)-.* has won because all opponents have lost$")
 HEADER_LINE = re.compile(r"^Ai\(1\)-.* vs Ai\(2\)-.* seed (\d+)$")
 SIM_MODE_TAG = re.compile(r"\[sim=(\w+)\]")
+AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws$")
 TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
 AI_TIMEOUT_LINE = "AI eval thread at timeout:"
@@ -36,12 +37,22 @@ class DrawCause(Enum):
 
 
 @dataclass(frozen=True)
+class AiLimits:
+    """What Forge prints per game with `-sim` or `-budget`. A run without either prints nothing."""
+
+    deadline_expiries: int
+    budget_stops: int
+    random_draws: int
+
+
+@dataclass(frozen=True)
 class GameResult:
     number: int
     duration_ms: int
     turn: int | None
     winner_seat: int | None = None
     draw_cause: DrawCause | None = None
+    ai_limits: AiLimits | None = None
 
     @property
     def is_win(self) -> bool:
@@ -54,9 +65,12 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
     turn = None
     clock_stopped = False
     outcome_winners = 0
+    limits = None
     for line in lines:
         if line == CLOCK_LINE:
             clock_stopped = True
+        elif match := AI_LIMITS_LINE.match(line):
+            limits = AiLimits(int(match[1]), int(match[2]), int(match[3]))
         elif match := TURN_LINE.match(line):
             turn = int(match[1])
         elif OUTCOME_WON_LINE.match(line):
@@ -65,18 +79,19 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
             if match := WIN_LINE.match(line):
                 number, duration = int(match[1]), int(match[2])
                 if clock_stopped:
-                    results.append(GameResult(number, duration, turn, draw_cause=DrawCause.CLOCK))
+                    results.append(GameResult(number, duration, turn, draw_cause=DrawCause.CLOCK, ai_limits=limits))
                 elif outcome_winners > 1:
-                    results.append(GameResult(number, duration, turn, draw_cause=DrawCause.EXCEPTION))
+                    results.append(GameResult(number, duration, turn, draw_cause=DrawCause.EXCEPTION, ai_limits=limits))
                 else:
-                    results.append(GameResult(number, duration, turn, winner_seat=int(match[3])))
+                    results.append(GameResult(number, duration, turn, winner_seat=int(match[3]), ai_limits=limits))
             elif match := DRAW_LINE.match(line):
                 cause = DrawCause.CLOCK if clock_stopped else DrawCause.RULES
-                results.append(GameResult(int(match[1]), int(match[2]), turn, draw_cause=cause))
+                results.append(GameResult(int(match[1]), int(match[2]), turn, draw_cause=cause, ai_limits=limits))
             # A line that matches neither pattern was garbled, so that game counts as not finished.
             turn = None
             clock_stopped = False
             outcome_winners = 0
+            limits = None
     return results
 
 

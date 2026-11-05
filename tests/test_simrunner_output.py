@@ -6,7 +6,7 @@ Forge, so it follows the source: `simulateSingleMatch` ends a thrown game exactl
 it ends a clocked one, without the clock's line.
 """
 
-from simrunner.output import (DrawCause, HEADER_LINE, count_stack_traces, find_fatal, parse_games,
+from simrunner.output import (AiLimits, DrawCause, HEADER_LINE, count_stack_traces, find_fatal, parse_games,
                               printed_sim_modes)
 
 A = "Ai(1)-GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18"
@@ -142,3 +142,20 @@ def test_stack_traces_are_counted_by_their_first_line():
     lines = ["java.lang.InterruptedException", "\tat java.base/java.util.concurrent.FutureTask.get(FutureTask.java:203)",
              "java.lang.NullPointerException: boom", "The card A-Divide by Zero was not assigned to any set."]
     assert count_stack_traces(lines) == 2
+
+
+AI_LIMITS = "AI limits: 3 deadline expiries, 1 budget stops, 5120 random draws\n"
+
+
+def test_the_ai_limits_line_belongs_to_the_game_it_precedes():
+    games = parse(AI_LIMITS + WIN + WIN)
+    assert games[0].ai_limits == AiLimits(3, 1, 5120)
+    assert games[1].ai_limits is None
+
+
+def test_a_forced_end_keeps_its_ai_limits():
+    assert parse(AI_LIMITS + FORCED_END)[0].ai_limits == AiLimits(3, 1, 5120)
+
+
+def test_a_game_without_the_line_has_no_ai_limits():
+    assert parse(WIN)[0].ai_limits is None

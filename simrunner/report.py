@@ -21,6 +21,10 @@ def _seat(seat: Seat) -> str:
     return f"{seat.deck.stem} (AI {seat.ai_profile or 'default'}, sim {seat.sim_mode or DEFAULT_SIM_MODE})"
 
 
+def _count(value: int | None) -> str:
+    return "not reported" if value is None else str(value)
+
+
 def format_summary(batch: BatchResult) -> str:
     config = batch.config
     startups = batch.startup_times
@@ -32,6 +36,7 @@ def format_summary(batch: BatchResult) -> str:
         ("batch seed", str(config.batch_seed)),
         ("workers", str(len(batch.workers))),
         ("clock", f"{config.clock_s} s"),
+        ("search budget", f"{batch.search_budget} steps per decision" if batch.search_budget else "off"),
         ("games attempted", str(batch.attempted)),
         ("games finished", str(batch.finished)),
         ("games not finished", str(batch.not_finished)),
@@ -49,6 +54,8 @@ def format_summary(batch: BatchResult) -> str:
         (f"usable games in {OVERNIGHT_HOURS} h, steady rate",
          f"{overnight:.0f} (kill criterion 1 needs about {KILL_CRITERION_GAMES})"),
         ("AI decision timeouts", str(sum(worker.ai_timeouts for worker in batch.workers))),
+        ("AI deadline expiries", _count(batch.deadline_expiries)),
+        ("AI search budget stops", _count(batch.budget_stops)),
         ("stack traces on stderr", str(sum(worker.stderr_traces for worker in batch.workers))),
         ("result digest", batch.digest),
     ]
@@ -63,6 +70,8 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("no log in its throwaway profile")
     if worker.ready_s is not None and not batch.played_requested_modes(worker):
         notes.append("Forge did not name the sim modes asked for, so the jar may be stale")
+    if not batch.applied_search_budget(worker):
+        notes.append("Forge did not report on the search budget, so the jar may be stale")
     if worker.fatal:
         notes.append(worker.fatal)
     return "; ".join(notes)

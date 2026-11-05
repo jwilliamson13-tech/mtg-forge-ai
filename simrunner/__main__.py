@@ -10,7 +10,7 @@ from pathlib import Path
 
 from simrunner.batch import BatchConfig, SetupError, run_batch
 from simrunner.report import format_report
-from simrunner.worker import SIM_MODES, Seat
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, SIM_MODES, Seat
 
 CORES_RESERVED = 2
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +26,7 @@ def _batch(args: argparse.Namespace) -> int:
         seats=(Seat(Path(args.deck1), profiles[0], modes[0]), Seat(Path(args.deck2), profiles[1], modes[1])),
         games=args.games, batch_seed=args.seed, workers=args.workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
-        java=tuple(args.java), keep_profiles=args.keep_profiles,
+        java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget,
     )
     try:
         batch = run_batch(config)
@@ -59,6 +59,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="AI profile per seat, such as Default Reckless")
     batch.add_argument("--sim-mode", nargs=2, metavar=("SEAT1", "SEAT2"), choices=SIM_MODES,
                        help="simulation mode per seat: heuristic, hybrid or full (default: heuristic)")
+    batch.add_argument("--search-budget", type=int,
+                       help="search steps per AI decision, in place of Forge's wall-clock limit (default: "
+                            f"{DEFAULT_SEARCH_BUDGET} when a seat searches, otherwise off; 0 turns it off)")
     batch.add_argument("--clock", type=int, default=2400, help="seconds before Forge stops a game (default: 2400)")
     batch.add_argument("--heap", default="2048m", help="-Xmx per JVM (default: 2048m)")
     batch.add_argument("--forge", default=str(DEFAULT_FORGE), help="Forge clone (default: ../forge)")

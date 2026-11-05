@@ -31,6 +31,8 @@ DEFAULT_AI_PROFILE = "Default"
 SIM_MODES = ("heuristic", "hybrid", "full")
 DEFAULT_SIM_MODE = "heuristic"
 DECK_NAMES = ("seat1.dck", "seat2.dck")
+# Search steps per AI decision. See "Full-sim replay" in docs/forge-build.md for how this was chosen.
+DEFAULT_SEARCH_BUDGET = 100
 
 # Past this, a worker is hung rather than slow, and gets killed. The clock already
 # bounds each game, so this is a backstop for a JVM that stops responding.
@@ -77,7 +79,16 @@ def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
     return tuple(seat.sim_mode or DEFAULT_SIM_MODE for seat in seats)
 
 
-def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int) -> list[str]:
+def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> int:
+    """The `-budget` for a batch: what was asked for, else the default if any seat searches. 0 leaves it off."""
+    if requested is not None:
+        return requested
+    searches = any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
+    return DEFAULT_SEARCH_BUDGET if searches else 0
+
+
+def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
+             search_budget: int = 0) -> list[str]:
     """Return the `forge sim` arguments for one worker."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -86,6 +97,8 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-a", *(seat.ai_profile or DEFAULT_AI_PROFILE for seat in seats)]
     if modes := requested_sim_modes(seats):
         args += ["-sim", *modes]
+    if search_budget:
+        args += ["-budget", str(search_budget)]
     return args
 
 
