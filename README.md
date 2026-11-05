@@ -26,13 +26,21 @@ python -m cardscript sweep path/to/cardsfolder path/to/tokenscripts --out cards.
 python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
 ```
 
+## Game records
+
+`docs/game-record.md` is the contract between Forge and Python: one gzip'd JSONL file per game. `gamerecord.load_game` reads a file and validates it against that contract. This command converts a folder of them to Parquet, keeps the wins, and reports what it kept and dropped by end reason:
+
+```
+python -m gamerecord convert path/to/games path/to/parquet
+```
+
 ## Tests
 
-The packages need nothing outside the standard library; `requirements-dev.txt` holds the test runner:
+`cardscript`, `simrunner` and the `gamerecord` loader need nothing outside the standard library. The Parquet converter needs `pyarrow`. `requirements-dev.txt` holds that and the test runner:
 
 ```
 pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-The tests feed real Forge scripts from `tests/fixtures/` to `parse_card` and check what comes back. Fixtures are byte-for-byte copies of Forge's files at commit `64569999b8b99dd7176ab9d3e1e6008f3ab68590`; `.gitattributes` keeps git from rewriting their line endings.
+The tests feed real Forge scripts from `tests/fixtures/` to `parse_card` and check what comes back. Those `.txt` fixtures are byte-for-byte copies of Forge's files at commit `64569999b8b99dd7176ab9d3e1e6008f3ab68590`; `.gitattributes` keeps git from rewriting their line endings. `tests/fixtures/games/` holds hand-written game records as plain JSONL, and the tests gzip them.
