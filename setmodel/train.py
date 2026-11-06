@@ -179,7 +179,7 @@ def save_run(trained: Trained, corpus: Corpus, out: str | Path, seconds: float) 
     config = trained.config
     metadata = {"generation": config.generation, "batch_ids": corpus.batch_ids, "ablation": config.ablation,
                 "train_rows": int(len(corpus.rows(TRAIN))), "train_games": int(len(np.unique(corpus.game[corpus.rows(TRAIN)]))),
-                "torch": torch.__version__, "device": _device_name(trained.device)}
+                "torch": str(torch.__version__), "device": _device_name(trained.device)}
     metrics = {**metadata, **report(trained, corpus), "epoch_loss": trained.epoch_losses, "seconds": seconds,
                "truncation": corpus.truncation(), "join": corpus.report.to_dict(), "config": asdict(config)}
     (out / METRICS_FILE).write_text(json.dumps(metrics, indent=1) + "\n", encoding="utf-8")
