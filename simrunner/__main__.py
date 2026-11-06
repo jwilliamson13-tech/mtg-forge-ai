@@ -45,7 +45,7 @@ def _deck_path(arg: str, manifest_path: Path | None, parser: argparse.ArgumentPa
     try:
         return mf.deck_path(mf.load(path), arg, path.parent.parent)
     except mf.ManifestError as e:
-        parser.error(str(e))
+        parser.error(f"not a file: {arg}, and {e}")
 
 
 def _batch(args: argparse.Namespace) -> int:
