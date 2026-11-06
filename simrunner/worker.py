@@ -54,12 +54,11 @@ class Seat:
 
 @dataclass(frozen=True)
 class RecordPlan:
-    """Where a worker's Forge writes game records. A cap of None takes Forge's default."""
+    """What a batch asks of game records. A folder of None keeps them in the run folder, and a cap of None takes Forge's default."""
 
-    folder: Path
-    batch_id: str
+    folder: Path | None = None
     turn_cap: int | None = None
-    honest: bool = True
+    honest: bool = True  # keep the AI to what a person in its seat could know
 
 
 @dataclass(frozen=True)
@@ -119,8 +118,9 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
-             search_budget: int = 0, records: RecordPlan | None = None, tripwire: bool = True) -> list[str]:
-    """Return the `forge sim` arguments for one worker."""
+             search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
+             tripwire: bool = True) -> list[str]:
+    """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
     if any(seat.ai_profile for seat in seats):
@@ -133,7 +133,7 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
     if not tripwire:
         args += ["-tripwire", "off"]
     if records:
-        args += ["-record", str(records.folder), "-batch", records.batch_id]
+        args += ["-record", str(records.folder), "-batch", batch_id]
         if records.turn_cap is not None:
             args += ["-turncap", str(records.turn_cap)]
         if records.honest:

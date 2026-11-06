@@ -21,7 +21,7 @@ from simrunner.output import AiLimits, DrawCause, GameResult
 from simrunner.report import format_report, format_summary, format_workers
 from simrunner.seeds import derive_seed
 from simrunner.window import Window
-from simrunner.worker import DEFAULT_SEARCH_BUDGET, Seat, WorkerPlan, WorkerResult, sim_args
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, RecordPlan, Seat, WorkerPlan, WorkerResult, sim_args
 
 STUB = Path(__file__).parent / "stub_java.py"
 REPO = Path(__file__).parents[1]
@@ -65,8 +65,10 @@ def records(tmp_path, monkeypatch):
 
 @pytest.fixture
 def config(forge, decks, tmp_path):
-    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None), **overrides):
+    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None),
+              records=False, records_dir=None, turn_cap=None, honest=True, **overrides):
         settings = dict(
+            records=RecordPlan(records_dir, turn_cap, honest) if records else None,
             seats=(Seat(decks[0], profiles[0], modes[0]), Seat(decks[1], profiles[1], modes[1])),
             games=games, batch_seed=seed, workers=workers, forge_root=forge,
             run_dir=tmp_path / "run", clock_s=60, java=(sys.executable, str(STUB)),
@@ -1025,9 +1027,13 @@ def test_a_folder_name_that_is_no_batch_id_is_fine_without_records(config, recor
     run_batch(config(run_dir=tmp_path / "night.1"))
 
 
-def test_a_turn_cap_needs_records(config, records):
-    with pytest.raises(SetupError, match="turn cap"):
-        run_batch(config(turn_cap=30))
+@pytest.mark.parametrize("flags", [["--turn-cap", "30"], ["--no-honest"]])
+def test_what_only_goes_with_records_is_refused_without_them(forge, decks, records, tmp_path, capsys, flags):
+    with pytest.raises(SystemExit):
+        main(["batch", str(decks[0]), str(decks[1]), "--games", "1", "--seed", "7", "--workers", "1", "--forge", str(forge),
+              "--run-dir", str(tmp_path / "cli"), "--java", sys.executable, str(STUB), *flags])
+    assert "need records" in capsys.readouterr().err
+    assert records() == {}
 
 
 def test_a_turn_cap_must_be_above_zero(config, records):
@@ -1126,11 +1132,6 @@ def test_a_batch_without_records_says_nothing_about_honest_play(config, tmp_path
     assert "-honest" not in sim_args(config().seats, tmp_path, 1, 1, 60)
 
 
-def test_turning_off_honest_play_that_never_ran_is_refused(config):
-    with pytest.raises(SetupError, match="honest"):
-        run_batch(config(honest=False))
-
-
 def test_with_no_seat_searching_a_clean_tripwire_just_says_yes(config):
     batch = run_batch(config(games=2, records=True))
     assert not batch.search_unchecked
@@ -1175,7 +1176,7 @@ def test_a_long_signature_list_is_cut_and_says_so():
     games = [GameResult(1, 3000, 7, winner_seat=1, tripwire_hits=25,
                         tripwire_signatures=tuple((f"forge.ai.Site.m:{line}", 1) for line in range(25)))]
     config = BatchConfig(seats=(Seat(Path("a.dck")), Seat(Path("b.dck"))), games=1, batch_seed=1, workers=1,
-                         forge_root=Path("forge"), run_dir=Path("run"), records=True)
+                         forge_root=Path("forge"), run_dir=Path("run"), records=RecordPlan())
     report = format_report(BatchResult(config, [WorkerResult(WorkerPlan(0, 1, 1), games=games)], wall_s=1.0))
     assert "and 5 more\n" in report
 
@@ -1199,7 +1200,7 @@ def test_a_jar_without_the_tripwire_is_not_a_clean_zero(config, monkeypatch):
 
 def test_one_silent_game_keeps_a_batch_from_being_tripwire_clean():
     config = BatchConfig(seats=(Seat(Path("a.dck")), Seat(Path("b.dck"))), games=2, batch_seed=1, workers=1,
-                         forge_root=Path("forge"), run_dir=Path("run"), records=True)
+                         forge_root=Path("forge"), run_dir=Path("run"), records=RecordPlan())
     games = [GameResult(1, 3000, 7, winner_seat=1, tripwire_hits=0), GameResult(2, 3000, 7, winner_seat=1)]
     batch = BatchResult(config, [WorkerResult(WorkerPlan(0, 1, 2), games=games)], wall_s=1.0)
     assert not batch.tripwire_clean

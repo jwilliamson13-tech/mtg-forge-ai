@@ -15,7 +15,7 @@ from pathlib import Path
 from simrunner.batch import BatchConfig, SetupError, run_batch
 from simrunner.report import format_report
 from simrunner.window import Window, parse_clock, resolve_window
-from simrunner.worker import DEFAULT_SEARCH_BUDGET, SIM_MODES, Seat
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, SIM_MODES, RecordPlan, Seat
 
 CORES_RESERVED = 2
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -53,14 +53,17 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
     profiles = args.ai or (None, None)
     modes = args.sim_mode or (None, None)
     run_dir = args.run_dir or DEFAULT_RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-seed{args.seed}"
+    records = None
+    if args.records or args.records_dir is not None:
+        records = RecordPlan(Path(args.records_dir) if args.records_dir else None, args.turn_cap, not args.no_honest)
+    elif args.turn_cap is not None or args.no_honest:
+        args.parser.error("--turn-cap and --no-honest need records")
     config = BatchConfig(
         seats=(Seat(Path(args.deck1), profiles[0], modes[0]), Seat(Path(args.deck2), profiles[1], modes[1])),
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
-        records=args.records or args.records_dir is not None,
-        records_dir=Path(args.records_dir) if args.records_dir else None, turn_cap=args.turn_cap,
-        tripwire=not args.no_tripwire, honest=not args.no_honest,
+        records=records, tripwire=not args.no_tripwire,
     )
     try:
         batch = run_batch(config)
