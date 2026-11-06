@@ -71,3 +71,53 @@ The batches didn't reach these. I fixed them because they are the same read as a
 The tripwire now watches this too. `Card.getState`, `getOriginalState` and `getPaperCard` tell `HiddenReadWatch.faceDownRead` when someone asks for the real side of a face-down card. The same rules as for zones apply: only a forge-ai frame counts, and not for a card the decider may see by `canFaceDownBeShownTo`. A hit starts with `face-down: `. Off the sim path the cost is a check of the card's face-down flag.
 
 It still can't see `Card.getStates()` or a `CardState` object the AI kept from before the card turned over.
+
+## Results
+
+Run 2026-11-05 with 2 workers, `--clock 120`, heuristic seats, records and tripwire on, on a jar with every fix above. "Hits with `--no-honest`" is the same batch and seed with the flag off.
+
+| Pair | Tests | Games | Hits | Hits per game with `--no-honest` | Digest same as `--no-honest` |
+|---|---|---|---|---|---|
+| Burn vs Merfolk (`GAL_`) | The ticket's batch | 200 | 0 | not run at this seed, 276.90 at seed 11 | not run at this seed |
+| Mono Blue Tempo vs Esper Control | Blue tricks | 100 | 0 | 525.59 | yes |
+| Sneak Show vs Mono Black Devotion | Combo, Show and Tell, discard | 100 | 0 | 276.12 | yes |
+| Mono Green Stompy vs Standard Elves | Creature combat, big boards | 100 | 0 | not run | see below |
+| Abhorrent Oculus deck vs Bloodtithe Harvester | Face-down cards | 100 | 0 | 415.42 | yes |
+| Dimir Faeries vs Liliana of the Veil | Flash, discard | 100 | 0 | 439.94 | yes |
+| 11 more pairs, 16 games each | Naming cards, mill, tutors, stealing, 6 random pairs | 176 | 0 | 251.75 to 447.00 per pair, where read | yes, all 11 |
+
+Before the last fixes, the pairs turned up three more sites: `hiddenOriginCanPlayAI` on Sneak Show, 68 hits. `sparingSourcesFirst` on Stompy, 6737 hits. `wouldLikeToRandomlyTrade` on Oculus, 24 hits, once the face-down check was in.
+
+Full sim, records on, clock 300:
+
+| Run | Games | Hits |
+|---|---|---|
+| Burn full, Merfolk heuristic | 12 | 0 |
+| Sneak Show full, Mono Black Devotion full | 8 | 0 |
+
+That zero covers the real game only. The search still plays on copies that hold the opponent's real hand and library. `GameCopier` reads the real game to make them, the tripwire exempts it by class, and no watch sits on a copy. That is #25's. Until then a full-sim seat can see hidden cards however clean this count reads.
+
+**The flag changed no game I measured.** I expected the digests to differ, and they didn't. Every pair above played the same games with `-honest` on and off, down to the random draws, and 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`. So in these decks the peeks read hidden cards without changing a choice. The library top was never playable, and no deck had a mana source in hand at the moment that mattered. The cases where honest play does change a choice are in `PeekFixesTest`, and they need cards these decks rarely or never draw: Chalice, Pithing Needle, Conjurer's Ban, Clash, Fog. The win rates here therefore say nothing about those sites. No batch shows the AI playing them well or badly.
+
+Flag off, nothing moved. Digests match the ones in `docs/forge-build.md`:
+
+| Run | Digest in the build notes | Now |
+|---|---|---|
+| No `-sim`, 20 games, seed 1 | `84c42eeea82f` | `84c42eeea82f` |
+| Heuristic seats, 20 games, seed 1 | `6f2c4c7c1863` | `6f2c4c7c1863` |
+| Same, records on, tripwire off, `--no-honest` | `6f2c4c7c1863` | `6f2c4c7c1863` |
+| Same, records on, tripwire on, `--no-honest` | `6f2c4c7c1863` | `6f2c4c7c1863`, with hits in all 20 games |
+| Burn full, 6 games, seed 2, `--no-honest` | `6d38e6c38b07` | `6d38e6c38b07`, with hits in all 6 games |
+
+Those hits show the sites still peek with the flag off, so nothing here hid a read from the tripwire. Honest play gives the same digest with the tripwire on and off, `6f2c4c7c1863`.
+
+The cost is small once the payment path stays off the hidden zones. Stompy vs Elves, 30 games, took 88.9 s stock and 103.4 s with honest play and the tripwire. An earlier version took 249.9 s, because `RevealLog.knownTo` scanned both hidden zones on every payment the AI tested, and with the tripwire each read walked the stack. `writtenDown` skips that scan and leaves it to the recorder's call at each priority pass, so a new standing look reaches the AI at the next priority pass, not mid-decision.
+
+## What this doesn't cover
+
+- A zero covers what these decks do. No batch had a Fog, a Clash or a Chalice in a deck, so those sites have Java tests and nothing else.
+- `Fog`, `Chalice`, naming and `Clash` had no read in real games to compare, so what the AI does now there is what the tests pin. How well a person's guess plays is untested.
+- One AI asking the other seat's controller opens that seat as the decider, so anything read inside that call counts as its own. I saw no such read, but neither the tripwire nor honest play can tell.
+- `canPayCost` for an opponent still runs the rules on their cards, such as `sa.canPlay()`. `Player.getCardsActivatableInExternalZones`, which Fog detection calls, filters real cards by what that player may play, and it is exempt from the tripwire by design. A card it returns can be a library top the AI hasn't seen.
+- A card on the notepad is the object seen then. Asking a card for its zone, as `Card.getZone` does, is a read the tripwire can't see, and a site that does it can still learn where a card went.
+- Stompy vs Elves goes past the 5 second AI limit: 28 deadline expiries in 100 games, with the overnight batch running beside it. Its digest doesn't replay without `--search-budget`.
