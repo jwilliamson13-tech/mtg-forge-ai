@@ -32,6 +32,7 @@ CONTRACT = "contract.json"
 
 CHECK_STATES = 300
 CHECK_THRESHOLD = 1e-4
+CHECK_SEED = 0  # which held-out states the check samples, the same ones each run
 TRACE_CARDS = 5  # any size above 1 will do: the card axis is exported as dynamic
 
 INPUTS = (
@@ -142,7 +143,7 @@ def _lookup(entries: dict[tuple[str, str], Encoded], names: dict[str, list[Encod
 
 
 def export_check(model: SetModel, corpus: Corpus, bundle: str | Path, *, states: int = CHECK_STATES,
-                 threshold: float = CHECK_THRESHOLD, seed: int = 0) -> CheckResult:
+                 threshold: float = CHECK_THRESHOLD) -> CheckResult:
     """Score held-out states in both runtimes and compare.
 
     The ONNX side builds its inputs the way Forge will, from the bundle's card table, and
@@ -152,7 +153,7 @@ def export_check(model: SetModel, corpus: Corpus, bundle: str | Path, *, states:
     rows = corpus.rows(HELD_OUT_GAMES, HELD_OUT_DECKS)
     if not len(rows):
         raise ValueError("no held-out rows to check the export on")
-    rows = np.random.default_rng(seed).permutation(rows)[:states]
+    rows = np.random.default_rng(CHECK_SEED).permutation(rows)[:states]
     entries = read_card_table(bundle / CARD_TABLE)
     names: dict[str, list[Encoded]] = {}
     for (name, _), encoded in entries.items():
