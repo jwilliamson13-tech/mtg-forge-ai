@@ -249,9 +249,19 @@ class BatchResult:
     def records_written(self) -> int:
         return sum(len(worker.record_files) for worker in self.workers)
 
-    def wrote_records(self, worker: WorkerResult) -> bool:
-        """Forge skips flags it doesn't know, so a jar without `-record` would play on and write nothing."""
-        return not self.config.records or not check_records(worker).missing
+    def ignored_flags(self, worker: WorkerResult) -> list[str]:
+        """Forge skips flags it doesn't know, so a stale jar plays on and says nothing. This is what each flag's proof left out."""
+        ignored = []
+        if self.search_budget and not all(game.ai_limits for game in worker.games):
+            ignored.append("Forge did not report on the search budget")
+        if self.config.records and check_records(worker).missing:
+            ignored.append("a game with no game record")
+        if self.config.records and self.config.honest and not all(
+                record.metadata and record.metadata.get("honest_play") is True for record in worker.records):
+            ignored.append("a game record that doesn't show honest play")
+        if self.tripwire_on and not all(game.tripwire_hits is not None for game in worker.games):
+            ignored.append("a game with no tripwire count")
+        return ignored
 
     def records_agree(self, worker: WorkerResult) -> bool:
         """A game file and a result line that tell different stories mean one of them is wrong."""
@@ -262,22 +272,9 @@ class BatchResult:
         return [f"worker {worker.plan.index}, {problem}" for worker in self.workers
                 for problem in check_records(worker).mismatches]
 
-    def played_honestly(self, worker: WorkerResult) -> bool:
-        """Forge skips flags it doesn't know, so a jar without `-honest` would play on with its peeks.
-
-        Only the records can prove it took effect, and they say so per game.
-        """
-        if not (self.config.records and self.config.honest):
-            return True
-        return all(record.metadata and record.metadata.get("honest_play") is True for record in worker.records)
-
     @property
     def tripwire_on(self) -> bool:
         return self.config.tripwire
-
-    def reported_tripwire(self, worker: WorkerResult) -> bool:
-        """Forge skips flags it doesn't know, so a jar without the tripwire would play on and report nothing."""
-        return not self.tripwire_on or all(game.tripwire_hits is not None for game in worker.games)
 
     @property
     def tripwire_hits(self) -> list[int]:
@@ -313,20 +310,13 @@ class BatchResult:
         """Forge skips flags it doesn't know, so only its own header proves the modes took effect."""
         return worker.sim_modes == requested_sim_modes(self.config.seats)
 
-    def applied_search_budget(self, worker: WorkerResult) -> bool:
-        """Forge skips flags it doesn't know, so a jar without `-budget` would play on the wall clock."""
-        return not self.search_budget or all(game.ai_limits for game in worker.games)
-
     @property
     def clean(self) -> bool:
         """True when every game was played, in the modes asked for, and every worker stayed in its own profile."""
         return self.complete and all(worker.profile_used and not worker.left_behind
                                      and self.played_requested_modes(worker)
-                                     and self.applied_search_budget(worker)
-                                     and self.wrote_records(worker)
-                                     and self.records_agree(worker)
-                                     and self.played_honestly(worker)
-                                     and self.reported_tripwire(worker) for worker in self.workers)
+                                     and not self.ignored_flags(worker)
+                                     and self.records_agree(worker) for worker in self.workers)
 
 
 def _game_file(path: Path) -> GameFile:

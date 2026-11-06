@@ -121,16 +121,10 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("no log in its throwaway profile")
     if worker.ready_s is not None and not batch.played_requested_modes(worker):
         notes.append("Forge did not name the sim modes asked for, so the jar may be stale")
-    if not batch.applied_search_budget(worker):
-        notes.append("Forge did not report on the search budget, so the jar may be stale")
-    if not batch.wrote_records(worker):
-        notes.append("a game with no game record, so the jar may be stale")
-    if batch.wrote_records(worker) and not batch.records_agree(worker):
+    ignored = batch.ignored_flags(worker)
+    notes += [f"{what}, so the jar may be stale" for what in ignored]
+    if not batch.records_agree(worker) and not check_records(worker).missing:
         notes.append("game records that disagree with the results")
-    if not batch.played_honestly(worker):
-        notes.append("a game record that doesn't show honest play, so the jar may be stale")
-    if not batch.reported_tripwire(worker):
-        notes.append("a game with no tripwire count, so the jar may be stale")
     if worker.fatal:
         notes.append(worker.fatal)
     return "; ".join(notes)

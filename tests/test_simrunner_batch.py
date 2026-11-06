@@ -1114,7 +1114,7 @@ def test_an_unreadable_game_file_shows_no_honest_play(config, records):
     batch = run_batch(config(games=2, workers=1, records=True))
     worker = batch.workers[0]
     worker.records[0] = replace(worker.records[0], metadata=None)
-    assert not batch.played_honestly(worker)
+    assert "a game record that doesn't show honest play" in batch.ignored_flags(worker)
 
 
 def test_no_honest_leaves_the_flag_out_so_forge_keeps_its_default(config, records):
