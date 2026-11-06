@@ -25,6 +25,31 @@ def test_a_sideboard_header_starts_the_sideboard():
     assert deck.main == [(4, "Lightning Bolt")] and deck.side == [(2, "Mountain")]
 
 
+def test_a_commented_sideboard_header_starts_the_sideboard():
+    deck = parse_decklist("// Main\n4 Lightning Bolt\n// Sideboard\n2 Mountain\n")
+    assert deck.main == [(4, "Lightning Bolt")] and deck.side == [(2, "Mountain")]
+
+
+def test_blank_lines_between_main_blocks_stay_main_when_a_marker_names_the_sideboard():
+    for side in ("Sideboard\n2 Rest in Peace\n", "SB: 2 Rest in Peace\n"):
+        deck = parse_decklist("4 Lightning Bolt\n\n20 Mountain\n\n" + side)
+        assert deck.main == [(4, "Lightning Bolt"), (20, "Mountain")] and deck.side == [(2, "Rest in Peace")]
+
+
+def test_three_blocks_with_no_sideboard_marker_fail_instead_of_guessing():
+    with pytest.raises(DeckError, match="3 blocks"):
+        parse_decklist("4 Lightning Bolt\n\n20 Mountain\n\n2 Rest in Peace\n")
+
+
+def test_an_arena_companion_block_goes_to_the_sideboard_once():
+    deck = parse_decklist("Companion\n1 Yorion, Sky Nomad\n\nDeck\n4 Lightning Bolt\n\n"
+                          "Sideboard\n2 Mountain\n1 Yorion, Sky Nomad\n")
+    assert deck.main == [(4, "Lightning Bolt")]
+    assert deck.side == [(2, "Mountain"), (1, "Yorion, Sky Nomad")]
+    deck = parse_decklist("Companion\n1 Yorion, Sky Nomad\n\nDeck\n4 Lightning Bolt\n")
+    assert deck.main == [(4, "Lightning Bolt")] and deck.side == [(1, "Yorion, Sky Nomad")]
+
+
 def test_sb_prefix_lines_are_sideboard():
     deck = parse_decklist("4 Lightning Bolt\nSB: 2 Mountain\n")
     assert deck.side == [(2, "Mountain")]

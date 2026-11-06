@@ -19,14 +19,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from deckpool.convert import DeckError, NameSet, UnresolvedNames, convert, normalize, parse_decklist
+from deckpool.convert import MIN_MAIN_CARDS, DeckError, NameSet, UnresolvedNames, convert, normalize, parse_decklist
 
 BASE = "https://mtgtop8.com"
 USER_AGENT = "mtg-forge-ai-deckpool/1.0"
 MIN_GAP_S = 6.0
 TOP_ARCHETYPES = 40
 LISTS_PER_ARCHETYPE = 3
-MIN_MAIN_CARDS = 60
 # The robots.txt Josh read on 2026-11-06. A different one means stop and ask.
 EXPECTED_ROBOTS = "User-agent: *\nDisallow: /compare\nCrawl-delay: 5\n\nUser-agent: Googlebot\nDisallow: /compare"
 RECORD_NAME = "pull.json"
@@ -135,9 +134,8 @@ def check_export(text: str, names: NameSet) -> tuple[str | None, str | None]:
         deck = parse_decklist(text)
     except DeckError as e:
         return f"unreadable: {e}", None
-    main = sum(c for c, _ in deck.main)
-    if main < MIN_MAIN_CARDS:
-        return f"main deck has {main} cards", None
+    if deck.main_cards < MIN_MAIN_CARDS:
+        return f"main deck has {deck.main_cards} cards", None
     try:
         convert(text, names, "check")
     except UnresolvedNames as e:

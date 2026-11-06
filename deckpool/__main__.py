@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from deckpool import manifest as mf
-from deckpool.convert import DeckError, convert
+from deckpool.convert import MIN_MAIN_CARDS, DeckError, parse_decklist, to_forge
 from deckpool.names import DEFAULT_CARDSFOLDER, load_name_set
 
 DEFAULT_CARDS = mf.DEFAULT_ROOT / "data" / "cards.jsonl"
@@ -26,7 +26,10 @@ def add_deck(list_path: Path, deck_id: str, archetype: str, split: str, source: 
     manifest_path = manifest_path or root / "decks" / "manifest.json"
     manifest = mf.load(manifest_path) if manifest_path.is_file() else mf.Manifest()
     text = Path(list_path).read_text(encoding="utf-8")
-    forge_text = convert(text, names, deck_id)
+    parsed = parse_decklist(text)
+    if parsed.main_cards < MIN_MAIN_CARDS:
+        raise DeckError(f"main deck has {parsed.main_cards} cards; it needs at least {MIN_MAIN_CARDS}")
+    forge_text = to_forge(parsed, names, deck_id)
     deck = mf.Deck(deck_id, f"decks/forge/{deck_id}.dck", source, archetype, split)
     manifest.add_deck(deck)
     raw, forge = root / "decks" / "raw" / f"{deck_id}.txt", root / deck.file

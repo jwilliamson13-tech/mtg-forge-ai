@@ -5,10 +5,11 @@ import pytest
 
 from deckpool import manifest as mf
 from deckpool.__main__ import add_deck
-from deckpool.convert import NameSet, UnresolvedNames
+from deckpool.convert import DeckError, NameSet, UnresolvedNames
 from simrunner.__main__ import _deck_path
 
 NAMES = NameSet(["Lightning Bolt", "Mountain", "Rest in Peace"])
+LIST = "4 Lightning Bolt\n56 Mountain\n"
 
 
 def deck(i, archetype, split="train"):
@@ -75,7 +76,7 @@ def test_held_out_choice_repeats_and_holds_out_whole_archetypes():
 
 def test_add_deck_round_trips(tmp_path):
     src = tmp_path / "in.txt"
-    src.write_text("4 Lightning Bolt\n\n2 Rest in Peace\n", encoding="utf-8")
+    src.write_text(LIST + "\n2 Rest in Peace\n", encoding="utf-8")
     added = add_deck(src, "mine-1", "Mine", "held_out", "user", NAMES, root=tmp_path)
     m = mf.load(tmp_path / "decks" / "manifest.json")
     assert m.get("mine-1") == added
@@ -86,20 +87,27 @@ def test_add_deck_round_trips(tmp_path):
 
 def test_add_deck_with_a_bad_name_or_split_writes_nothing(tmp_path):
     src = tmp_path / "in.txt"
-    src.write_text("4 Lightning Bolt\n1 Black Lotos\n", encoding="utf-8")
+    src.write_text(LIST + "1 Black Lotos\n", encoding="utf-8")
     with pytest.raises(UnresolvedNames):
         add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
     assert not (tmp_path / "decks").exists()
-    src.write_text("4 Lightning Bolt\n", encoding="utf-8")
+    src.write_text(LIST, encoding="utf-8")
     add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
     with pytest.raises(mf.ManifestError):
         add_deck(src, "x-2", "X", "held_out", "user", NAMES, root=tmp_path)
     assert not (tmp_path / "decks" / "forge" / "x-2.dck").exists()
 
 
+def test_add_deck_refuses_a_main_under_sixty(tmp_path):
+    src = tmp_path / "in.txt"
+    src.write_text("4 Lightning Bolt\n55 Mountain\n", encoding="utf-8")
+    with pytest.raises(DeckError, match="59 cards"):
+        add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
+
+
 def test_the_sim_runner_takes_a_deck_id_or_a_path(tmp_path, monkeypatch):
     src = tmp_path / "in.txt"
-    src.write_text("4 Lightning Bolt\n", encoding="utf-8")
+    src.write_text(LIST, encoding="utf-8")
     add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
     parser = argparse.ArgumentParser()
     manifest = tmp_path / "decks" / "manifest.json"

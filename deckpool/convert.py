@@ -1,10 +1,16 @@
 """Plain-text decklists to Forge deck files, with every name checked.
 
 A list is lines of `count name`, with an optional set after the name or in
-brackets before it (`4 [ZEN] Arid Mesa`, the MTGTop8 .dec export). `//` lines are comments.
-The sideboard follows a blank line, a `Sideboard` header or an `SB:` prefix. Names are matched against a set of known names, ignoring case, accents
-and punctuation. A name that doesn't match fails the whole conversion, and the
-error lists every such name.
+brackets before it (`4 [ZEN] Arid Mesa`, the MTGTop8 .dec export). `//` lines are comments,
+apart from `// Sideboard` and the like, which work as headers.
+
+The sideboard follows a `Sideboard` header, or its lines carry an `SB:` prefix. With either marker,
+blank lines mean nothing. Without one, a single blank line splits main from sideboard, and more than
+one fails the parse, because the blocks could be card types. An Arena `Companion` block goes to the
+sideboard.
+
+Names are matched against a set of known names, ignoring case, accents and punctuation. A name that
+doesn't match fails the whole conversion, and the error lists every such name.
 """
 
 from __future__ import annotations
@@ -14,10 +20,12 @@ import unicodedata
 from dataclasses import dataclass, field
 
 SPLIT_SEP = " // "
+MIN_MAIN_CARDS = 60
 _LINE = re.compile(r"^(?:SB:\s*)?(\d+)x?\s+(?:\[[^\]]*\]\s*)?(.+?)\s*$", re.IGNORECASE)
 _SET_TAIL = re.compile(r"\s+\(([A-Za-z0-9]{2,6})\)(?:\s+\S+)?$")
 _SIDE_HEADERS = {"sideboard", "sideboard:", "sb", "sb:"}
-_SKIP_HEADERS = {"deck", "deck:", "maindeck", "main", "mainboard", "companion", "companion:"}
+_MAIN_HEADERS = {"deck", "deck:", "maindeck", "main", "mainboard"}
+_COMPANION_HEADERS = {"companion", "companion:"}
 
 
 class DeckError(ValueError):
@@ -75,33 +83,51 @@ class Decklist:
     main: list[tuple[int, str]] = field(default_factory=list)
     side: list[tuple[int, str]] = field(default_factory=list)
 
+    @property
+    def main_cards(self) -> int:
+        return sum(count for count, _ in self.main)
+
 
 def parse_decklist(text: str) -> Decklist:
-    """Read count and name lines. Raises DeckError on a line it can't read, or an empty main deck."""
+    """Read count and name lines. Raises DeckError on an unreadable line, an unclear sideboard or an empty main deck."""
     deck = Decklist()
-    in_side = False
-    seen_main = False
+    blocks: list[list[tuple[int, str]]] = [[]]  # main-deck lines, broken at each blank line
+    companions: list[tuple[int, str]] = []
+    section, marked_side = "main", False
     for raw in text.splitlines():
         line = raw.strip().lstrip("\ufeff")
+        header = line.removeprefix("//").strip().lower()
         if not line:
-            if seen_main:
-                in_side = True
-            continue
-        if line.startswith("//"):
-            continue
-        low = line.lower()
-        if low in _SIDE_HEADERS:
-            in_side = True
-            continue
-        if low in _SKIP_HEADERS:
-            continue
-        m = _LINE.match(line)
-        if not m:
-            raise DeckError(f"can't read line: {raw!r}")
-        count, name = int(m.group(1)), _SET_TAIL.sub("", m.group(2))
-        side = in_side or line.upper().startswith("SB:")
-        (deck.side if side else deck.main).append((count, name))
-        seen_main = seen_main or not side
+            if section == "companion":
+                section = "main"
+            elif blocks[-1]:
+                blocks.append([])
+        elif header in _SIDE_HEADERS:
+            section, marked_side = "side", True
+        elif header in _MAIN_HEADERS:
+            section = "main"
+        elif header in _COMPANION_HEADERS:
+            section = "companion"
+        elif not line.startswith("//"):
+            m = _LINE.match(line)
+            if not m:
+                raise DeckError(f"can't read line: {raw!r}")
+            entry = (int(m.group(1)), _SET_TAIL.sub("", m.group(2)))
+            if line.upper().startswith("SB:"):
+                marked_side = True
+                deck.side.append(entry)
+            else:
+                {"main": blocks[-1], "side": deck.side, "companion": companions}[section].append(entry)
+    blocks = [block for block in blocks if block]
+    if marked_side:
+        deck.main = [entry for block in blocks for entry in block]
+    elif len(blocks) > 2:
+        raise DeckError(f"{len(blocks)} blocks of cards and no sideboard marker, so the main deck is unclear; "
+                        "put a `Sideboard` line before the sideboard")
+    elif blocks:
+        deck.main = blocks[0]
+        deck.side = blocks[1] if len(blocks) == 2 else []
+    deck.side += [c for c in companions if c[1] not in {name for _, name in deck.side}]  # Arena lists it twice
     if not deck.main:
         raise DeckError("no main deck lines")
     return deck
