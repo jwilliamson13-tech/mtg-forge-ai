@@ -24,6 +24,7 @@ The hook buffers a game in memory and writes the file at game end. It writes und
 Some games leave no file at all:
 
 - A game that throws. So does a game where the hook itself fails, because a file with holes in it is worse than none.
+- A game `SimulateMatch` has to force over with nothing to say why: the rules hadn't ended it, and no clock or cap had stopped it. Its only result would be the false winner below.
 - A game with no snapshots, which the loader would reject. A clock stop before the first priority pass does this, because mulligans come first.
 
 Every field in this document is written, null ones included. The hook has to serialize nulls, because Gson drops them by default.
@@ -86,7 +87,7 @@ A signature is up to three `forge.ai` frames, nearest first, as `Class.method:li
 | `draw_rules` | The rules ended the game as a draw, such as both players reaching 0 life at once. `winner` is null. |
 | `exception` | The game threw. The hook writes no file for such a game, so this value should never appear. The loader rejects it anyway. |
 
-Never take `winner` from Forge's outcome on a stopped game. `SimulateMatch` stops a game with `setGameOver(GameEndReason.Draw)`, `Player.onGameOver` then marks everyone who hasn't lost as a winner, and `getOutcome()` names an arbitrary seat. The hook sets the end reason from what stopped the game, and writes no winner for it.
+Never take `winner` from Forge's outcome on a stopped game. `SimulateMatch` stops a game with `setGameOver(GameEndReason.Draw)`, `Player.onGameOver` then marks everyone who hasn't lost as a winner, and `getOutcome()` names an arbitrary seat. The hook sets the end reason from what stopped the game, and writes no winner for it. It asks Forge for a winner only if the game was already over by the rules before `SimulateMatch` forced it.
 
 ## Snapshot lines
 
