@@ -52,7 +52,8 @@ def build_contract(caps: Caps, key_count: int) -> dict:
         "version": CONTRACT_VERSION,
         "sizes": {"N": "dynamic, 0 or more", "A": caps.abilities, "T": caps.tokens, "K": key_count,
                   "L": len(LIVE_FIELDS), "S": len(SCOREBOARD_FIELDS)},
-        "inputs": [{"name": name, "dtype": dtype, "shape": shape, "meaning": meaning} for name, dtype, shape, meaning in INPUTS],
+        "inputs": [{"name": name, "dtype": dtype, "shape": shape, "meaning": meaning}
+                   for name, dtype, shape, meaning in INPUTS],
         "output": OUTPUT,
         "scoreboard_fields": list(SCOREBOARD_FIELDS),
         "live_fields": list(LIVE_FIELDS),
@@ -60,7 +61,8 @@ def build_contract(caps: Caps, key_count: int) -> dict:
         "truncation": {"abilities": "Row 0 stays. Past A rows, the oldest other rows are dropped.",
                        "tokens": "Past T tokens in a row, the oldest are dropped.",
                        "numbers": "Two numbers under one key in a row are added."},
-        "card_table": {"file": CARD_TABLE, "slots": {"Original": FRONT, "EmptyRoom": EMPTY_ROOM, "any other face": BACK},
+        "card_table": {"file": CARD_TABLE,
+                       "slots": {"Original": FRONT, "EmptyRoom": EMPTY_ROOM, "any other face": BACK},
                        "lookup": "(name, slot), else the name's entry under any slot, else all masks 0.",
                        "hidden": "A hidden card has no lookup: all masks 0 and `hidden` 1 in `live`."},
     }
@@ -103,7 +105,8 @@ def export_onnx(model: SetModel, caps: Caps, path: Path) -> None:
                       dynamic_shapes=shapes, dynamo=True, external_data=False, verbose=False)
 
 
-def export_bundle(model: SetModel, vocab, caps: Caps, metadata: dict, table: CardTable, corpus: Corpus, out: str | Path) -> dict:
+def export_bundle(model: SetModel, vocab, caps: Caps, metadata: dict, table: CardTable, corpus: Corpus,
+                  out: str | Path) -> dict:
     """Write the bundle to `out` and return its contract. `corpus` supplies the truncation rates."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -114,7 +117,8 @@ def export_bundle(model: SetModel, vocab, caps: Caps, metadata: dict, table: Car
               "scoreboard": SCOREBOARD_SCALE, "live": LIVE_SCALE}
     (out / SCALES).write_text(json.dumps(scales, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     contract = {**build_contract(caps, model.config.key_count),
-                "bundle": {"generation": metadata["generation"], "batch_ids": metadata["batch_ids"], "card_entries": entries,
+                "bundle": {"generation": metadata["generation"], "batch_ids": metadata["batch_ids"],
+                           "card_entries": entries,
                            "opset": onnx.load(out / MODEL, load_external_data=False).opset_import[0].version,
                            "onnxruntime": onnxruntime.__version__, "torch": str(torch.__version__),
                            "truncation_rates": corpus.truncation()}}
@@ -133,7 +137,8 @@ class CheckResult:
         return self.max_difference <= self.threshold
 
 
-def _lookup(entries: dict[tuple[str, str], Encoded], names: dict[str, list[Encoded]], key: tuple[str, str] | None) -> Encoded:
+def _lookup(entries: dict[tuple[str, str], Encoded], names: dict[str, list[Encoded]],
+            key: tuple[str, str] | None) -> Encoded:
     """The contract's lookup rule."""
     if key is None:
         return EMPTY_CARD
@@ -163,7 +168,8 @@ def export_check(model: SetModel, corpus: Corpus, bundle: str | Path, *, states:
     for row in rows.tolist():
         cards = slice(corpus.card_offsets[row], corpus.card_offsets[row + 1])
         features = corpus.card_feature[cards]
-        shared = {"scoreboard": corpus.scoreboard[row], "live": corpus.card_live[cards], "zone": corpus.card_zone[cards]}
+        shared = {"scoreboard": corpus.scoreboard[row], "live": corpus.card_live[cards],
+                  "zone": corpus.card_zone[cards]}
         from_table = densify([_lookup(entries, names, corpus.feature_keys[f]) for f in features.tolist()],
                              corpus.caps, model.config.key_count)
         onnx_inputs = {**shared, **dict(zip(("token_ids", "token_mask", "numbers", "number_mask"), from_table))}

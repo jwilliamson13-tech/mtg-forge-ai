@@ -56,7 +56,8 @@ LIVE = {name: index for index, name in enumerate(LIVE_FIELDS)}
 NAMED_COUNTERS = {"P1P1": "counters_p1p1", "M1M1": "counters_m1m1", "LOYALTY": "counters_loyalty"}
 
 # Every column read. Decks only pick the split. `batch_id` only tags the model.
-SNAPSHOT_COLUMNS = ("batch_id", "game_id", "snapshot_index", "side", "won", "seat1_deck", "seat2_deck", *SCOREBOARD_FIELDS)
+SNAPSHOT_COLUMNS = ("batch_id", "game_id", "snapshot_index", "side", "won", "seat1_deck", "seat2_deck",
+                    *SCOREBOARD_FIELDS)
 CARD_COLUMNS = ("game_id", "snapshot_index", "zone", "name", "face", "power", "toughness", "tapped", "counters",
                 "summoning_sick", "attached_to", "attached_to_seat", "controller", "face_down", "damage",
                 "attacking_seat", "attacking_card", "blocking", "blocked_by")
@@ -120,8 +121,10 @@ class JoinReport:
                  f"card and stack rows {self.card_rows}", f"hidden cards {self.hidden_cards}",
                  f"unmatched names {len(self.unmatched)}, {self.unmatched.total()} rows"]
         lines += [f"  {rows}  {name} ({face})" for (name, face), rows in self.unmatched.most_common()]
-        lines.append(f"names on several scripts, shared features only: {len(self.ambiguous)}, {self.ambiguous.total()} rows")
-        lines += [f"  {rows}  {name} ({self.script_counts[name]} scripts)" for name, rows in self.ambiguous.most_common()]
+        lines.append(f"names on several scripts, shared features only: {len(self.ambiguous)}, "
+                     f"{self.ambiguous.total()} rows")
+        lines += [f"  {rows}  {name} ({self.script_counts[name]} scripts)"
+                  for name, rows in self.ambiguous.most_common()]
         return "\n".join(lines) + "\n"
 
 
@@ -187,7 +190,8 @@ def _rate(part: int, whole: int) -> float:
 
 
 def _read(folder: Path, columns: tuple[str, ...]) -> pa.Table:
-    return ds.dataset(folder, format="parquet", partitioning=BATCH_PARTITION).to_table(columns=list(columns)).combine_chunks()
+    dataset = ds.dataset(folder, format="parquet", partitioning=BATCH_PARTITION)
+    return dataset.to_table(columns=list(columns)).combine_chunks()
 
 
 def _array(table: pa.Table, column: str) -> pa.Array:
@@ -268,7 +272,8 @@ class _Features:
         pairs = pc.binary_join_element_wise(_array(table, "name"), _array(table, "face"), "\0").dictionary_encode()
         codes = _numpy(pc.fill_null(pairs.indices, -1)).astype(np.int64)
         counts = np.bincount(codes[codes >= 0], minlength=len(pairs.dictionary))
-        lookup = [self._feature(*pair.split("\0"), int(rows)) for pair, rows in zip(pairs.dictionary.to_pylist(), counts)]
+        lookup = [self._feature(*pair.split("\0"), int(rows))
+                  for pair, rows in zip(pairs.dictionary.to_pylist(), counts)]
         return np.array([*lookup, 0], dtype=np.int64)[codes]  # a null code of -1 reads the 0 on the end: hidden
 
     def _feature(self, name: str, face: str, rows: int) -> int:
@@ -339,7 +344,8 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
     kept_cards = keep[card_row]
     new_row = (np.cumsum(keep) - 1)[card_row[kept_cards]]
     order = np.argsort(new_row, kind="stable")
-    card_row, feature, zone, live = new_row[order], feature[kept_cards][order], zone[kept_cards][order], live[kept_cards][order]
+    card_row = new_row[order]
+    feature, zone, live = feature[kept_cards][order], zone[kept_cards][order], live[kept_cards][order]
     snapshots = snapshots.filter(pa.array(keep))
 
     game = keys[keep] // stride
@@ -372,7 +378,8 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
         token_ids=token_ids, token_mask=token_mask, numbers=numbers, number_mask=number_mask, report=report, caps=caps)
 
 
-def load_inputs(parquet: str | Path, cards: str | Path, manifest: str | Path, min_count: int) -> tuple[Corpus, Vocabulary]:
+def load_inputs(parquet: str | Path, cards: str | Path, manifest: str | Path,
+                min_count: int) -> tuple[Corpus, Vocabulary]:
     """The corpus and vocabulary one command works from. The vocabulary comes from the dump, as in `docs/sweep.md`."""
     with open(cards, encoding="utf-8") as lines:
         vocab = build_vocabulary((json.loads(line) for line in lines), min_count=min_count)

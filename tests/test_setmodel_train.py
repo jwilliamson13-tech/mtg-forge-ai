@@ -104,9 +104,10 @@ def test_a_short_last_batch_gives_each_row_the_same_gradient_scale_as_a_full_bat
     assert torch.allclose(per_row[0], per_row[0][:1].expand_as(per_row[0]), rtol=1e-4)
 
     # The epoch's loss is still the weighted mean over its rows, tail included.
-    weighted = sum((torch.nn.functional.binary_cross_entropy_with_logits(logits, labels, reduction="none") * weights).sum()
-                   for logits, labels, weights in seen)
-    assert trained.epoch_losses[0] == pytest.approx(weighted.item() / corpus.weights[corpus.rows(TRAIN)].sum(), rel=1e-4)
+    bce = torch.nn.functional.binary_cross_entropy_with_logits
+    weighted = sum((bce(logits, labels, reduction="none") * weights).sum() for logits, labels, weights in seen)
+    mean = weighted.item() / corpus.weights[corpus.rows(TRAIN)].sum()
+    assert trained.epoch_losses[0] == pytest.approx(mean, rel=1e-4)
 
 
 def test_ablating_all_cards_leaves_the_rows_and_empties_every_board(tmp_path):

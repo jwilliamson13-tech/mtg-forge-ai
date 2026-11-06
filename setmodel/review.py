@@ -44,7 +44,8 @@ def kill_verdict(rows: list[dict]) -> str:
         return "No verdict: nothing was held out."
     margin = round(-gap, 6)  # 5.00 points must pass, and float noise can land it at 4.999999
     outcome = "carries" if margin >= KILL_MARGIN_POINTS else "does not carry"
-    return f"Full model beats no cards by {margin:.2f} points. The card encoding {outcome} information by the {KILL_MARGIN_POINTS:g} point bar."
+    return (f"Full model beats no cards by {margin:.2f} points. "
+            f"The card encoding {outcome} information by the {KILL_MARGIN_POINTS:g} point bar.")
 
 
 def format_table(rows: list[dict], verdict: str) -> str:
@@ -52,7 +53,8 @@ def format_table(rows: list[dict], verdict: str) -> str:
         return "n/a" if value is None else f"{value:.{digits}f}"
 
     lines = ["| Run | Held-out accuracy (%) | Held-out log loss | Against full (points) |", "|---|---|---|---|"]
-    lines += [f"| {r['run']} | {cell(r['accuracy'], 2)} | {cell(r['log_loss'], 4)} | {cell(r['vs_full'], 2)} |" for r in rows]
+    lines += [f"| {r['run']} | {cell(r['accuracy'], 2)} | {cell(r['log_loss'], 4)} | {cell(r['vs_full'], 2)} |"
+              for r in rows]
     return "\n".join(lines) + f"\n\n{verdict}\n"
 
 
@@ -93,8 +95,10 @@ class PairResult:
         return self.pair_lift > self.first_lift + self.second_lift
 
     def format(self) -> str:
-        verdict = ("the pair's lift exceeds the sum of the single lifts: the model sees the interaction" if self.sees_interaction
-                   else "the pair's lift does not exceed the sum of the single lifts: consider attention over the battlefield")
+        verdict = ("the pair's lift exceeds the sum of the single lifts: the model sees the interaction"
+                   if self.sees_interaction else
+                   "the pair's lift does not exceed the sum of the single lifts: "
+                   "consider attention over the battlefield")
         return (f"empty board      {self.empty:.4f}\n"
                 f"{self.names[0]} alone  {self.first:.4f}\n"
                 f"{self.names[1]} alone  {self.second:.4f}\n"
@@ -103,7 +107,8 @@ class PairResult:
                 f"verdict          {verdict}\n")
 
 
-def _card_inputs(cards: list[dict], table: CardTable, vocab: Vocabulary, caps: Caps, key_count: int) -> list[torch.Tensor]:
+def _card_inputs(cards: list[dict], table: CardTable, vocab: Vocabulary, caps: Caps,
+                 key_count: int) -> list[torch.Tensor]:
     encoded, live = [], np.zeros((len(cards), len(LIVE_FIELDS)), dtype=np.float32)
     for n, card in enumerate(cards):
         resolved = table.resolve(card["name"], card.get("face", "Original"))
@@ -125,7 +130,8 @@ def pair_test(model: SetModel, vocab: Vocabulary, caps: Caps, table: CardTable, 
     """
     wrapper = StateModel(model).eval()
     first, second = fixture["cards"]
-    defaults = {"me_life": 20, "opp_life": 20, "me_library": 50, "opp_library": 50, "opp_hand": 5, "turn": 5, "me_active": 1}
+    defaults = {"me_life": 20, "opp_life": 20, "me_library": 50, "opp_library": 50, "opp_hand": 5, "turn": 5,
+                "me_active": 1}
     scoreboard = {**defaults, **fixture.get("scoreboard", {})}
     board = torch.tensor([float(scoreboard.get(name, 0)) for name in SCOREBOARD_FIELDS])
 
@@ -135,4 +141,5 @@ def pair_test(model: SetModel, vocab: Vocabulary, caps: Caps, table: CardTable, 
         with torch.no_grad():
             return wrapper(board, *inputs, zone).item()
 
-    return PairResult((first["name"], second["name"]), score([]), score([first]), score([second]), score([first, second]))
+    return PairResult((first["name"], second["name"]), score([]), score([first]), score([second]),
+                      score([first, second]))

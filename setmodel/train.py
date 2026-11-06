@@ -64,7 +64,8 @@ def ablated(corpus: Corpus, ablation: str, key_scale: np.ndarray) -> Corpus:
     if ablation == NO_LIVE_STATE:
         return replace(corpus, card_live=np.zeros_like(corpus.card_live))
     if ablation == NO_NUMBERS:
-        return replace(corpus, numbers=corpus.number_mask * key_scale)  # 1 after scaling: the key stays, as a token would
+        # 1 after scaling: the key stays, as a token would
+        return replace(corpus, numbers=corpus.number_mask * key_scale)
     raise ValueError(f"unknown ablation {ablation!r}")
 
 
@@ -127,7 +128,8 @@ def probabilities(trained: Trained, corpus: Corpus, rows: np.ndarray) -> np.ndar
     out = []
     with torch.no_grad():
         for start in range(0, len(rows), EVAL_BATCH):
-            out.append(torch.sigmoid(_logits(model, _batch(corpus, rows[start:start + EVAL_BATCH], device))).cpu().numpy())
+            batch = _batch(corpus, rows[start:start + EVAL_BATCH], device)
+            out.append(torch.sigmoid(_logits(model, batch)).cpu().numpy())
     return np.concatenate(out) if out else np.zeros(0, dtype=np.float32)
 
 
@@ -139,7 +141,8 @@ def _scores(corpus: Corpus, rows: np.ndarray, p: np.ndarray) -> dict:
     clipped = np.clip(p.astype(np.float64), 1e-7, 1 - 1e-7)
     losses = -(labels * np.log(clipped) + (1 - labels) * np.log(1 - clipped))
     right = (p >= 0.5) == (labels >= 0.5)
-    return {"log_loss": float((losses * weights).sum() / weights.sum()), "accuracy": float((right * weights).sum() / weights.sum()),
+    return {"log_loss": float((losses * weights).sum() / weights.sum()),
+            "accuracy": float((right * weights).sum() / weights.sum()),
             "rows": int(len(rows)), "games": int(len(np.unique(corpus.game[rows])))}
 
 
@@ -166,7 +169,8 @@ def save_run(trained: Trained, corpus: Corpus, out: str | Path, seconds: float) 
     out.mkdir(parents=True, exist_ok=True)
     config = trained.config
     metadata = {"generation": config.generation, "batch_ids": corpus.batch_ids, "ablation": config.ablation,
-                "train_rows": int(len(corpus.rows(TRAIN))), "train_games": int(len(np.unique(corpus.game[corpus.rows(TRAIN)]))),
+                "train_rows": int(len(corpus.rows(TRAIN))),
+                "train_games": int(len(np.unique(corpus.game[corpus.rows(TRAIN)]))),
                 "torch": str(torch.__version__), "device": _device_name(trained.device)}
     metrics = {**metadata, **report(trained, corpus), "epoch_loss": trained.epoch_losses, "seconds": seconds,
                "truncation": corpus.truncation(), "join": corpus.report.to_dict(), "config": asdict(config)}

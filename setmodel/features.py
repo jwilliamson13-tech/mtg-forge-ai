@@ -179,7 +179,10 @@ def _capped_rows(rows: tuple[Row, ...], caps: Caps) -> tuple[Row, ...]:
 
 
 def encode(rows: tuple[Row, ...], vocab: Vocabulary, caps: Caps) -> Encoded:
-    """Vocabulary ids under the caps. Two numbers under one key in a row add up, because `numbers` holds one value per key."""
+    """Vocabulary ids under the caps.
+
+    Two numbers under one key in a row add up, because `numbers` holds one value per key.
+    """
     tokens, numbers = [], []
     over_tokens = merged = 0
     for row_tokens, row_numbers in _capped_rows(rows, caps):

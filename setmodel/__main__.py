@@ -78,7 +78,8 @@ def _export(args: argparse.Namespace) -> int:
     check = export_check(model, corpus, args.out, states=args.states, threshold=args.threshold)
     _print(f"wrote {args.out}: {contract['bundle']['card_entries']} card entries\n"
            f"truncation {contract['bundle']['truncation_rates']}\n"
-           f"export check: {check.states} states, max difference {check.max_difference:.3g}, threshold {check.threshold:.3g}\n")
+           f"export check: {check.states} states, max difference {check.max_difference:.3g}, "
+           f"threshold {check.threshold:.3g}\n")
     return 0 if check.passed else 1
 
 
@@ -106,7 +107,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m setmodel")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    join = commands.add_parser("join", help="join the tables to the card dump and report unmatched names, without training")
+    join = commands.add_parser("join", help="join the tables to the card dump and report unmatched names, "
+                                            "without training")
     _inputs(join)
     _vocab_cutoff(join)
     join.set_defaults(handler=_join)
@@ -115,7 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
     _training_options(train)
     train.set_defaults(handler=_train)
 
-    export = commands.add_parser("export", help="write the ONNX bundle and check it against PyTorch, exit 1 if it fails")
+    export = commands.add_parser("export", help="write the ONNX bundle and check it against PyTorch, "
+                                                "exit 1 if it fails")
     export.add_argument("model", help="folder `train` wrote")
     _inputs(export)
     export.add_argument("--out", required=True, help="folder for the bundle")
@@ -130,7 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
     pair = commands.add_parser("pairtest", help="score a card pair together and alone, and print the verdict")
     pair.add_argument("model", help="folder `train` wrote")
     pair.add_argument("cards", help="parsed card dump")
-    pair.add_argument("--fixture", default=str(Path(__file__).parent / "pair_fixture.json"), help="the cards and scoreboard to test")
+    pair.add_argument("--fixture", default=str(Path(__file__).parent / "pair_fixture.json"),
+                      help="the cards and scoreboard to test")
     pair.set_defaults(handler=_pairtest)
     return parser
 

@@ -1,4 +1,7 @@
-"""Run settings and their defaults. The command line reads these, and `join` has to run without torch, so this imports none."""
+"""Run settings and their defaults.
+
+The command line reads these, and `join` has to run without torch, so this module imports none.
+"""
 
 from __future__ import annotations
 
