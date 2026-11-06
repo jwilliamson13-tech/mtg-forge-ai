@@ -74,17 +74,17 @@ It still can't see `Card.getStates()` or a `CardState` object the AI kept from b
 
 ## Results
 
-Run 2026-11-05 with 2 workers, `--clock 120`, heuristic seats, records and tripwire on, on a jar with every fix above. "Hits with `--no-honest`" is the same batch and seed with the flag off.
+Run 2026-11-05 with 2 workers, the overnight batch beside the later ones, `--clock 120`, heuristic seats, records and tripwire on, on a jar with every fix above. "Hits with `--no-honest`" is the same batch and seed with the flag off.
 
 | Pair | Tests | Games | Hits | Hits per game with `--no-honest` | Digest same as `--no-honest` |
 |---|---|---|---|---|---|
-| Burn vs Merfolk (`GAL_`) | The ticket's batch | 200 | 0 | not run at this seed, 276.90 at seed 11 | not run at this seed |
+| Burn vs Merfolk (`GAL_`) | The ticket's batch | 200 | 0 | 288.93 | yes |
 | Mono Blue Tempo vs Esper Control | Blue tricks | 100 | 0 | 525.59 | yes |
 | Sneak Show vs Mono Black Devotion | Combo, Show and Tell, discard | 100 | 0 | 276.12 | yes |
 | Mono Green Stompy vs Standard Elves | Creature combat, big boards | 100 | 0 | not run | see below |
 | Abhorrent Oculus deck vs Bloodtithe Harvester | Face-down cards | 100 | 0 | 415.42 | yes |
 | Dimir Faeries vs Liliana of the Veil | Flash, discard | 100 | 0 | 439.94 | yes |
-| 11 more pairs, 16 games each | Naming cards, mill, tutors, stealing, 6 random pairs | 176 | 0 | 251.75 to 447.00 per pair, where read | yes, all 11 |
+| 11 more pairs, 16 games each | Naming cards, mill, tutors, stealing, 6 random pairs | 176 | 0 | 251.75 to 472.38, mean per pair | yes, all 11 |
 
 Before the last fixes, the pairs turned up three more sites: `hiddenOriginCanPlayAI` on Sneak Show, 68 hits. `sparingSourcesFirst` on Stompy, 6737 hits. `wouldLikeToRandomlyTrade` on Oculus, 24 hits, once the face-down check was in.
 
@@ -97,7 +97,9 @@ Full sim, records on, clock 300:
 
 That zero covers the real game only. The search still plays on copies that hold the opponent's real hand and library. `GameCopier` reads the real game to make them, the tripwire exempts it by class, and no watch sits on a copy. That is #25's. Until then a full-sim seat can see hidden cards however clean this count reads.
 
-**The flag changed no game I measured.** I expected the digests to differ, and they didn't. Every pair above played the same games with `-honest` on and off, down to the random draws, and 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`. So in these decks the peeks read hidden cards without changing a choice. The library top was never playable, and no deck had a mana source in hand at the moment that mattered. The cases where honest play does change a choice are in `PeekFixesTest`, and they need cards these decks rarely or never draw: Chalice, Pithing Needle, Conjurer's Ban, Clash, Fog. The win rates here therefore say nothing about those sites. No batch shows the AI playing them well or badly.
+**The digests didn't move.** I expected them to differ, and they didn't. Every pair I compared has the same digest with `-honest` on and off, random draws included, while about 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`, with honest play on and with it off.
+
+My reading, which I didn't check site by site: 99% of the hits are `getAvailableCards` picking up a library top the AI can't play anyway, so most of what the tripwire caught was a read that changed no choice. The cases where honest play does change a choice are in `PeekFixesTest`, and they need cards these decks barely hold. None of the decks here has Chalice of the Void, Conjurer's Ban, Cabal Therapy, Fog, Volrath's Shapeshifter or Cemetery Gatekeeper. One has Pithing Needle, one Meddling Mage and one Simian Spirit Guide. A digest also can't see a different name on a card that changed nothing later. So these batches say nothing about how well the AI plays those sites now.
 
 Flag off, nothing moved. Digests match the ones in `docs/forge-build.md`:
 
@@ -115,8 +117,7 @@ The cost is small once the payment path stays off the hidden zones. Stompy vs El
 
 ## What this doesn't cover
 
-- A zero covers what these decks do. No batch had a Fog, a Clash or a Chalice in a deck, so those sites have Java tests and nothing else.
-- `Fog`, `Chalice`, naming and `Clash` had no read in real games to compare, so what the AI does now there is what the tests pin. How well a person's guess plays is untested.
+- A zero covers what these decks do. Fog, Chalice and Clash have Java tests and no real game. How well a person's guess plays there is untested.
 - One AI asking the other seat's controller opens that seat as the decider, so anything read inside that call counts as its own. I saw no such read, but neither the tripwire nor honest play can tell.
 - `canPayCost` for an opponent still runs the rules on their cards, such as `sa.canPlay()`. `Player.getCardsActivatableInExternalZones`, which Fog detection calls, filters real cards by what that player may play, and it is exempt from the tripwire by design. A card it returns can be a library top the AI hasn't seen.
 - A card on the notepad is the object seen then. Asking a card for its zone, as `Card.getZone` does, is a read the tripwire can't see, and a site that does it can still learn where a card went.
