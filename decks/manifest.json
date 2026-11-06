@@ -216,21 +216,21 @@
       "file": "decks/forge/cloudpost-tron-ramp-1.dck",
       "source": "https://mtgtop8.com/event?e=93298&d=908916&f=LE",
       "archetype": "Cloudpost / Tron Ramp",
-      "split": "train"
+      "split": "held_out"
     },
     {
       "id": "cloudpost-tron-ramp-2",
       "file": "decks/forge/cloudpost-tron-ramp-2.dck",
       "source": "https://mtgtop8.com/event?e=93298&d=908918&f=LE",
       "archetype": "Cloudpost / Tron Ramp",
-      "split": "train"
+      "split": "held_out"
     },
     {
       "id": "cloudpost-tron-ramp-3",
       "file": "decks/forge/cloudpost-tron-ramp-3.dck",
       "source": "https://mtgtop8.com/event?e=93197&d=908243&f=LE",
       "archetype": "Cloudpost / Tron Ramp",
-      "split": "train"
+      "split": "held_out"
     },
     {
       "id": "bant-control-1",
@@ -755,7 +755,7 @@
       "file": "decks/forge/ninja-1.dck",
       "source": "https://mtgtop8.com/event?e=93030&d=906721&f=LE",
       "archetype": "Ninja",
-      "split": "held_out"
+      "split": "train"
     },
     {
       "id": "bant-aggro-1",
@@ -787,9 +787,21 @@
     }
   ],
   "tracked_matchups": [
-    null,
-    null,
-    null,
-    null
+    [
+      "hogaak-1",
+      "ur-tempo-1"
+    ],
+    [
+      "lands-1",
+      "eldrazi-aggro-1"
+    ],
+    [
+      "cloudpost-tron-ramp-1",
+      "ur-tempo-1"
+    ],
+    [
+      "cloudpost-tron-ramp-1",
+      "lands-1"
+    ]
   ]
 }
