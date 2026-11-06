@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+from deckpool import manifest as mf
 from deckpool.convert import MIN_MAIN_CARDS, DeckError, NameSet, UnresolvedNames, convert, normalize, parse_decklist
 
 BASE = "https://mtgtop8.com"
@@ -249,11 +250,7 @@ def run_pull(root: Path, cache: Path, names: NameSet, fetcher: Fetcher | None = 
                     continue
                 kept += 1
                 deck_id = f"{slug(arch.name)}-{kept}"
-                forge = convert(text, names, deck_id)
-                (root / "decks" / "raw").mkdir(parents=True, exist_ok=True)
-                (root / "decks" / "forge").mkdir(parents=True, exist_ok=True)
-                (root / "decks" / "raw" / f"{deck_id}.txt").write_text(text, encoding="utf-8", newline="\n")
-                (root / "decks" / "forge" / f"{deck_id}.dck").write_text(forge, encoding="utf-8", newline="\n")
+                mf.write_deck_files(root, deck_id, text, convert(text, names, deck_id))
                 decks.append({"id": deck_id, "archetype": arch.name, "source": ref.url,
                               "player": ref.player, "date": ref.played.isoformat()})
         if kept < LISTS_PER_ARCHETYPE:

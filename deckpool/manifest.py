@@ -116,6 +116,19 @@ def choose_held_out(archetypes, seed: int, count: int = HELD_OUT_ARCHETYPES) -> 
     return sorted(random.Random(seed).sample(ordered, count))
 
 
+def deck_file(deck_id: str) -> str:
+    return f"decks/forge/{deck_id}.dck"
+
+
+def write_deck_files(root: Path, deck_id: str, text: str, forge_text: str) -> None:
+    """Save a deck under `root`: the list as it came in, and the Forge file made from it."""
+    raw, forge = Path(root) / "decks" / "raw" / f"{deck_id}.txt", Path(root) / deck_file(deck_id)
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    forge.parent.mkdir(parents=True, exist_ok=True)
+    raw.write_text(text, encoding="utf-8", newline="\n")
+    forge.write_text(forge_text, encoding="utf-8", newline="\n")
+
+
 def root_of(manifest_path: Path) -> Path:
     """The folder a deck's `file` is relative to. Files start with `decks/`, so it's the one above the manifest's."""
     return Path(manifest_path).resolve().parent.parent
@@ -142,6 +155,17 @@ def build_from_pull(record: dict, seed: int, left_out=()) -> Manifest:
     held = {normalize(a) for a in choose_held_out({d["archetype"] for d in decks}, seed)}
     manifest = Manifest()
     for d in decks:
-        manifest.add_deck(Deck(d["id"], f"decks/forge/{d['id']}.dck", d["source"], d["archetype"],
+        manifest.add_deck(Deck(d["id"], deck_file(d["id"]), d["source"], d["archetype"],
                                HELD_OUT if normalize(d["archetype"]) in held else TRAIN))
+    return manifest
+
+
+def build_file(seed: int, left_out=(), root: Path = DEFAULT_ROOT) -> Manifest:
+    """Write `decks/manifest.json` from `decks/pull.json`. The split is assigned once, so an existing file stops it."""
+    path = Path(root) / "decks" / "manifest.json"
+    if path.is_file():
+        raise ManifestError(f"{path} exists; the split is assigned once, so edit it by hand to change it")
+    record = json.loads((Path(root) / "decks" / "pull.json").read_text(encoding="utf-8"))
+    manifest = build_from_pull(record, seed, left_out)
+    save(manifest, path)
     return manifest
