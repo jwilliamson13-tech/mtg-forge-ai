@@ -10,12 +10,14 @@ import json
 import numpy as np
 import pytest
 
+from gamerecord.convert import convert_folder
+from gamerecord.record import END_REASONS
 from setmodel import dataset
 from setmodel.dataset import HELD_OUT_DECKS, LIVE, TRAIN, ZONE_IDS, DatasetError, load_corpus, load_manifest
 from setmodel.features import Caps, encode, key_scales
 from setmodel.train import TrainConfig, train
 from tests.setmodel_corpus import (HELD_OUT_DECK, TRAIN_DECKS, card, card_table, game, manifest, smoke_games, snapshot,
-                                   vocabulary, write_manifest, write_parquet)
+                                   vocabulary, write_games, write_manifest, write_parquet)
 
 
 def corpus_of(games, root, **options):
@@ -60,6 +62,20 @@ def test_row_weights_sum_to_one_per_game_whatever_its_length(tmp_path):
     corpus = corpus_of(games, tmp_path)
     assert np.bincount(corpus.game, weights=corpus.weights).tolist() == pytest.approx([1.0, 1.0])
     assert sorted(set(corpus.weights.tolist())) == pytest.approx([1 / 7, 1 / 2])
+
+
+@pytest.mark.parametrize("reason", [reason for reason in END_REASONS if reason != "win"])
+def test_a_game_with_no_rules_win_gives_the_corpus_no_rows_whatever_winner_it_claims(tmp_path, reason):
+    """Without a winner both sides would read as losers, and Forge names an arbitrary winner on a stopped game."""
+    games = [game(1, morph_game(), winner=2), game(2, morph_game(), winner=None, end_reason=reason),
+             game(3, morph_game(), winner=1, end_reason=reason)]
+    report = convert_folder(write_games(games, tmp_path), tmp_path / "parquet")
+    corpus = load_corpus(tmp_path / "parquet", card_table(), vocabulary(), manifest())
+    assert corpus.game_ids == ["smoke-7-1"]
+    assert corpus.labels.tolist() == [0.0, 1.0]
+    assert report.kept == {"win": 1}
+    assert report.dropped[reason] == (2 if reason == "exception" else 1)  # the loader refuses any exception file first
+    assert len(report.rejected) == (0 if reason == "exception" else 1)  # a stopped game can't name a winner
 
 
 def test_changing_the_other_sides_snapshot_changes_nothing_on_this_sides_rows(tmp_path):

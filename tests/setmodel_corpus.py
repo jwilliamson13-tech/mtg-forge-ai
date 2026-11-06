@@ -68,23 +68,28 @@ def snapshot(side, *, life=20, turn=1, battlefield=(), hand=(), graveyard=(), re
     }
 
 
-def game(number, snapshots, *, winner=1, decks=TRAIN_DECKS, final_turn=9, seed=7, profile="Default"):
+def game(number, snapshots, *, winner=1, end_reason="win", decks=TRAIN_DECKS, final_turn=9, seed=7, profile="Default"):
     seats = [{"seat": seat, "deck": deck, "ai_profile": profile, "sim_mode": "heuristic", "search_budget": 0}
              for seat, deck in zip((1, 2), decks)]
     metadata = {"schema_version": 1, "batch_id": BATCH, "seed": seed, "game_number": number, "seats": seats,
-                "winner": winner, "final_turn": final_turn, "end_reason": "win", "honest_play": True,
+                "winner": winner, "final_turn": final_turn, "end_reason": end_reason, "honest_play": True,
                 "tripwire": {"enabled": True, "hits": 0, "signatures": []}}
     return [metadata, *snapshots]
 
 
-def write_parquet(games: list[list[dict]], root: Path) -> Path:
-    """Write these games as files, convert them, and return the Parquet folder."""
+def write_games(games: list[list[dict]], root: Path) -> Path:
+    """Write these games as files and return their folder."""
     folder = root / "games"
     folder.mkdir(parents=True, exist_ok=True)
     for n, lines in enumerate(games):
         text = "".join(json.dumps(line) + "\n" for line in lines)
         (folder / f"game_{n}.jsonl.gz").write_bytes(gzip.compress(text.encode("utf-8")))
-    report = convert_folder(folder, root / "parquet")
+    return folder
+
+
+def write_parquet(games: list[list[dict]], root: Path) -> Path:
+    """Write these games as files, convert them, and return the Parquet folder."""
+    report = convert_folder(write_games(games, root), root / "parquet")
     assert not report.rejected, report.rejected
     return root / "parquet"
 
