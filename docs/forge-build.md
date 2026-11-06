@@ -138,7 +138,7 @@ $decks = "..\forge\forge-gui\res\geneticaidecks"
 python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
 ```
 
-Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a batch with `--sim-mode` doesn't get those modes back in Forge's match header, or if a batch with a search budget gets no `AI limits:` lines. Those last two mean a stale jar, and the worker table says so.
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` doesn't get those modes back in Forge's match header, or if a batch with a search budget gets no `AI limits:` lines. Those last two mean a stale jar, and the worker table says so.
 
 ### What the report counts
 
@@ -159,6 +159,70 @@ The output can't separate everything:
 - A game that threw after one player had already lost looks like a normal win on stdout. Only `stack traces on stderr` hints at it, and that count is per worker, not per game, because stdout and stderr have to stay on separate pipes. On one pipe a stopped game's stack trace lands in the middle of the `Game Result:` line.
 - The exception signature comes from the source. I could not force a throw without patching Forge, so it is only tested against the stub. The clock signature comes from real runs with `--clock 1`.
 - A draw by the turn cap doesn't exist yet, and neither does a per-game end reason. Those arrive with the game records.
+
+### Nightly window
+
+`nightly` runs a batch inside a time window and kills whatever is still playing at the end of it. The machine is in use in the mornings, so the stop is hard.
+
+```powershell
+python -m simrunner nightly "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 100000 --seed 1 --start 23:00 --stop 07:00 --clock 600
+```
+
+It takes every `batch` option, plus these:
+
+- `--start` and `--stop` are local clock times, `HH:MM` or `HH:MM:SS`. A stop at or before the start falls on the next day, so the line above means 23:00 tonight to 07:00 tomorrow. Called inside the window, it starts at once and stops at the end of that window. Called after it, it waits for the next one.
+- `--reserve` is the number of logical cores to leave free, 2 by default. The workers are the rest, and never fewer than 1. `--workers` sets the count outright, and the two can't be combined.
+
+Nothing schedules the command. Leave it waiting in a terminal, or start it from Task Scheduler. It checks the decks, the jar and the run folder when you call it, not at 23:00, so a bad path fails while you can still fix it.
+
+Set `--games` higher than the window can play, or the workers finish early and the rest of the night goes unused. The window ends the batch, and `--games` only caps it. Each worker's share goes to Forge as `-n`, which is a Java `int`.
+
+**The stop.** Killing starts 15 seconds before `--stop` (`STOP_LEAD_S`), so the machine is idle at the stop and not just after it. Workers watch the wall clock in half-second waits, so a clock change on the night doesn't move the stop. A worker dies by `taskkill /F /T`, which takes the launcher and the JVM together. That kill gives Forge no chance to print, so a game cut off by the stop has no `Game Result:` line and counts as not finished. It can't turn into a fake win, and neither can a result line cut off halfway, because a partial line matches neither pattern.
+
+**Incomplete.** A batch the stop cut off is marked incomplete in `batch.json` and in the report, and the command exits 1. With `--games` set high that is the normal end of a night, so read exit 1 from `nightly` alongside the status row. The games it finished are real games. They count, and the report's rates use them. What the batch has lost is replay as a whole: the stop lands at a different game on each run, so its digest won't match a rerun. A rerun with the same seed, games and workers still plays the same first games per worker, as under "Seeds" below.
+
+A window that closes before the batch can launch, say because the machine slept through it, launches nothing and is marked incomplete the same way.
+
+What the stop doesn't cover:
+
+- The stop lives in the runner. If the runner itself dies, nothing kills the JVMs, and they play on into the morning. `batch.json` stays at `running`, which is the sign to go looking.
+- `taskkill /T` follows parent links. If a launcher died on its own and left its JVM alive, the tree kill can't find that JVM. The runner doesn't hang on it. It gives up on the pipes after 10 seconds, notes `left a process running` on that worker and fails `clean`, but the process stays up. I haven't seen a launcher die alone. The test for this is a stub.
+- A machine asleep at the stop kills its workers when it wakes, and not before.
+- Each JVM keeps one `Match` for its whole run, and `Match` keeps every game's outcome, so heap use may grow through a night. No run has gone longer than the numbers below show.
+
+### Batch output folder
+
+Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.
+
+```
+runs\<batch>\
+    batch.json            where the batch stands
+    report.txt            the report, once the batch has ended
+    worker-NN.out.log     Forge's stdout for worker NN, written as it arrives
+    worker-NN.err.log     Forge's stderr for worker NN
+    games\                game records, empty until issue #18 lands
+    worker-NN\            throwaway profile, deleted when the batch ends
+```
+
+`batch.json` holds:
+
+| Field | Meaning |
+|---|---|
+| `batch` | The folder name |
+| `status` | `running`, `complete` or `incomplete` |
+| `stopped_at_hard_stop` | True when the stop killed a worker or came before launch |
+| `window_start`, `window_stop` | The window as local times, or null for a plain batch |
+| `games_attempted`, `games_finished`, `games_not_finished` | The report's counts |
+
+Only `complete` means every game was played. The file says `running` from launch until the batch ends, so a runner that dies can't leave a batch looking finished: `running` with no runner alive means it died. `incomplete` also covers a worker lost to a crash, with `stopped_at_hard_stop` false. The file doesn't exist while a nightly batch waits for its window. It is replaced in one step, so a reader never sees half of it.
+
+`complete` doesn't mean clean. A stale jar can play every game in the wrong mode, and the report and the exit code are what say so.
+
+`games\` is the place for the records from issue #18, one gzip'd JSONL file per game, named by batch, seed and deck pair. The runner creates it and doesn't read it yet. Three things the hook and the runner have to agree on when that lands:
+
+- Records go here and not under `worker-NN\`, because the runner deletes that folder when the batch ends. All workers share this one folder, and the seed in the file name keeps their files apart. A worker's seed is the same for every game in that worker, so the name needs the game number as well.
+- Forge has to be told the path, which means a new sim-only flag and a line in `sim_args`. Nothing passes it today.
+- The hard stop can land while a file is being written, and `taskkill /F` gives Java no chance to finish. The hook flushes a game at game end, so it should write to a temporary name in `games\` and rename when the file is closed. Then a kill leaves a `.tmp` file at worst, and the loader never sees a truncated `.jsonl.gz`.
 
 ### Seeds
 

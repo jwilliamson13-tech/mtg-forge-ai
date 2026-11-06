@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
+from simrunner.window import Window
 from simrunner.worker import (JVM_PROPERTIES, Seat, WorkerPlan, WorkerResult, kill_tree,
                               prepare_folder, remove_folder, requested_sim_modes, resolve_search_budget,
                               run_worker, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
+STATUS_FILE = "batch.json"
+GAMES_FOLDER = "games"  # Forge's game records, once issue #18 writes them. See docs/forge-build.md.
 
 
 class SetupError(Exception):
@@ -34,6 +40,7 @@ class BatchConfig:
     java: tuple[str, ...] = ("java",)
     keep_profiles: bool = False
     search_budget: int | None = None  # None picks the default for the seats, and 0 leaves it off
+    window: Window | None = None  # None runs the batch now, with no hard stop
 
 
 @dataclass
@@ -57,6 +64,16 @@ class BatchResult:
     @property
     def not_finished(self) -> int:
         return self.attempted - self.finished
+
+    @property
+    def complete(self) -> bool:
+        """True when every game was played. Clean asks for more than this."""
+        return self.not_finished == 0
+
+    @property
+    def stopped(self) -> bool:
+        """True when the hard stop killed a worker, or came before any could launch."""
+        return bool(self.config.window) and (not self.workers or any(worker.stopped for worker in self.workers))
 
     def wins(self, seat: int) -> int:
         return sum(game.winner_seat == seat for game in self.games)
@@ -157,8 +174,9 @@ class BatchResult:
     @property
     def clean(self) -> bool:
         """True when every game was played, in the modes asked for, and every worker stayed in its own profile."""
-        return self.not_finished == 0 and all(worker.profile_used and self.played_requested_modes(worker)
-                                              and self.applied_search_budget(worker) for worker in self.workers)
+        return self.complete and all(worker.profile_used and not worker.left_behind
+                                     and self.played_requested_modes(worker)
+                                     and self.applied_search_budget(worker) for worker in self.workers)
 
 
 def plan_workers(games: int, batch_seed: int, workers: int) -> list[WorkerPlan]:
@@ -191,12 +209,49 @@ def _check(config: BatchConfig) -> None:
         raise SetupError(f"the run folder already holds worker folders: {config.run_dir}")
 
 
+def _stamp(moment: datetime | None) -> str | None:
+    return moment.isoformat(timespec="seconds") if moment else None
+
+
+def _write_status(config: BatchConfig, status: str, batch: BatchResult | None = None) -> None:
+    """Record where the batch stands. Only `complete` means every game was played.
+
+    It reads `running` until the batch ends, so a runner that dies leaves no false finish behind.
+    """
+    finished = batch.finished if batch else 0
+    fields = {
+        "batch": config.run_dir.name,
+        "status": status,
+        "stopped_at_hard_stop": batch.stopped if batch else False,
+        "window_start": _stamp(config.window.start) if config.window else None,
+        "window_stop": _stamp(config.window.stop) if config.window else None,
+        "games_attempted": config.games,
+        "games_finished": finished,
+        "games_not_finished": config.games - finished,
+    }
+    path = config.run_dir / STATUS_FILE
+    fresh = path.with_suffix(".tmp")
+    fresh.write_text(json.dumps(fields, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(fresh, path)  # a reader never sees half a file
+
+
 def run_batch(config: BatchConfig) -> BatchResult:
     _check(config)
     jar = find_jar(config.forge_root)
     forge_gui = config.forge_root.resolve() / "forge-gui"
-    config.run_dir.mkdir(parents=True, exist_ok=True)
+    (config.run_dir / GAMES_FOLDER).mkdir(parents=True, exist_ok=True)
+    if config.window:
+        config.window.wait_for_start()
+    if config.window and config.window.closed:
+        batch = BatchResult(config, [], 0.0)
+    else:
+        _write_status(config, "running")
+        batch = _play(config, jar, forge_gui)
+    _write_status(config, "complete" if batch.complete else "incomplete", batch)
+    return batch
 
+
+def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
     folders = []
     jobs = []
     started = []
@@ -209,7 +264,8 @@ def run_batch(config: BatchConfig) -> BatchResult:
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES, "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
                                  resolve_search_budget(config.seats, config.search_budget))]
-            jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started))
+            jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started,
+                         config.window.kill_at if config.window else None))
 
         began = time.monotonic()
         pool = ThreadPoolExecutor(max_workers=len(jobs))

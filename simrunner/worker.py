@@ -38,6 +38,9 @@ DEFAULT_SEARCH_BUDGET = 100
 # bounds each game, so this is a backstop for a JVM that stops responding.
 STARTUP_ALLOWANCE_S = 300
 PER_GAME_ALLOWANCE_S = 60
+POLL_S = 0.5
+# Once a worker has ended, its pipes close as soon as what's left in them is read.
+PIPE_DRAIN_S = 10
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,8 @@ class WorkerResult:
     plan: WorkerPlan
     exit_code: int | None = None
     timed_out: bool = False
+    stopped: bool = False  # the hard stop killed it
+    left_behind: bool = False  # something it started still held its pipes after it ended
     profile_used: bool = False
     ready_s: float | None = None  # seconds from launch until Forge printed its match header
     last_result_s: float | None = None  # seconds from launch until the last Game Result line
@@ -168,8 +173,31 @@ def _pump(stream, log_path: Path, launched: float, lines: list[tuple[float, str]
             log.flush()
 
 
-def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Path,
-               clock_s: int, started: list[subprocess.Popen]) -> WorkerResult:
+def _wait(process: subprocess.Popen, result: WorkerResult, backstop_s: int, kill_at: float | None) -> None:
+    """Wait for a worker to end, and kill it at the hard stop or its backstop, whichever comes first.
+
+    The hard stop is a wall clock time, so it is checked against the wall clock in short
+    waits. One long wait would run late if the machine slept or the clocks changed.
+    """
+    give_up = time.monotonic() + backstop_s
+    while True:
+        try:
+            process.wait(timeout=POLL_S)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        if kill_at is not None and time.time() >= kill_at:
+            result.stopped = True
+        elif time.monotonic() >= give_up:
+            result.timed_out = True
+        else:
+            continue
+        kill_tree(process)
+        return
+
+
+def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Path, clock_s: int,
+               started: list[subprocess.Popen], kill_at: float | None = None) -> WorkerResult:
     """Run one JVM to its end and read the results out of what it printed.
 
     stdout and stderr stay on separate pipes. On one pipe, the stack trace from a
@@ -184,19 +212,16 @@ def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Pat
     err_lines: list[tuple[float, str]] = []
     out_log = log_stem.with_name(log_stem.name + ".out.log")
     err_log = log_stem.with_name(log_stem.name + ".err.log")
-    pumps = [threading.Thread(target=_pump, args=(process.stdout, out_log, launched, out_lines)),
-             threading.Thread(target=_pump, args=(process.stderr, err_log, launched, err_lines))]
+    pumps = [threading.Thread(target=_pump, args=(process.stdout, out_log, launched, out_lines), daemon=True),
+             threading.Thread(target=_pump, args=(process.stderr, err_log, launched, err_lines), daemon=True)]
     for pump in pumps:
         pump.start()
 
     result = WorkerResult(plan)
-    try:
-        process.wait(timeout=deadline_s(plan.games, clock_s))
-    except subprocess.TimeoutExpired:
-        result.timed_out = True
-        kill_tree(process)
+    _wait(process, result, deadline_s(plan.games, clock_s), kill_at)
     for pump in pumps:
-        pump.join()
+        pump.join(timeout=PIPE_DRAIN_S)
+    result.left_behind = any(pump.is_alive() for pump in pumps)
 
     result.exit_code = process.returncode
     result.profile_used = profile_was_used(folder)

@@ -25,12 +25,22 @@ def _count(value: int | None) -> str:
     return "not reported" if value is None else str(value)
 
 
+def _status(batch: BatchResult) -> str:
+    if batch.complete:
+        return "complete"
+    return "incomplete, stopped at the hard stop" if batch.stopped else "incomplete"
+
+
 def format_summary(batch: BatchResult) -> str:
     config = batch.config
     startups = batch.startup_times
     startup_mean = sum(startups) / len(startups) if startups else 0.0
     overnight = batch.steady_usable_per_hour * (OVERNIGHT_HOURS - startup_mean / 3600)
+    window = []
+    if config.window:
+        window = [("window", f"{config.window.start} to {config.window.stop}"), ("status", _status(batch))]
     rows = [
+        *window,
         ("seat 1", _seat(config.seats[0])),
         ("seat 2", _seat(config.seats[1])),
         ("batch seed", str(config.batch_seed)),
@@ -70,6 +80,10 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
     notes = []
     if worker.timed_out:
         notes.append("killed at deadline")
+    if worker.stopped:
+        notes.append("killed at hard stop")
+    if worker.left_behind:
+        notes.append("left a process running that still holds its pipes, so check for java")
     if not worker.profile_used:
         notes.append("no log in its throwaway profile")
     if worker.ready_s is not None and not batch.played_requested_modes(worker):

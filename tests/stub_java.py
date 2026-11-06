@@ -50,6 +50,7 @@ def record(argv: list[str]) -> None:
             "localappdata": os.environ.get("LOCALAPPDATA"),
             "profile": profile_values(),
             "res_marker": Path("res/marker.txt").exists(),
+            "status_at_launch": json.loads(Path("../batch.json").read_text(encoding="utf-8")),
         }), encoding="utf-8")
 
 
@@ -139,6 +140,16 @@ def main() -> int:
             child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
             Path(os.environ["STUB_RECORD_DIR"], f"child-{seed}.pid").write_text(str(child.pid), encoding="utf-8")
             child.wait()
+        elif scenario == "launcher_dies":
+            # The launcher goes, and the JVM it started keeps the pipes open.
+            subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"],
+                             stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=sys.stderr)
+            return 1
+        elif scenario == "cut_off_after_one" and n == 2:
+            # A hard stop lands mid-game, here partway through printing the result line.
+            print("Game Outcome: Turn 3")
+            print(f"Game Result: Game {n} ended in 26", end="", flush=True)
+            time.sleep(600)
         elif scenario == "dies_after_one" and n == 2:
             print("java.lang.OutOfMemoryError: Java heap space", file=sys.stderr)
             return 1
