@@ -116,6 +116,16 @@ Those hits show the sites still peek with the flag off, so nothing here hid a re
 
 The cost is small once the payment path stays off the hidden zones. Stompy vs Elves, 30 games, took 88.9 s stock and 103.4 s with honest play and the tripwire. An earlier version took 249.9 s, because `RevealLog.knownTo` scanned both hidden zones on every payment the AI tested, and with the tripwire each read walked the stack. `writtenDown` skips that scan and leaves it to the recorder's call at each priority pass, so a new standing look reaches the AI at the next priority pass, not mid-decision.
 
+## Where the tripwire is silent
+
+A zero says nothing about these. None of them counts as a hit, by design:
+
+- `ComputerUtil.java:1579`, `Player.getCardsActivatableInExternalZones`, in Fog detection. See below.
+- Anything read from a forge-game frame. Rules code running inside a decision gets the real list, so `sa.canPlay()` on an opponent's spell stays silent and the AI still learns the answer.
+- `Card.getZone`, and the like, on a card the AI already holds.
+- The order of the AI's own library, which story 10 exempts.
+- `GameCopier`, which is exempt by class. No watch sits on a copy either.
+
 ## What this doesn't cover
 
 - A zero covers what these decks do. Fog, Chalice and Clash have Java tests and no real game. How well a person's guess plays there is untested.
