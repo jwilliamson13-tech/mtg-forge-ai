@@ -40,9 +40,14 @@ def _tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
         return [("tripwire", "no game reported, so the jar may be stale")]
     dirty = sum(count > 0 for count in hits)
     missing = batch.finished - len(hits)
-    verdict = "yes" if batch.tripwire_clean else f"no, {dirty} of {batch.finished} games had hits"
+    if batch.tripwire_clean:
+        verdict = "the real game is clean" if batch.search_unchecked else "yes"
+    else:
+        verdict = f"no, {dirty} of {batch.finished} games had hits"
     if missing:
         verdict += f", {missing} reported nothing"
+    if batch.search_unchecked:
+        verdict += ", search copies unchecked until #25"
     return [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
 
 

@@ -1026,6 +1026,25 @@ def test_turning_off_honest_play_that_never_ran_is_refused(config):
         run_batch(config(honest=False))
 
 
+def test_with_no_seat_searching_a_clean_tripwire_just_says_yes(config):
+    batch = run_batch(config(games=2, records=True))
+    assert not batch.search_unchecked
+    assert "tripwire clean                    yes\n" in format_summary(batch)
+
+
+def test_a_searching_seat_is_clean_for_the_real_game_only(config):
+    batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
+    assert batch.tripwire_clean
+    assert batch.search_unchecked
+    assert "tripwire clean                    the real game is clean, search copies unchecked until #25\n" in format_summary(batch)
+
+
+def test_a_searching_seat_with_hits_still_says_what_was_unchecked(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "tripwire_hits")
+    batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
+    assert "no, 2 of 2 games had hits, search copies unchecked until #25\n" in format_summary(batch)
+
+
 def test_the_report_gives_max_and_mean_hits_per_game(config, monkeypatch):
     monkeypatch.setenv("STUB_SCENARIO", "tripwire_hits")
     batch = run_batch(config(games=4, workers=1, records=True))

@@ -96,12 +96,15 @@ def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
     return tuple(seat.sim_mode or DEFAULT_SIM_MODE for seat in seats)
 
 
+def any_seat_searches(seats: tuple[Seat, Seat]) -> bool:
+    return any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
+
+
 def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> int:
     """The `-budget` for a batch: what was asked for, else the default if any seat searches. 0 leaves it off."""
     if requested is not None:
         return requested
-    searches = any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
-    return DEFAULT_SEARCH_BUDGET if searches else 0
+    return DEFAULT_SEARCH_BUDGET if any_seat_searches(seats) else 0
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,

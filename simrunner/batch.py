@@ -17,7 +17,7 @@ from gamerecord import GameRecordError, game_digest
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
-from simrunner.worker import (JVM_PROPERTIES, RecordPlan, Seat, WorkerPlan, WorkerResult, kill_tree,
+from simrunner.worker import (JVM_PROPERTIES, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
                               prepare_folder, remove_folder, requested_sim_modes, resolve_search_budget,
                               run_worker, sim_args)
 
@@ -221,9 +221,17 @@ class BatchResult:
 
     @property
     def tripwire_clean(self) -> bool:
-        """True when every finished game ran the tripwire and it caught nothing. A game that said nothing proves nothing."""
+        """True when every finished game ran the tripwire and it caught nothing. A game that said nothing proves nothing.
+
+        This covers the real game. With a searching seat, `search_unchecked` says what it leaves out.
+        """
         return (self.tripwire_on and self.finished > 0 and len(self.tripwire_hits) == self.finished
                 and not any(self.tripwire_hits))
+
+    @property
+    def search_unchecked(self) -> bool:
+        """True when a seat searches: the tripwire watches the real game only, so copies with hidden cards go unseen."""
+        return self.tripwire_on and any_seat_searches(self.config.seats)
 
     def tripwire_signatures(self) -> list[tuple[str, int, int]]:
         """Each signature with its hits and the games it showed up in, most hits first."""
