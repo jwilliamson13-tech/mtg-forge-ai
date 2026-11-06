@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+1 [] Mystic Forge
+1 [SOM] Mox Opal
+1 [] Portable Hole
+1 [SOK] Pithing Needle
+1 [] Mishra's Research Desk
+1 [US] Voltaic Key
+2 [] Disruptor Flute
+2 [] Ugin, Eye of the Storms
+3 [] Manifold Key
+3 [] Tezzeret, Cruel Captain
+4 [TE] Lotus Petal
+4 [] Kozilek's Command
+4 [] Karn, the Great Creator
+4 [] The One Ring
+4 [UL] Grim Monolith
+4 [] Glaring Fleshraker
+4 [AQ] Urza's Tower
+4 [] Planar Nexus
+4 [] Urza's Saga
+4 [] Urza's Workshop
+4 [TE] Ancient Tomb
+SB:  1 [DS] Trinisphere
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [SOM] Liquimetal Coating
+SB:  3 [GP] Leyline of the Void
+SB:  1 [SH] Ensnaring Bridge
+SB:  1 [AER] Paradox Engine
+SB:  1 [] Perilous Snare
+SB:  1 [UL] Defense Grid
+SB:  1 [] Extinguisher Battleship
+SB:  1 [FD] Crucible of Worlds
+SB:  1 [] Mystic Forge
+SB:  1 [] Portable Hole

@@ -40,7 +40,17 @@ def test_the_archetype_page_gives_decks_newest_first_with_their_labels():
     assert refs[0].url == "https://mtgtop8.com/event?e=93260&d=908677&f=LE"
     assert refs[0].export_url == "https://mtgtop8.com/dec?d=908677"
     assert [r.played for r in refs] == sorted((r.played for r in refs), reverse=True)
-    assert any(not pull.label_matches(r.label, "Boros Aggro") for r in refs)
+    assert any(r.label == "Boros Energy" for r in refs)
+
+
+def test_a_list_is_skipped_only_when_its_label_names_another_archetype():
+    names = ["Hogaak", "Pox", "Storm", "Ruby Storm", "Show and Tell", "Death & Taxes"]
+    assert pull.label_belongs("Ub Hogaak", "Hogaak", names)
+    assert not pull.label_belongs("Bg Hogaak", "Pox", names)
+    assert pull.label_belongs("Red Storm", "Ruby Storm", names)
+    assert not pull.label_belongs("Ruby Storm", "Storm", names)
+    assert pull.label_belongs("Sneak Show", "Show and Tell", names)
+    assert pull.label_belongs("BW Death & Taxes", "Death & Taxes", names)
 
 
 def test_an_export_converts_with_brackets_comments_split_cards_and_sb_lines():
@@ -101,13 +111,13 @@ def test_the_pull_spaces_requests_names_itself_and_refuses_a_second_run(tmp_path
     root = tmp_path / "repo"
     record = pull.run_pull(root, tmp_path / "cache", ALL_NAMES, fetcher, progress=lambda *_: None)
     assert record["metagame_period"] == "Last 2 Weeks" and record["archetypes_on_page"] == 58
-    # every page is the Boros Aggro fixture, so only that archetype finds lists labeled with its own name
-    assert len(record["archetypes"]) == 40 and [d["id"] for d in record["decks"]] == [f"boros-aggro-{i}" for i in (1, 2, 3)]
-    assert len(record["archetypes_short_of_three"]) == 39 and record["dropped"]
+    # every page is the Boros Aggro fixture: other archetypes skip its Boros Aggro lists and keep the Boros Energy ones
+    assert len(record["archetypes"]) == 40 and len(record["decks"]) == 120
+    assert record["archetypes_short_of_three"] == [] and record["dropped"]
     assert sleeps and min(sleeps) >= 6.0 and len(sleeps) == len(seen) - 1
     assert {agent for _, agent in seen} == {"mtg-forge-ai-deckpool/1.0"}
     assert all(url.startswith("https://mtgtop8.com/") for url, _ in seen)
-    assert (root / "decks" / "raw" / "boros-aggro-1.txt").is_file() and (root / "decks" / "forge" / "boros-aggro-1.dck").is_file()
+    assert (root / "decks" / "raw" / "hogaak-1.txt").is_file() and (root / "decks" / "forge" / "hogaak-1.dck").is_file()
     assert json.loads((root / "decks" / "pull.json").read_text())["requests"] == len(seen)
     with pytest.raises(pull.AlreadyPulled):
         pull.run_pull(root, tmp_path / "cache", ALL_NAMES, fetcher, progress=lambda *_: None)

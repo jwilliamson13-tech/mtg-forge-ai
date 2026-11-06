@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+2 [ROE] Emrakul, the Aeons Torn
+4 [] Atraxa, Grand Unifier
+1 [] Raph & Mikey, Troublemakers
+1 [MR] Chrome Mox
+4 [TE] Lotus Petal
+3 [ZEN] Spell Pierce
+4 [AL] Force of Will
+4 [IA] Brainstorm
+1 [CMD] Flusterstorm
+1 [] Prismari Charm
+4 [LRW] Ponder
+4 [US] Show and Tell
+4 [] Stock Up
+4 [US] Sneak Attack
+2 [A] Island
+1 [A] Mountain
+1 [EX] City of Traitors
+1 [ON] Polluted Delta
+3 [B] Volcanic Island
+1 [ZEN] Misty Rainforest
+4 [ZEN] Scalding Tarn
+4 [TE] Ancient Tomb
+1 [] Thundering Falls
+1 [] Mistrise Village
+SB:  1 [HOU] Abrade
+SB:  1 [DK] Blood Moon
+SB:  1 [IA] Pyroclasm
+SB:  2 [IA] Pyroblast
+SB:  1 [ZEN] Mindbreak Trap
+SB:  1 [] Fury
+SB:  1 [] Brotherhood's End
+SB:  2 [] Consign to Memory
+SB:  2 [] Ghost Vacuum
+SB:  3 [] Hexing Squelcher

@@ -1,0 +1,24 @@
+// Deck file created with mtgtop8.com
+4 [] Broadside Bombardiers
+4 [] Fury
+4 [] Pyrogoyf
+4 [PLC] Simian Spirit Guide
+3 [FUT] Magus of the Moon
+2 [] Hexing Squelcher
+4 [] Fable of the Mirror-Breaker
+4 [MR] Chalice of the Void
+4 [MR] Chrome Mox
+4 [] The One Ring
+4 [] Shatterskull Smashing
+4 [] Sundering Eruption
+3 [DK] Blood Moon
+4 [TE] Ancient Tomb
+4 [EX] City of Traitors
+3 [A] Mountain
+1 [] Sokenzan, Crucible of Defiance
+SB:  4 [GP] Leyline of the Void
+SB:  3 [] Disruptor Flute
+SB:  3 [] Summon: Bahamut
+SB:  2 [PLC] Dead / Gone
+SB:  2 [C15] Fiery Confluence
+SB:  1 [WL] Null Rod

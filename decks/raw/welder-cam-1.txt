@@ -1,0 +1,40 @@
+// Deck file created with mtgtop8.com
+4 [] Emry, Lurker of the Loch
+4 [] Goblin Engineer
+4 [UL] Goblin Welder
+1 [] Kappa Cannoneer
+1 [] Phyrexian Dragon Engine
+4 [TE] Lotus Petal
+4 [CS] Mishra's Bauble
+4 [SOM] Mox Opal
+4 [] Sewer-veillance Cam
+3 [] Melded Moxite
+2 [] Cori-Steel Cutter
+2 [MI] Lion's Eye Diamond
+1 [] Agatha's Soul Cauldron
+1 [TSP] Chromatic Star
+1 [] Legion Extruder
+1 [MR] Pyrite Spellbomb
+1 [] Skateboard
+4 [] Urza's Saga
+4 [B] Volcanic Island
+3 [] Arena of Glory
+2 [MR] Seat of the Synod
+1 [ZEN] Arid Mesa
+1 [ON] Bloodstained Mire
+1 [A] Mountain
+1 [ZEN] Scalding Tarn
+1 [ON] Wooded Foothills
+SB:  1 [] Kappa Cannoneer
+SB:  2 [CMD] Flusterstorm
+SB:  2 [] Disruptor Flute
+SB:  1 [HOU] Abrade
+SB:  1 [] Boomerang Basics
+SB:  1 [] Damping Sphere
+SB:  1 [] Haywire Mite
+SB:  1 [] Lost in the Maze
+SB:  1 [SOK] Pithing Needle
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [NPH] Torpor Orb
+SB:  1 [THS] Swan Song
+SB:  1 [SH] Ensnaring Bridge

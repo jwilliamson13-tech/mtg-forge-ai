@@ -1,0 +1,31 @@
+// Deck file created with mtgtop8.com
+1 [] Wail of the Forgotten
+1 [] Kaito, Bane of Nightmares
+2 [AER] Fatal Push
+4 [LRW] Ponder
+4 [NE] Daze
+4 [IA] Brainstorm
+4 [AL] Force of Will
+3 [] Mockingbird
+3 [] Orcish Bowmasters
+3 [] Stitcher's Supplier
+3 [] Hogaak, Arisen Necropolis
+4 [] Moonshadow
+4 [] Dark Matter Manipulator
+1 [A] Swamp
+1 [FUT] Dryad Arbor
+1 [A] Bayou
+1 [] Undercity Sewers
+4 [ZEN] Misty Rainforest
+4 [A] Underground Sea
+4 [ZEN] Verdant Catacombs
+4 [TE] Wasteland
+SB:  1 [WL] Null Rod
+SB:  2 [NE] Reverent Silence
+SB:  2 [] Consign to Memory
+SB:  3 [] Dauthi Voidwalker
+SB:  1 [FD] Engineered Explosives
+SB:  1 [MM] Snuff Out
+SB:  2 [NE] Massacre
+SB:  1 [] Kaito, Bane of Nightmares
+SB:  2 [AER] Fatal Push

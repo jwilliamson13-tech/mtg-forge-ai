@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+3 [] Glaring Fleshraker
+1 [SOK] Pithing Needle
+2 [US] Voltaic Key
+4 [TE] Lotus Petal
+4 [UL] Grim Monolith
+3 [] Manifold Key
+2 [] Mystic Forge
+1 [] Soul-Guide Lantern
+1 [] Mishra's Research Desk
+4 [] The One Ring
+4 [] Kozilek's Command
+2 [] Eldrazi Confluence
+4 [] Urza's Saga
+4 [] Karn, the Great Creator
+2 [] Ugin, Eye of the Storms
+2 [] Tezzeret, Cruel Captain
+1 [AQ] Urza's Mine
+1 [AQ] Urza's Power Plant
+4 [AQ] Urza's Tower
+4 [TE] Ancient Tomb
+4 [] Planar Nexus
+3 [] Petrified Hamlet
+SB:  1 [SOK] Pithing Needle
+SB:  1 [AER] Paradox Engine
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [SH] Ensnaring Bridge
+SB:  1 [NPH] Dismember
+SB:  1 [SOM] Liquimetal Coating
+SB:  2 [] Portable Hole
+SB:  1 [] Cityscape Leveler
+SB:  2 [] Disruptor Flute
+SB:  1 [] Ghost Vacuum
+SB:  1 [] Perilous Snare
+SB:  1 [] Extinguisher Battleship

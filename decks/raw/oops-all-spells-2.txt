@@ -1,0 +1,30 @@
+// Deck file created with mtgtop8.com
+4 [FUT] Summoner's Pact
+4 [] Boggart Trawler
+4 [PLC] Simian Spirit Guide
+1 [TE] Reanimate
+2 [JU] Cabal Therapy
+4 [FUT] Pact of Negation
+4 [AL] Elvish Spirit Guide
+1 [RTR] Destroy the Evidence
+1 [] Disciple of Freyalise
+1 [TSP] Dread Return
+4 [A] Dark Ritual
+4 [] Lively Dirge
+4 [TE] Lotus Petal
+1 [ISD] Memory's Journey
+3 [FUT] Narcomoeba
+2 [MR] Chrome Mox
+1 [] Poxwalkers
+4 [TO] Cabal Ritual
+1 [FUT] Bridge from Below
+4 [GTC] Balustrade Spy
+4 [] Agadeem's Awakening
+1 [] Thassa's Oracle
+1 [GP] Wild Cantor
+SB:  2 [] Disciple of Freyalise
+SB:  4 [M11] Leyline of Sanctity
+SB:  4 [] Force of Vigor
+SB:  1 [] Foundation Breaker
+SB:  3 [LRW] Thoughtseize
+SB:  1 [] Disruptive Stormbrood

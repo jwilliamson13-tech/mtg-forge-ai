@@ -1,0 +1,31 @@
+// Deck file created with mtgtop8.com
+1 [MR] Aether Spellbomb
+4 [TE] Ancient Tomb
+4 [MR] Chalice of the Void
+4 [] Emry, Lurker of the Loch
+2 [] Force of Negation
+4 [AL] Force of Will
+1 [A] Island
+4 [] Kappa Cannoneer
+2 [] Loki, God of Mischief
+4 [TE] Lotus Petal
+4 [CS] Mishra's Bauble
+4 [SOM] Mox Opal
+4 [] Pinnacle Emissary
+4 [MR] Seat of the Synod
+3 [] Sink into Stupor
+1 [] Skateboard
+2 [DK] Tormod's Crypt
+4 [IA] Urza's Bauble
+4 [] Urza's Saga
+SB:  1 [] Loki, God of Mischief
+SB:  1 [NPH] Dismember
+SB:  1 [] Agatha's Soul Cauldron
+SB:  3 [] Consign to Memory
+SB:  1 [] Haywire Mite
+SB:  2 [FUT] Magus of the Moon
+SB:  1 [SOK] Pithing Needle
+SB:  1 [] Shadowspear
+SB:  1 [] Sheltered by Ghosts
+SB:  1 [C13] Toxic Deluge
+SB:  2 [NPH] Whipflare

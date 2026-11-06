@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+1 [A] Island
+1 [A] Mountain
+2 [ON] Flooded Strand
+2 [ON] Polluted Delta
+4 [ZEN] Scalding Tarn
+1 [] Thundering Falls
+4 [B] Volcanic Island
+4 [TE] Wasteland
+1 [] Brazen Borrower
+4 [ISD] Delver of Secrets
+4 [] Dragon's Rage Channeler
+2 [] Murktide Regent
+4 [IA] Brainstorm
+4 [NE] Daze
+4 [AL] Force of Will
+4 [A] Lightning Bolt
+4 [LRW] Ponder
+4 [] Flow State
+1 [LG] Chain Lightning
+2 [] Cori-Steel Cutter
+3 [CS] Mishra's Bauble
+SB:  2 [PLC] Rough / Tumble
+SB:  2 [] Consign to Memory
+SB:  1 [] Force of Negation
+SB:  2 [IA] Pyroblast
+SB:  1 [IA] Hydroblast
+SB:  1 [US] Meltdown
+SB:  1 [EX] Price of Progress
+SB:  1 [DK] Tormod's Crypt
+SB:  2 [] Unholy Heat
+SB:  1 [CMD] Flusterstorm
+SB:  1 [WL] Null Rod

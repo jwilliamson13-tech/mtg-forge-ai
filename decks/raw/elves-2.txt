@@ -1,0 +1,37 @@
+// Deck file created with mtgtop8.com
+2 [A] Llanowar Elves
+1 [AVR] Craterhoof Behemoth
+1 [FRF] Temur Sabertooth
+2 [IA] Fyndhorn Elves
+1 [M14] Elvish Mystic
+4 [VI] Quirion Ranger
+3 [SC] Wirewood Symbiote
+4 [] Allosaurus Shepherd
+1 [] Atraxa, Grand Unifier
+1 [] Alpha Deathclaw
+1 [] Eladamri, Korvecdal
+4 [] Badgermole Cub
+4 [] Formidable Speaker
+1 [] Mirkwood Nurturer
+4 [VI] Natural Order
+4 [MBS] Green Sun's Zenith
+3 [A] Forest
+2 [FUT] Dryad Arbor
+2 [ON] Windswept Heath
+2 [ON] Wooded Foothills
+3 [A] Bayou
+2 [ZEN] Misty Rainforest
+2 [ZEN] Verdant Catacombs
+2 [TE] Ancient Tomb
+4 [US] Gaea's Cradle
+SB:  1 [CFX] Progenitus
+SB:  2 [MM] Snuff Out
+SB:  2 [RTR] Abrupt Decay
+SB:  1 [SHM] Faerie Macabre
+SB:  1 [] Collector Ouphe
+SB:  1 [] Force of Vigor
+SB:  1 [] Hogaak, Arisen Necropolis
+SB:  2 [] Endurance
+SB:  1 [] Grist, the Hunger Tide
+SB:  2 [] Disruptor Flute
+SB:  1 [] Chomping Changeling

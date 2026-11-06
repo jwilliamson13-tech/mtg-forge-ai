@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+1 [] Force of Negation
+1 [] Wrath of the Skies
+1 [] Erode
+1 [] Forth Eorlingas!
+2 [DIS] Spell Snare
+2 [] Prismatic Ending
+3 [] Flame of Anor
+3 [] Flow State
+4 [AL] Force of Will
+4 [LRW] Ponder
+4 [A] Swords to Plowshares
+4 [IA] Brainstorm
+2 [] Murktide Regent
+4 [] Tamiyo, Inquisitive Student
+4 [] Thundertrap Trainer
+1 [] Meticulous Archive
+1 [A] Mountain
+1 [A] Tundra
+1 [B] Volcanic Island
+1 [LG] Karakas
+2 [ZEN] Scalding Tarn
+2 [A] Plains
+3 [] Prismatic Vista
+4 [ON] Flooded Strand
+4 [A] Island
+SB:  1 [ISD] Geist of Saint Traft
+SB:  2 [A] Blue Elemental Blast
+SB:  3 [] Consign to Memory
+SB:  1 [CMD] Flusterstorm
+SB:  1 [] Lavinia, Azorius Renegade
+SB:  1 [IA] Pyroblast
+SB:  2 [A] Red Elemental Blast
+SB:  2 [ISD] Stony Silence
+SB:  1 [NPH] Surgical Extraction
+SB:  1 [SH] Ruination

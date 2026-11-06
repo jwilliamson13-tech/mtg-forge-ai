@@ -1,0 +1,45 @@
+// Deck file created with mtgtop8.com
+4 [ZEN] Verdant Catacombs
+3 [TE] Wasteland
+2 [A] Bayou
+2 [A] Forest
+2 [] Talon Gates of Madara
+2 [ON] Windswept Heath
+1 [ON] Wooded Foothills
+1 [A] Swamp
+1 [ZEN] Misty Rainforest
+1 [] Ba Sing Se
+1 [WWK] Bojuka Bog
+1 [] Grist, the Hunger Tide
+1 [UL] Crop Rotation
+3 [] Once Upon a Time
+4 [MBS] Green Sun's Zenith
+4 [LRW] Thoughtseize
+1 [] Endurance
+1 [] Collector Ouphe
+1 [A] Birds of Paradise
+1 [] Badgermole Cub
+1 [] Keen-Eyed Curator
+1 [] Icetill Explorer
+1 [JU] Sylvan Safekeeper
+1 [] Mole Man, Moloid Master
+2 [] Barrowgoyf
+2 [] Carnivorous Cultivator
+4 [] Wight of the Reliquary
+4 [] Ignoble Hierarch
+4 [] Scythecat Cub
+1 [US] Gaea's Cradle
+1 [DIS] Ghost Quarter
+1 [LG] Karakas
+1 [FUT] Dryad Arbor
+SB:  1 [LG] The Tabernacle at Pendrell Vale
+SB:  2 [RTR] Abrupt Decay
+SB:  1 [] Alpha Deathclaw
+SB:  2 [] Disruptor Flute
+SB:  2 [US] Duress
+SB:  2 [] Force of Vigor
+SB:  1 [LRW] Gaddock Teeg
+SB:  1 [] Professor Dellian Fel
+SB:  1 [MM] Snuff Out
+SB:  1 [] Grist, the Hunger Tide
+SB:  1 [] Endurance

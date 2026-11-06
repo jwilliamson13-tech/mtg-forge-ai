@@ -1,0 +1,39 @@
+// Deck file created with mtgtop8.com
+4 [ON] Flooded Strand
+3 [ZEN] Misty Rainforest
+2 [A] Tundra
+2 [ON] Polluted Delta
+1 [] Hedge Maze
+1 [] Meticulous Archive
+1 [A] Plains
+1 [A] Island
+1 [] Xander's Lounge
+1 [A] Underground Sea
+1 [A] Tropical Island
+1 [A] Bayou
+1 [A] Savannah
+1 [A] Scrubland
+3 [] Tamiyo, Inquisitive Student
+3 [] Quantum Riddler
+3 [] Orcish Bowmasters
+2 [] Phelia, Exuberant Shepherd
+4 [] Leyline Binding
+4 [] Up the Beanstalk
+4 [A] Swords to Plowshares
+4 [IA] Brainstorm
+4 [AL] Force of Will
+3 [LRW] Ponder
+2 [] Kaito, Bane of Nightmares
+2 [] Force of Negation
+1 [RAV] Life from the Loam
+1 [] Assassin's Trophy
+SB:  1 [] Damping Sphere
+SB:  1 [] Disruptor Flute
+SB:  1 [RTR] Rest in Peace
+SB:  1 [] Lavinia, Azorius Renegade
+SB:  2 [] Consign to Memory
+SB:  2 [A] Blue Elemental Blast
+SB:  2 [] Deafening Silence
+SB:  2 [US] Carpet of Flowers
+SB:  2 [] Wrath of the Skies
+SB:  1 [] Endurance

@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+4 [] Orcish Bowmasters
+2 [] Barrowgoyf
+2 [] Carnivorous Cultivator
+2 [] Hogaak, Arisen Necropolis
+4 [SH] Mox Diamond
+1 [] Currency Converter
+1 [] Disruptor Flute
+1 [] Ghost Vacuum
+1 [] Witherbloom Charm
+4 [TSP] Smallpox
+4 [LRW] Thoughtseize
+3 [] Malevolent Rumble
+2 [RAV] Life from the Loam
+2 [] Witherbloom Command
+4 [] Urza's Saga
+4 [] Eumidian Hatchery
+4 [ZEN] Verdant Catacombs
+4 [TE] Wasteland
+3 [] Boseiju, Who Endures
+2 [A] Bayou
+1 [OD] Cabal Pit
+1 [A] Forest
+1 [DIS] Ghost Quarter
+1 [LG] Karakas
+1 [A] Swamp
+1 [] Underground Mortuary
+SB:  2 [] Barrowgoyf
+SB:  2 [] Disruptor Flute
+SB:  3 [NPH] Surgical Extraction
+SB:  2 [] Break the Ice
+SB:  2 [AER] Fatal Push
+SB:  2 [] Force of Vigor
+SB:  1 [NPH] Torpor Orb
+SB:  1 [C13] Toxic Deluge

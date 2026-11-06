@@ -1,0 +1,34 @@
+// Deck file created with mtgtop8.com
+2 [] Agate Instigator
+4 [] Ajani, Nacatl Pariah
+4 [] Amped Raptor
+4 [ZEN] Arid Mesa
+1 [] Elegant Parlor
+1 [ON] Flooded Strand
+1 [] Galvanic Discharge
+2 [TE] Goblin Bombardment
+4 [] Guide of Souls
+1 [] Hexing Squelcher
+2 [LG] Karakas
+2 [] Lazotep Quarry
+1 [ZEN] Marsh Flats
+1 [A] Mountain
+4 [] Ocelot Pride
+1 [A] Plains
+3 [A] Plateau
+3 [] Sand Scout
+1 [] Spider-Punk
+3 [] Static Prison
+2 [] Sunbaked Canyon
+4 [A] Swords to Plowshares
+4 [] Voice of Victory
+4 [TE] Wasteland
+1 [ON] Windswept Heath
+SB:  1 [HOU] Abrade
+SB:  2 [] Containment Priest
+SB:  2 [MI] Cursed Totem
+SB:  2 [] Disruptor Flute
+SB:  1 [] Erode
+SB:  3 [GP] Leyline of the Void
+SB:  2 [EX] Price of Progress
+SB:  2 [IA] Pyroblast

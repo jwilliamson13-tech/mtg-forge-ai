@@ -1,0 +1,31 @@
+// Deck file created with mtgtop8.com
+4 [ISD] Delver of Secrets
+4 [] Dragon's Rage Channeler
+1 [] Brazen Borrower
+4 [CS] Mishra's Bauble
+3 [] Cori-Steel Cutter
+4 [IA] Brainstorm
+4 [AL] Force of Will
+4 [A] Lightning Bolt
+3 [NE] Daze
+1 [] Prismari Charm
+1 [] Unholy Heat
+4 [LRW] Ponder
+3 [] Flow State
+1 [M11] Preordain
+4 [ZEN] Scalding Tarn
+4 [B] Volcanic Island
+4 [TE] Wasteland
+2 [ON] Flooded Strand
+2 [A] Island
+1 [ZEN] Misty Rainforest
+1 [A] Mountain
+1 [ON] Polluted Delta
+SB:  2 [] Unholy Heat
+SB:  3 [] Consign to Memory
+SB:  2 [] Force of Negation
+SB:  2 [US] Meltdown
+SB:  2 [EX] Price of Progress
+SB:  2 [IA] Pyroblast
+SB:  1 [A] Red Elemental Blast
+SB:  1 [PLC] Rough / Tumble

@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+4 [DS] Aether Vial
+2 [TE] Ancient Tomb
+2 [A] Badlands
+3 [ON] Bloodstained Mire
+1 [] Boggart Trawler
+2 [] Bolg's Company
+3 [] Broadside Bombardiers
+4 [AVR] Cavern of Souls
+4 [US] Goblin Lackey
+4 [P2] Goblin Matron
+3 [AP] Goblin Ringleader
+1 [] Grub, Storied Matriarch
+2 [] Howlsquad Heavy
+1 [] Masked Vandal
+2 [TSP] Mogg War Marshal
+3 [A] Mountain
+3 [] Munitions Expert
+2 [] Muxus, Goblin Grandee
+1 [] Raucous Theater
+2 [] Rundvelt Hordemaster
+3 [ZEN] Scalding Tarn
+2 [ON] Skirk Prospector
+1 [] Sling-Gang Lieutenant
+1 [A] Taiga
+1 [LRW] Tarfire
+4 [TE] Wasteland
+SB:  2 [] Disruptor Flute
+SB:  1 [] Fury
+SB:  1 [ST] Goblin Settler
+SB:  1 [LG] Karakas
+SB:  3 [GP] Leyline of the Void
+SB:  1 [ZEN] Mindbreak Trap
+SB:  2 [IA] Pyroblast
+SB:  2 [AL] Pyrokinesis
+SB:  2 [A] Red Elemental Blast

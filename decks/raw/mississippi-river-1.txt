@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+4 [] Apex Devastator
+2 [ROE] Emrakul, the Aeons Torn
+2 [PC2] Maelstrom Wanderer
+2 [] Trumpeting Carnosaur
+1 [] Etali, Primal Conqueror
+4 [ARB] Violent Outburst
+3 [] Tibalt's Trickery
+4 [] Creative Technique
+4 [] Throes of Chaos
+2 [] Call Forth the Tempest
+2 [] Emergent Ultimatum
+4 [TE] Ancient Tomb
+4 [FE] Dwarven Ruins
+4 [OD] Mossfire Valley
+4 [MM] Sandstone Needle
+3 [] Boseiju, Who Endures
+3 [] Petrified Hamlet
+2 [MI] Crystal Vein
+2 [IN] Tinder Farm
+1 [A] Forest
+1 [MM] Hickory Woodlot
+1 [A] Mountain
+1 [A] Taiga
+SB:  2 [] Trumpeting Carnosaur
+SB:  1 [] Tibalt's Trickery
+SB:  1 [] Boseiju, Who Endures
+SB:  1 [] Petrified Hamlet
+SB:  3 [GP] Leyline of the Void
+SB:  2 [] Blast Zone
+SB:  2 [LRW] Ingot Chewer
+SB:  2 [LG] Karakas
+SB:  1 [] Talon Gates of Madara

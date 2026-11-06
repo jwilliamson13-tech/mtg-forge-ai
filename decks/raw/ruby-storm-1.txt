@@ -1,0 +1,29 @@
+// Deck file created with mtgtop8.com
+3 [TE] Ancient Tomb
+13 [A] Mountain
+4 [] Ral, Monsoon Mage
+2 [] Bonus Round
+4 [JU] Burning Wish
+4 [CHK] Desperate Ritual
+3 [] Jeska's Will
+4 [SHM] Manamorphose
+4 [] Reckless Impulse
+3 [CS] Rite of Flame
+4 [MR] Seething Song
+2 [] Storm of Memories
+1 [] Wish
+4 [] Wrenn's Resolve
+1 [TE] Lotus Petal
+4 [TE] Ruby Medallion
+SB:  1 [] Bonus Round
+SB:  1 [] Jeska's Will
+SB:  1 [CS] Rite of Flame
+SB:  2 [] Blast Zone
+SB:  3 [NPH] Surgical Extraction
+SB:  1 [TSP] Empty the Warrens
+SB:  1 [C15] Fiery Confluence
+SB:  1 [TSP] Grapeshot
+SB:  1 [] Alchemist's Gambit
+SB:  1 [GP] Shattering Spree
+SB:  1 [] Inspired Tinkering
+SB:  1 [] Will of the Jeskai

@@ -1,0 +1,38 @@
+// Deck file created with mtgtop8.com
+1 [] Underground Mortuary
+2 [] Beseech the Mirror
+1 [B] Volcanic Island
+1 [SC] Tendrils of Agony
+1 [A] Island
+4 [LRW] Ponder
+4 [ON] Polluted Delta
+3 [ZEN] Misty Rainforest
+2 [] Flow State
+1 [JU] Living Wish
+4 [MI] Lion's Eye Diamond
+1 [A] Swamp
+4 [TE] Lotus Petal
+4 [DIS] Infernal Tutor
+1 [] Gaea's Will
+1 [ALA] Ad Nauseam
+4 [A] Dark Ritual
+2 [MR] Chrome Mox
+2 [TO] Cabal Ritual
+4 [IA] Brainstorm
+1 [A] Bayou
+1 [] Undercity Sewers
+1 [A] Underground Sea
+3 [] Veil of Summer
+1 [ZEN] Verdant Catacombs
+3 [LRW] Thoughtseize
+2 [US] Duress
+1 [A] Tropical Island
+SB:  1 [ON] Chain of Vapor
+SB:  1 [] Stormscale Scion
+SB:  3 [US] Carpet of Flowers
+SB:  2 [CMD] Flusterstorm
+SB:  1 [] Brazen Borrower
+SB:  2 [] Boseiju, Who Endures
+SB:  2 [RTR] Abrupt Decay
+SB:  1 [] Witherbloom Apprentice
+SB:  2 [] Hexing Squelcher

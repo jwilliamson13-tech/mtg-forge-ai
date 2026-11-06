@@ -1,0 +1,26 @@
+// Deck file created with mtgtop8.com
+3 [] Barrowgoyf
+4 [LRW] Thoughtseize
+5 [A] Swamp
+2 [] Super Shredder
+4 [ON] Polluted Delta
+4 [] Orcish Bowmasters
+4 [] Moonshadow
+4 [] Nethergoyf
+4 [CS] Mishra's Bauble
+4 [AER] Fatal Push
+1 [] Raucous Theater
+2 [] Bitter Triumph
+4 [] Dauthi Voidwalker
+4 [A] Dark Ritual
+2 [JU] Cabal Therapy
+4 [ON] Bloodstained Mire
+4 [TE] Wasteland
+1 [] Sheoldred's Edict
+SB:  2 [] Tourach, Dread Cantor
+SB:  2 [NPH] Torpor Orb
+SB:  2 [] Mai, Scornful Striker
+SB:  2 [WL] Null Rod
+SB:  1 [NE] Massacre
+SB:  4 [GP] Leyline of the Void
+SB:  2 [] Damping Sphere

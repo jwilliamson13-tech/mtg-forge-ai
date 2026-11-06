@@ -1,0 +1,29 @@
+// Deck file created with mtgtop8.com
+4 [MM] Unmask
+3 [] Archon of Cruelty
+2 [ON] Polluted Delta
+2 [A] Badlands
+2 [A] Swamp
+2 [JU] Cabal Therapy
+4 [A] Dark Ritual
+4 [TE] Reanimate
+4 [TE] Lotus Petal
+2 [ZEN] Marsh Flats
+4 [DKA] Faithless Looting
+1 [] Raph & Mikey, Troublemakers
+1 [] Raucous Theater
+4 [AVR] Griselbrand
+4 [MI] Shallow Grave
+2 [ZEN] Verdant Catacombs
+1 [ON] Bloodstained Mire
+1 [] Undercity Sewers
+1 [A] Underground Sea
+4 [] Atraxa, Grand Unifier
+4 [A] Animate Dead
+4 [LRW] Thoughtseize
+SB:  2 [] Bitter Triumph
+SB:  2 [EMN] Collective Brutality
+SB:  4 [US] Show and Tell
+SB:  1 [FUT] Magus of the Moon
+SB:  3 [NE] Stronghold Gambit
+SB:  3 [] Hexing Squelcher

@@ -113,8 +113,20 @@ def parse_archetype(page: str) -> list[DeckRef]:
     return sorted(decks, key=lambda d: d.played, reverse=True)
 
 
-def label_matches(label: str, archetype: str) -> bool:
-    return normalize(label) == normalize(archetype)
+def label_belongs(label: str, archetype: str, all_names) -> bool:
+    """False when a list's own label names a different archetype than the page it sits on.
+
+    MTGTop8 files sub-types under an archetype page (`Sneak Show` under Show and Tell, `BW Death & Taxes`
+    under Death & Taxes), so a label that differs from the page name is normal and kept. A list is skipped
+    only when its label contains another archetype's whole name, and that name isn't part of this
+    archetype's own name (`Bg Hogaak` on the Pox page; `Red Storm` on Ruby Storm is fine).
+    """
+    tokens, own = set(normalize(label).split()), set(normalize(archetype).split())
+    rivals = [set(normalize(n).split()) for n in all_names if normalize(n) != normalize(archetype)]
+    hits = [r for r in rivals if r <= tokens and not r <= own]
+    if not hits:
+        return True
+    return own <= tokens and len(own) >= max(len(r) for r in hits)
 
 
 def check_export(text: str, names: NameSet) -> tuple[str | None, str | None]:
@@ -216,6 +228,7 @@ def run_pull(root: Path, cache: Path, names: NameSet, fetcher: Fetcher | None = 
     check_robots(fetcher)
     period, archetypes = parse_metagame(fetcher.get(f"{BASE}/format?f=LE"))
     chosen = top_archetypes(archetypes)
+    all_names = [a.name for a in archetypes]
     progress(f"{len(archetypes)} archetypes on the page for {period!r}; taking {len(chosen)}")
     decks, dropped, short = [], [], []
     for rank, arch in enumerate(chosen, 1):
@@ -227,7 +240,7 @@ def run_pull(root: Path, cache: Path, names: NameSet, fetcher: Fetcher | None = 
             for ref in refs:
                 if kept >= LISTS_PER_ARCHETYPE:
                     break
-                if not label_matches(ref.label, arch.name):
+                if not label_belongs(ref.label, arch.name, all_names):
                     dropped.append({"archetype": arch.name, "url": ref.url, "reason": f"labeled {ref.label!r}"})
                     continue
                 text = fetcher.get(ref.export_url).replace("\r\n", "\n")

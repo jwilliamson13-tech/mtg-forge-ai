@@ -1,0 +1,25 @@
+// Deck file created with mtgtop8.com
+4 [TE] Wasteland
+4 [TE] Ancient Tomb
+4 [EX] City of Traitors
+4 [A] Plains
+4 [] Urza's Saga
+4 [] Solitude
+4 [] Witch Enchanter
+4 [] Timeless Dragon
+4 [] Karn, the Great Creator
+4 [] Touch the Spirit Realm
+4 [A] Wrath of God
+4 [MR] Chrome Mox
+4 [MR] Chalice of the Void
+4 [DS] Trinisphere
+2 [] Currency Converter
+2 [US] Smokestack
+SB:  1 [SOM] Liquimetal Coating
+SB:  4 [RTR] Rest in Peace
+SB:  1 [FD] Crucible of Worlds
+SB:  1 [SH] Ensnaring Bridge
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [DK] Tormod's Crypt
+SB:  2 [] Karn, Scion of Urza
+SB:  4 [] Disruptor Flute

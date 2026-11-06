@@ -1,0 +1,40 @@
+// Deck file created with mtgtop8.com
+2 [ON] Flooded Strand
+1 [] Canoptek Scarab Swarm
+1 [] Cloak and Dagger, Entwined
+2 [] Disruptor Flute
+1 [EVE] Flickerwisp
+1 [A] Swamp
+1 [] Lich's Relic
+1 [] Lion Sash
+4 [WWK] Stoneforge Mystic
+1 [] Meteor Sword
+4 [] Solitude
+2 [] Skyclave Apparition
+2 [] Shadowy Backstreet
+2 [A] Scrubland
+4 [] Prismatic Vista
+4 [CN2] Recruiter of the Guard
+1 [] Pre-War Formalwear
+5 [A] Plains
+4 [] Phelia, Exuberant Shepherd
+4 [] Overlord of the Balemurk
+4 [ZEN] Marsh Flats
+4 [TE] Wasteland
+4 [LG] Karakas
+4 [DS] Aether Vial
+2 [] Witch Enchanter
+4 [A] Swords to Plowshares
+4 [LRW] Thoughtseize
+4 [] White Orchid Phantom
+2 [ON] Windswept Heath
+1 [TSP] Flagstones of Trokair
+SB:  2 [] Disruptor Flute
+SB:  1 [] Containment Priest
+SB:  1 [ZEN] Mindbreak Trap
+SB:  2 [US] Duress
+SB:  2 [] Erode
+SB:  1 [SHM] Faerie Macabre
+SB:  3 [] Wrath of the Skies
+SB:  1 [] Yorion, Sky Nomad
+SB:  2 [NPH] Surgical Extraction

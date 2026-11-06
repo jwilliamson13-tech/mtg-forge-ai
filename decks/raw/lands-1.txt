@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+1 [] Skateboard
+1 [SOK] Pithing Needle
+1 [ZEN] Expedition Map
+2 [] Disruptor Flute
+3 [RAV] Life from the Loam
+4 [] Malevolent Rumble
+4 [UL] Crop Rotation
+4 [US] Exploration
+4 [SH] Mox Diamond
+1 [] Icetill Explorer
+4 [] Carnivorous Cultivator
+1 [DK] Maze of Ith
+1 [TE] Ancient Tomb
+1 [LG] The Tabernacle at Pendrell Vale
+1 [DIS] Ghost Quarter
+1 [LG] Karakas
+1 [WWK] Bojuka Bog
+1 [] Otawara, Soaring City
+1 [] Blast Zone
+2 [A] Forest
+3 [CS] Dark Depths
+3 [] Yavimaya, Cradle of Growth
+3 [GTC] Thespian's Stage
+4 [TE] Wasteland
+4 [] Boseiju, Who Endures
+4 [] Urza's Saga
+SB:  2 [] Force of Vigor
+SB:  2 [] Damping Sphere
+SB:  1 [TE] Choke
+SB:  1 [MI] Cursed Totem
+SB:  3 [NPH] Dismember
+SB:  2 [] Endurance
+SB:  3 [NPH] Torpor Orb
+SB:  1 [] Disruptor Flute

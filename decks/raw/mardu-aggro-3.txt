@@ -1,0 +1,31 @@
+// Deck file created with mtgtop8.com
+1 [] Silent Clearing
+1 [A] Plains
+4 [] Orcish Bowmasters
+4 [] Voice of Victory
+4 [] Amped Raptor
+4 [] Ajani, Nacatl Pariah
+2 [A] Scrubland
+1 [] Shadowy Backstreet
+1 [A] Badlands
+1 [] Elegant Parlor
+4 [ZEN] Marsh Flats
+4 [LRW] Thoughtseize
+4 [A] Swords to Plowshares
+4 [] Guide of Souls
+2 [TE] Goblin Bombardment
+4 [TE] Wasteland
+4 [] Ocelot Pride
+3 [JU] Cabal Therapy
+2 [LG] Karakas
+2 [A] Plateau
+4 [ZEN] Arid Mesa
+SB:  2 [ZEN] Mindbreak Trap
+SB:  2 [ISD] Stony Silence
+SB:  1 [] Deafening Silence
+SB:  1 [A] Red Elemental Blast
+SB:  1 [IA] Pyroblast
+SB:  1 [] Prismatic Ending
+SB:  1 [] Clarion Conqueror
+SB:  4 [GP] Leyline of the Void
+SB:  2 [] Containment Priest

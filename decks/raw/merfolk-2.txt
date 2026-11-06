@@ -1,0 +1,30 @@
+// Deck file created with mtgtop8.com
+4 [] Floodpits Drowner
+4 [A] Lord of Atlantis
+4 [M13] Master of the Pearl Trident
+4 [LRW] Silvergill Adept
+3 [] Tide Shaper
+3 [C13] True-Name Nemesis
+3 [] Vodalian Hexcatcher
+2 [] Harbinger of the Seas
+1 [] Svyelun of Sea and Sky
+1 [SHM] Sygg, River Cutthroat
+4 [DS] Aether Vial
+4 [AL] Force of Will
+3 [NE] Daze
+1 [] Sink into Stupor
+10 [A] Island
+4 [AVR] Cavern of Souls
+4 [TE] Wasteland
+1 [] Otawara, Soaring City
+SB:  1 [] Vodalian Hexcatcher
+SB:  1 [] Harbinger of the Seas
+SB:  2 [] Consign to Memory
+SB:  2 [NPH] Dismember
+SB:  2 [] Disruptor Flute
+SB:  2 [] Mistcaller
+SB:  1 [A] Blue Elemental Blast
+SB:  1 [] Force of Negation
+SB:  1 [DKA] Grafdigger's Cage
+SB:  1 [IA] Hydroblast
+SB:  1 [ZEN] Spell Pierce

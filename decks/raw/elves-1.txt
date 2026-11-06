@@ -1,0 +1,34 @@
+// Deck file created with mtgtop8.com
+4 [] Badgermole Cub
+3 [] Formidable Speaker
+2 [ON] Windswept Heath
+1 [] Atraxa, Grand Unifier
+4 [SC] Wirewood Symbiote
+4 [US] Gaea's Cradle
+1 [AVR] Craterhoof Behemoth
+4 [MBS] Green Sun's Zenith
+3 [] Once Upon a Time
+3 [VI] Quirion Ranger
+2 [ON] Wooded Foothills
+1 [] Vibrance
+3 [] Allosaurus Shepherd
+2 [A] Llanowar Elves
+2 [A] Forest
+3 [ZEN] Misty Rainforest
+4 [VI] Natural Order
+2 [A] Bayou
+1 [FRF] Temur Sabertooth
+2 [] Boseiju, Who Endures
+2 [IA] Fyndhorn Elves
+2 [FUT] Dryad Arbor
+2 [M14] Elvish Mystic
+1 [] Collector Ouphe
+1 [] Alpha Deathclaw
+1 [] Endurance
+SB:  3 [] Force of Vigor
+SB:  3 [MM] Snuff Out
+SB:  2 [LRW] Thoughtseize
+SB:  2 [TE] Choke
+SB:  3 [GP] Leyline of the Void
+SB:  1 [CFX] Progenitus
+SB:  1 [US] Carpet of Flowers

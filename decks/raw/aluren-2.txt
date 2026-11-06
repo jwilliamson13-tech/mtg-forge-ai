@@ -1,0 +1,32 @@
+// Deck file created with mtgtop8.com
+4 [] Atraxa, Grand Unifier
+2 [A] Tropical Island
+2 [] Hedge Maze
+1 [] Boseiju, Who Endures
+4 [] Acererak the Archlich
+2 [] Veil of Summer
+1 [] Prismatic Vista
+1 [EX] City of Traitors
+2 [M13] Omniscience
+1 [ON] Flooded Strand
+4 [IA] Brainstorm
+4 [AL] Force of Will
+4 [LRW] Ponder
+4 [TE] Ancient Tomb
+1 [A] Forest
+2 [A] Island
+4 [ZEN] Misty Rainforest
+1 [ZEN] Scalding Tarn
+4 [TE] Aluren
+4 [US] Show and Tell
+4 [] Stock Up
+4 [TE] Lotus Petal
+SB:  1 [] Boseiju, Who Endures
+SB:  2 [] Veil of Summer
+SB:  2 [UL] Defense Grid
+SB:  3 [US] Carpet of Flowers
+SB:  1 [NPH] Dismember
+SB:  2 [] Consign to Memory
+SB:  2 [DKA] Grafdigger's Cage
+SB:  1 [] Force of Negation
+SB:  1 [] Disruptor Flute
