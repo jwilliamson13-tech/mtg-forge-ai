@@ -72,6 +72,12 @@ def test_a_clock_stop_is_a_draw_even_though_forge_prints_a_winner():
     assert game.draw_cause is DrawCause.CLOCK
 
 
+def test_the_turn_cap_line_makes_a_draw_a_draw_by_turn_cap():
+    capped, normal = parse("Stopping game at the turn cap as draw\n" + RULES_DRAW + WIN)
+    assert capped.draw_cause is DrawCause.TURN_CAP
+    assert normal.is_win
+
+
 def test_both_players_winning_without_the_clock_line_is_an_exception():
     [game] = parse(FORCED_END)
     assert game.draw_cause is DrawCause.EXCEPTION

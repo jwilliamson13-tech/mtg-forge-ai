@@ -125,6 +125,30 @@ def test_a_card_row_keeps_its_zone_and_live_state(night, out):
     assert (curse["attached_to"], curse["attached_to_seat"]) == (None, 2)
 
 
+def test_a_card_row_keeps_combat_and_damage(night, out):
+    convert_folder(night, out)
+
+    table = rows(out / "cards")
+    attacker = next(row for row in table if row["id"] == 13 and row["snapshot_index"] == 2 and row["zone"] == "battlefield")
+    blocker = next(row for row in table if row["id"] == 32 and row["snapshot_index"] == 2 and row["zone"] == "battlefield")
+    assert (attacker["attacking_seat"], attacker["attacking_card"], attacker["blocked_by"]) == (2, None, [32])
+    assert (blocker["blocking"], blocker["damage"]) == ([13], 1)
+
+
+def test_the_stack_table_has_one_row_per_item_with_its_position(night, out):
+    report = convert_folder(night, out)
+
+    table = sorted(read(out / "stack").to_pylist(), key=lambda row: (row["snapshot_index"], row["position"]))
+    assert report.stack_rows == 4
+    assert [(row["snapshot_index"], row["position"], row["kind"]) for row in table] == [
+        (2, 0, "ability"), (2, 1, "spell"), (3, 0, "ability"), (3, 1, "spell")]
+    assert table[0]["game_id"] == GAME_ID
+    assert table[0]["name"] == "Grim Lavamancer"
+    assert table[0]["targets"] == [{"card": None, "seat": 2}, {"card": 32, "seat": None}]
+    assert (table[1]["name"], table[1]["face"], table[1]["face_down"]) == (None, None, True)
+    assert (table[3]["name"], table[3]["controller"]) == ("Willbender", 2)
+
+
 def test_every_zone_reaches_the_card_table_under_its_own_name(night, out):
     convert_folder(night, out)
 
@@ -241,6 +265,7 @@ def test_the_command_prints_the_counts(night, out, capsys):
     assert "wrong_version.jsonl.gz" in printed
     assert "snapshot rows 4" in printed
     assert "card rows 29" in printed
+    assert "stack rows 4" in printed
 
 
 def test_the_command_succeeds_when_nothing_is_rejected(tmp_path, game_file, out, capsys):

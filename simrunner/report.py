@@ -55,6 +55,8 @@ def format_summary(batch: BatchResult) -> str:
         ("draws", str(batch.draw_count)),
     ]
     rows += [(f"  by {cause.value}", str(batch.draws(cause))) for cause in DrawCause]
+    if config.records:
+        rows.append(("game records written", f"{batch.records_written} of {batch.finished} games"))
     rows += [
         ("wall time", f"{batch.wall_s:.1f} s"),
         ("games per hour", f"{batch.games_per_hour:.0f}"),
@@ -90,6 +92,8 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("Forge did not name the sim modes asked for, so the jar may be stale")
     if not batch.applied_search_budget(worker):
         notes.append("Forge did not report on the search budget, so the jar may be stale")
+    if not batch.wrote_records(worker):
+        notes.append("a game with no game record, so the jar may be stale")
     if worker.fatal:
         notes.append(worker.fatal)
     return "; ".join(notes)

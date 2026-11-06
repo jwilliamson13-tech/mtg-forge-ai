@@ -28,6 +28,7 @@ AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget 
                             r"(\d+) land drops missed)?$")
 TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
+TURN_CAP_LINE = "Stopping game at the turn cap as draw"
 AI_TIMEOUT_LINE = "AI eval thread at timeout:"
 FATAL_LINES = ("Could not load deck", "Unknown AI profile", "Unknown simulation mode")
 
@@ -35,6 +36,7 @@ FATAL_LINES = ("Could not load deck", "Unknown AI profile", "Unknown simulation 
 class DrawCause(Enum):
     RULES = "rules"
     CLOCK = "clock"
+    TURN_CAP = "turn_cap"
     EXCEPTION = "exception"
 
 
@@ -73,11 +75,14 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
     results = []
     turn = None
     clock_stopped = False
+    turn_capped = False
     outcome_winners = 0
     limits = None
     for line in lines:
         if line == CLOCK_LINE:
             clock_stopped = True
+        elif line == TURN_CAP_LINE:
+            turn_capped = True
         elif match := AI_LIMITS_LINE.match(line):
             limits = AiLimits(*(None if group is None else int(group) for group in match.groups()))
         elif match := TURN_LINE.match(line):
@@ -94,11 +99,12 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
                 else:
                     results.append(GameResult(number, duration, turn, winner_seat=int(match[3]), ai_limits=limits))
             elif match := DRAW_LINE.match(line):
-                cause = DrawCause.CLOCK if clock_stopped else DrawCause.RULES
+                cause = DrawCause.CLOCK if clock_stopped else DrawCause.TURN_CAP if turn_capped else DrawCause.RULES
                 results.append(GameResult(int(match[1]), int(match[2]), turn, draw_cause=cause, ai_limits=limits))
             # A line that matches neither pattern was garbled, so that game counts as not finished.
             turn = None
             clock_stopped = False
+            turn_capped = False
             outcome_winners = 0
             limits = None
     return results

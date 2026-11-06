@@ -58,6 +58,8 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
+        records=args.records or args.records_dir is not None,
+        records_dir=Path(args.records_dir) if args.records_dir else None, turn_cap=args.turn_cap,
     )
     try:
         batch = run_batch(config)
@@ -98,6 +100,11 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--java", nargs="+", default=["java"], help="command that starts Java (default: java)")
     batch.add_argument("--keep-profiles", action="store_true",
                        help="keep the throwaway worker folders for debugging")
+    batch.add_argument("--records", action="store_true", help="have Forge write one game record per game")
+    batch.add_argument("--records-dir", help="folder for game records, which turns them on "
+                                             "(default: games in the run folder)")
+    batch.add_argument("--turn-cap", type=int, help="with records, the last turn a game may play before it "
+                                                    "stops as a draw (default: Forge's 50)")
 
 
 def build_parser() -> argparse.ArgumentParser:

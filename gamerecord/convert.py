@@ -1,4 +1,4 @@
-"""Turn a folder of game files into two Parquet tables, partitioned by batch.
+"""Turn a folder of game files into three Parquet tables, partitioned by batch.
 
 Only wins are kept: a draw has no label to train on. `docs/game-record.md` lists the
 columns. Rows go out one game at a time, because a night of games would not fit in
@@ -57,6 +57,23 @@ CARD_SCHEMA = pa.schema([
     ("attached_to_seat", pa.int8()),
     ("controller", pa.int8()),
     ("face_down", pa.bool_()),
+    ("damage", pa.int32()),
+    ("attacking_seat", pa.int8()),
+    ("attacking_card", pa.int32()),
+    ("blocking", pa.list_(pa.int32())),
+    ("blocked_by", pa.list_(pa.int32())),
+])
+STACK_SCHEMA = pa.schema([
+    ("game_id", pa.string()),
+    ("snapshot_index", pa.int32()),
+    ("position", pa.int32()),
+    ("id", pa.int32()),
+    ("name", pa.string()),
+    ("face", pa.string()),
+    ("face_down", pa.bool_()),
+    ("controller", pa.int8()),
+    ("kind", pa.string()),
+    ("targets", pa.list_(pa.struct([("card", pa.int32()), ("seat", pa.int8())]))),
 ])
 
 
@@ -67,6 +84,7 @@ class ConversionReport:
     rejected: list[tuple[Path, str]] = field(default_factory=list)  # file and why
     snapshot_rows: int = 0
     card_rows: int = 0
+    stack_rows: int = 0
 
 
 class _PartitionedTable:
@@ -125,19 +143,25 @@ def card_rows(game: GameRecord) -> list[dict]:
     return rows
 
 
+def stack_rows(game: GameRecord) -> list[dict]:
+    return [{**item, "game_id": game.game_id, "snapshot_index": index, "position": position}
+            for index, snapshot in enumerate(game.snapshots) for position, item in enumerate(snapshot["stack"])]
+
+
 def game_files(folder: Path) -> list[Path]:
     return sorted(folder.rglob(GAME_FILES))
 
 
 def convert_folder(folder: Path, out: Path) -> ConversionReport:
-    """Write `out/snapshots` and `out/cards` from every game file under `folder`.
+    """Write `out/snapshots`, `out/cards` and `out/stack` from every game file under `folder`.
 
     An exception game counts as dropped, by its end reason. Any other file the loader
     refuses is listed in `rejected`, and the rest of the folder still converts.
     """
     report = ConversionReport()
     with (_PartitionedTable(out / "snapshots", SNAPSHOT_SCHEMA) as snapshots,
-          _PartitionedTable(out / "cards", CARD_SCHEMA) as cards):
+          _PartitionedTable(out / "cards", CARD_SCHEMA) as cards,
+          _PartitionedTable(out / "stack", STACK_SCHEMA) as stack):
         for path in game_files(folder):
             try:
                 game = load_game(path)
@@ -153,11 +177,13 @@ def convert_folder(folder: Path, out: Path) -> ConversionReport:
                 continue
             report.kept[reason] += 1
             batch_id = game.metadata["batch_id"]
-            game_snapshots, game_cards = snapshot_rows(game), card_rows(game)
+            game_snapshots, game_cards, game_stack = snapshot_rows(game), card_rows(game), stack_rows(game)
             snapshots.write(batch_id, game_snapshots)
             cards.write(batch_id, game_cards)
+            stack.write(batch_id, game_stack)
             report.snapshot_rows += len(game_snapshots)
             report.card_rows += len(game_cards)
+            report.stack_rows += len(game_stack)
     return report
 
 
@@ -168,5 +194,5 @@ def format_report(report: ConversionReport) -> str:
     lines += [f"  {reason}: {count}" for reason, count in sorted(report.dropped.items())]
     lines.append(f"rejected {len(report.rejected)}")
     lines += [f"  {path}: {why}" for path, why in report.rejected]
-    lines += [f"snapshot rows {report.snapshot_rows}", f"card rows {report.card_rows}"]
+    lines += [f"snapshot rows {report.snapshot_rows}", f"card rows {report.card_rows}", f"stack rows {report.stack_rows}"]
     return "\n".join(lines) + "\n"

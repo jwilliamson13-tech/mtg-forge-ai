@@ -19,6 +19,7 @@ SCHEMA_VERSION = 1
 
 END_REASONS = ("win", "draw_clock", "draw_turn_cap", "draw_rules", "exception")
 SIM_MODES = ("heuristic", "hybrid", "full")
+STACK_KINDS = ("spell", "ability")
 # `CardStateName` in Forge, minus FaceDown, which `face_down` says instead.
 FACES = ("Original", "Flipped", "Backside", "Meld", "LeftSplit", "RightSplit", "Secondary", "PreparedSpell",
          "EmptyRoom", "SpecializeW", "SpecializeU", "SpecializeB", "SpecializeR", "SpecializeG")
@@ -167,6 +168,24 @@ CARD = Shape({
     "attached_to_seat": _nullable(SEAT_NUMBER),
     "controller": SEAT_NUMBER,
     "face_down": _boolean,
+    "damage": COUNT,
+    "attacking_seat": _nullable(SEAT_NUMBER),
+    "attacking_card": _nullable(_integer()),
+    "blocking": _list_of(_integer()),
+    "blocked_by": _list_of(_integer()),
+})
+TARGET = Shape({
+    "card": _nullable(_integer()),
+    "seat": _nullable(SEAT_NUMBER),
+})
+STACK_ITEM = Shape({
+    "id": _integer(),
+    "name": _nullable(_text),
+    "face": _nullable(_one_of(*FACES)),
+    "face_down": _boolean,
+    "controller": SEAT_NUMBER,
+    "kind": _one_of(*STACK_KINDS),
+    "targets": _list_of(TARGET),
 })
 ZONES = Shape({zone: _list_of(CARD) for zone in (
     "battlefield", "me_hand", "me_graveyard", "opp_graveyard", "me_exile", "opp_exile", "opp_revealed")})
@@ -174,6 +193,7 @@ SNAPSHOT = Shape({
     "side": SEAT_NUMBER,
     "scoreboard": SCOREBOARD,
     "zones": ZONES,
+    "stack": _list_of(STACK_ITEM),
 })
 
 
@@ -216,18 +236,40 @@ def _check_metadata(metadata: object) -> None:
     _check_tripwire(metadata["tripwire"], f"{where}.tripwire")
 
 
-def _check_card(card: dict, where: str, battlefield_ids: set[int]) -> None:
-    if (card["name"] is None) != (card["face"] is None):
+def _check_identity(item: dict, where: str) -> None:
+    """A card and a stack item hide their name the same way."""
+    if (item["name"] is None) != (item["face"] is None):
         raise GameRecordError(f"{where}.name: name and face are both there or both null")
-    if card["name"] is None and not card["face_down"]:
+    if item["name"] is None and not item["face_down"]:
         raise GameRecordError(f"{where}.face_down: only a face-down card can hide its name")
+
+
+def _check_on_battlefield(ids: Iterable[int | None], field: str, where: str, battlefield_ids: set[int]) -> None:
+    for card_id in ids:
+        if card_id is not None and card_id not in battlefield_ids:
+            raise GameRecordError(f"{where}.{field}: no card {card_id} on the battlefield")
+
+
+def _check_card(card: dict, where: str, battlefield_ids: set[int]) -> None:
+    _check_identity(card, where)
     if (card["power"] is None) != (card["toughness"] is None):
         raise GameRecordError(f"{where}.power: power and toughness are both there or both null")
     host = card["attached_to"]
     if host is not None and card["attached_to_seat"] is not None:
         raise GameRecordError(f"{where}.attached_to: a card can't attach to a card and a seat")
-    if host is not None and host not in battlefield_ids:
-        raise GameRecordError(f"{where}.attached_to: no card {host} on the battlefield")
+    _check_on_battlefield([host], "attached_to", where, battlefield_ids)
+    if card["attacking_seat"] is not None and card["attacking_card"] is not None:
+        raise GameRecordError(f"{where}.attacking_card: a card can't be attacking a seat and a card")
+    _check_on_battlefield([card["attacking_card"]], "attacking_card", where, battlefield_ids)
+    _check_on_battlefield(card["blocking"], "blocking", where, battlefield_ids)
+    _check_on_battlefield(card["blocked_by"], "blocked_by", where, battlefield_ids)
+
+
+def _check_stack_item(item: dict, where: str) -> None:
+    _check_identity(item, where)
+    for index, target in enumerate(item["targets"]):
+        if (target["card"] is None) == (target["seat"] is None):
+            raise GameRecordError(f"{where}.targets[{index}]: a target is a card or a seat")
 
 
 def _check_snapshot(snapshot: object, where: str, final_turn: int) -> None:
@@ -240,6 +282,8 @@ def _check_snapshot(snapshot: object, where: str, final_turn: int) -> None:
     for zone, cards in zones.items():
         for index, card in enumerate(cards):
             _check_card(card, f"{where}.zones.{zone}[{index}]", battlefield_ids)
+    for index, item in enumerate(snapshot["stack"]):
+        _check_stack_item(item, f"{where}.stack[{index}]")
 
 
 def _read(lines: Iterable[str]) -> GameRecord:
