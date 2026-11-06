@@ -97,7 +97,7 @@ def test_add_deck_with_a_bad_name_or_split_writes_nothing(tmp_path):
     assert not (tmp_path / "decks" / "forge" / "x-2.dck").exists()
 
 
-def test_the_sim_runner_takes_a_deck_id_or_a_path(tmp_path):
+def test_the_sim_runner_takes_a_deck_id_or_a_path(tmp_path, monkeypatch):
     src = tmp_path / "in.txt"
     src.write_text("4 Lightning Bolt\n", encoding="utf-8")
     add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
@@ -107,6 +107,8 @@ def test_the_sim_runner_takes_a_deck_id_or_a_path(tmp_path):
     assert _deck_path(str(src), manifest, parser) == src
     with pytest.raises(SystemExit):
         _deck_path("nope", manifest, parser)
+    monkeypatch.chdir(tmp_path / "decks")
+    assert _deck_path("x-1", "manifest.json", parser).samefile(tmp_path / "decks" / "forge" / "x-1.dck")
 
 
 def test_a_pull_becomes_a_manifest_that_holds_out_ten_whole_archetypes():
@@ -117,3 +119,5 @@ def test_a_pull_becomes_a_manifest_that_holds_out_ten_whole_archetypes():
     held = {d.archetype for d in manifest.decks if d.split == "held_out"}
     assert len(held) == 10 and held == set(mf.choose_held_out({f"A{n}" for n in range(14)}, 3))
     assert all(d.split == "held_out" for d in manifest.decks if d.archetype in held)
+    with pytest.raises(mf.ManifestError, match="a9-9"):
+        mf.build_from_pull(record, seed=3, left_out=["a9-9"])

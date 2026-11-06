@@ -116,6 +116,11 @@ def choose_held_out(archetypes, seed: int, count: int = HELD_OUT_ARCHETYPES) -> 
     return sorted(random.Random(seed).sample(ordered, count))
 
 
+def root_of(manifest_path: Path) -> Path:
+    """The folder a deck's `file` is relative to. Files start with `decks/`, so it's the one above the manifest's."""
+    return Path(manifest_path).resolve().parent.parent
+
+
 def deck_path(manifest: Manifest, deck_id: str, root: Path = DEFAULT_ROOT) -> Path:
     deck = manifest.get(deck_id)
     path = Path(root) / deck.file
@@ -130,6 +135,9 @@ def build_from_pull(record: dict, seed: int, left_out=()) -> Manifest:
     `left_out` names deck ids that can't play in Forge. They stay on disk but out of the manifest.
     """
     skipped = set(left_out)
+    unknown = sorted(skipped - {d["id"] for d in record["decks"]})
+    if unknown:
+        raise ManifestError(f"can't leave out unknown deck ids: {', '.join(unknown)}")
     decks = [d for d in record["decks"] if d["id"] not in skipped]
     held = {normalize(a) for a in choose_held_out({d["archetype"] for d in decks}, seed)}
     manifest = Manifest()

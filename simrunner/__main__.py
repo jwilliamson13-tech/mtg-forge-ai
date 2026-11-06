@@ -43,7 +43,7 @@ def _deck_path(arg: str, manifest_path: Path | None, parser: argparse.ArgumentPa
     if not path.is_file():
         parser.error(f"not a file: {arg} (and no deck manifest at {path} to look it up in)")
     try:
-        return mf.deck_path(mf.load(path), arg, path.parent.parent)
+        return mf.deck_path(mf.load(path), arg, mf.root_of(path))
     except mf.ManifestError as e:
         parser.error(f"not a file: {arg}, and {e}")
 
