@@ -84,12 +84,23 @@ def test_every_game_weighs_the_same_in_the_loss():
     logits = torch.zeros(4)
     labels = torch.tensor([1.0, 1.0, 1.0, 0.0])
     weights = torch.tensor([1 / 3, 1 / 3, 1 / 3, 1.0])  # a three-row game, then a one-row game
-    loss = weighted_loss(logits, labels, weights, weights.mean().item())
+    scale = weights.mean().item() * len(labels)
+    loss = weighted_loss(logits, labels, weights, scale)
     assert loss.item() == pytest.approx(torch.log(torch.tensor(2.0)).item())
     flipped = torch.tensor([1.0, 1.0, 1.0, 1.0])
-    one_game_right = weighted_loss(torch.tensor([5.0, 5.0, 5.0, 0.0]), flipped, weights, weights.mean().item())
-    other_game_right = weighted_loss(torch.tensor([0.0, 0.0, 0.0, 5.0]), flipped, weights, weights.mean().item())
+    one_game_right = weighted_loss(torch.tensor([5.0, 5.0, 5.0, 0.0]), flipped, weights, scale)
+    other_game_right = weighted_loss(torch.tensor([0.0, 0.0, 0.0, 5.0]), flipped, weights, scale)
     assert one_game_right.item() == pytest.approx(other_game_right.item())
+
+
+def test_the_loss_scale_does_not_depend_on_how_many_rows_a_batch_holds():
+    logits = torch.zeros(4, requires_grad=True)
+    labels, weights = torch.ones(4), torch.full((4,), 0.5)
+    weighted_loss(logits, labels, weights, 8.0).backward()
+    full_batch = logits.grad[0].item()
+    tail = torch.zeros(1, requires_grad=True)
+    weighted_loss(tail, labels[:1], weights[:1], 8.0).backward()
+    assert tail.grad[0].item() == pytest.approx(full_batch)
 
 
 def test_smoke_training_on_cpu_lowers_the_loss(tmp_path):

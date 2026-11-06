@@ -100,11 +100,12 @@ class StateModel(nn.Module):
         return torch.sigmoid(logit)
 
 
-def weighted_loss(logits: Tensor, labels: Tensor, weights: Tensor, mean_weight: float) -> Tensor:
-    """Weighted binary cross-entropy, on one fixed scale across batches.
+def weighted_loss(logits: Tensor, labels: Tensor, weights: Tensor, scale: float) -> Tensor:
+    """Weighted binary cross-entropy over a fixed `scale`, the corpus's mean weight times the batch size.
 
-    Dividing by the corpus's mean weight, not the batch's, keeps a game at weight 1 over
-    an epoch: a batch of rows from long games doesn't get scaled back up.
+    The scale is the same for every batch, so a row pulls as hard in a short last batch as
+    in a full one, and a batch of rows from long games doesn't get scaled back up. That
+    keeps a game at weight 1 over an epoch.
     """
     losses = nn.functional.binary_cross_entropy_with_logits(logits, labels, reduction="none")
-    return (losses * weights).sum() / (mean_weight * len(labels))
+    return (losses * weights).sum() / scale

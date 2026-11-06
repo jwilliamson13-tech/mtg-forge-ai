@@ -111,7 +111,7 @@ def train(corpus: Corpus, vocab: Vocabulary, config: TrainConfig) -> Trained:
     rows = corpus.rows(TRAIN)
     if not len(rows):
         raise ValueError("no training rows")
-    mean_weight = float(corpus.weights[rows].mean())
+    loss_scale = float(corpus.weights[rows].mean()) * config.batch_size
 
     model_config = ModelConfig(len(vocab.tokens), len(vocab.numeric_keys), config.width)
     model = SetModel(model_config, torch.as_tensor(key_scale)).to(device)
@@ -123,11 +123,11 @@ def train(corpus: Corpus, vocab: Vocabulary, config: TrainConfig) -> Trained:
         order = shuffler.permutation(rows)
         for start in range(0, len(order), config.batch_size):
             batch = _batch(corpus, order[start:start + config.batch_size], device)
-            loss = weighted_loss(_logits(model, batch), batch["labels"], batch["weights"], mean_weight)
+            loss = weighted_loss(_logits(model, batch), batch["labels"], batch["weights"], loss_scale)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            total += loss.item() * len(batch["labels"])
+            total += loss.item() * config.batch_size
         trained.epoch_losses.append(total / len(order))
     return trained
 
