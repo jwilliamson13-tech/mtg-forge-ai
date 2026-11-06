@@ -164,9 +164,9 @@ An `id` is opaque. It exists so that attachments, combat and targets can point a
 
 The hook (`RecordIds` in `forge.view`) takes the id from a SHA-256 hash of `<seed>:<game_number>:<side>:<n>`, where `n` counts the ids this side has handed out, and keeps the first four bytes less the sign bit. If that id is taken, it moves on to the next `n`. The seed is in the metadata, so the card's own number can't go into the hash, or anyone could try every number. All anyone can get from an id is the order this side first saw things in. It draws nothing from `MyRandom`, and the same seed gives the same ids, so a replay's ids match.
 
-`python -m gamerecord hiddencheck FOLDER` repeats both attacks on a folder of game files and exits 1 if either names a hidden card: an id with a name in another game, and an id the other side's rows put a name to. Both have to come to zero.
+`python -m gamerecord hiddencheck FOLDER` repeats both attacks on a folder of game files and exits 1 if either names a hidden card: an id with a name in another game, and an id the other side's rows put a name to. Both have to come to zero. On the 100 games of Abhorrent Oculus vs Bloodtithe Harvester, seed 35, Forge's ids named 121 of 121 both ways, and record ids name 0 of 121 both ways. The games are the same, with the same result digest.
 
-Ids can't protect one thing. A file holds both sides, so the other side's row of the same moment shows a face-down card under its real name, and it can often be picked out by public state, such as being the only face-down card that player has. `hiddencheck` prints that count too, and it won't reach zero. A training row has to come from one side and never be joined to the other side's rows.
+Ids can't protect one thing. A file holds both sides, so the other side's row of the same moment shows a face-down card under its real name, and it can often be picked out by public state, such as being the only face-down card that player has. `hiddencheck` prints that count too, and it won't reach zero: on that batch it matches 106 of 121, the same with Forge's ids or record ids. The `id` order of `battlefield` stops position from doing the same job exactly, but a position can still hit the right card by chance. A training row has to come from one side and never be joined to the other side's rows.
 
 ### Card
 

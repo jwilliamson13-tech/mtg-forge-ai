@@ -435,7 +435,7 @@ Who asked is settled when the zone hands the cards over, from the first stack fr
 
 The Fog hand read can't happen in a real game, going by its call sites, so the ticket's Fog test calls `ComputerUtil.hasAFogEffect(opp, ai, false)` directly. The proof that resolve-time decisions are covered is in two other tests, which open no decision themselves. They put Conjurer's Ban and Whirlpool Whelm on the real stack and resolve it. `PlayerControllerAi.chooseCardName` hits on the first, and `ClashAi.chooseSinglePlayer:75` on the second, with the library size read at L67 in the same method staying silent. With plain controllers the same resolve hits as `no decider: `.
 
-Each game prints `Tripwire: N hits` and one `Tripwire hit: N SIGNATURE` line per signature before its result lines. The hits go to stdout as well as the record for two reasons. A game that threw gets no file, and the record has no count per signature.
+Each game prints `Tripwire: N hits` and one `Tripwire hit: N SIGNATURE` line per signature before its result lines. The hits go to stdout as well as the record for three reasons. A game that threw gets no file, a run without `-record` has no file at all, and the record has no count per signature.
 
 Checked on 2026-11-05 with 2 workers, on a jar built from the fork's `t20-tripwire`. The digests are the ones under "Game records", with the same decks and seeds.
 

@@ -100,6 +100,16 @@ That zero covers the real game only. The search still plays on copies that hold 
 
 **The digests didn't move.** I expected them to differ, and they didn't. Every pair I compared has the same digest with `-honest` on and off, random draws included, while about 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`, with honest play on and with it off.
 
+Those are result digests, which only hash how each game ended. The record digest hashes every snapshot, and it agrees too, on the three batches run with it. So honest play changed no card in these games:
+
+| Batch | Games | Record digest, honest on | Honest off |
+|---|---|---|---|
+| Burn vs Merfolk, seed 31 | 200 | `9cabcac7dec4` | `9cabcac7dec4` |
+| Abhorrent Oculus deck vs Bloodtithe Harvester, seed 35 | 100 | `205a3c56b412` | `205a3c56b412` |
+| Burn full, Merfolk heuristic, seed 2, `--clock 300` | 6 | `82f5db378cf0` | `82f5db378cf0` |
+
+The other pairs have result digests only.
+
 My reading, which I didn't check site by site: 96.5% of the hits on Burn vs Merfolk, 55,784 of 57,786 with `--no-honest`, are `getAvailableCards` picking up a library top the AI can't play anyway, so most of what the tripwire caught was a read that changed no choice. The cases where honest play does change a choice are in `PeekFixesTest`, and they need cards these decks barely hold. None of the decks here has Chalice of the Void, Conjurer's Ban, Cabal Therapy, Fog, Volrath's Shapeshifter or Cemetery Gatekeeper. One has Pithing Needle, one Meddling Mage and one Simian Spirit Guide. A digest also can't see a different name on a card that changed nothing later. So these batches say nothing about how well the AI plays those sites now. They show the fixes are harmless on these decks. They don't show that Fog, Chalice or Clash play well, because no game here reached them.
 
 Flag off, nothing moved. Digests match the ones in `docs/forge-build.md`:
@@ -111,6 +121,8 @@ Flag off, nothing moved. Digests match the ones in `docs/forge-build.md`:
 | Same, records on, tripwire off, `--no-honest` | `6f2c4c7c1863` | `6f2c4c7c1863` |
 | Same, records on, tripwire on, `--no-honest` | `6f2c4c7c1863` | `6f2c4c7c1863`, with hits in all 20 games |
 | Burn full, 6 games, seed 2, `--no-honest` | `6d38e6c38b07` | `6d38e6c38b07`, with hits in all 6 games |
+
+Run again on the jar with the review's fixes, where the tripwire no longer needs records, all five still match. So do the first two with the tripwire on and with `--no-tripwire`, without records. The two record runs of the third row share a record digest, `d60a45654629`, under different batch ids.
 
 Those hits show the sites still peek with the flag off, so nothing here hid a read from the tripwire. Honest play gives the same digest with the tripwire on and off, `6f2c4c7c1863`.
 
