@@ -1,5 +1,6 @@
 """Batches run against `tests/stub_java.py`, so nothing here needs Java or a built Forge."""
 
+import gzip
 import hashlib
 import json
 import os
@@ -20,7 +21,7 @@ from simrunner.output import AiLimits, DrawCause, GameResult
 from simrunner.report import format_report, format_summary, format_workers
 from simrunner.seeds import derive_seed
 from simrunner.window import Window
-from simrunner.worker import DEFAULT_SEARCH_BUDGET, Seat, WorkerPlan, WorkerResult, sim_args
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, RecordPlan, Seat, WorkerPlan, WorkerResult, sim_args
 
 STUB = Path(__file__).parent / "stub_java.py"
 REPO = Path(__file__).parents[1]
@@ -64,8 +65,10 @@ def records(tmp_path, monkeypatch):
 
 @pytest.fixture
 def config(forge, decks, tmp_path):
-    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None), **overrides):
+    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None),
+              records=False, records_dir=None, turn_cap=None, honest=True, **overrides):
         settings = dict(
+            records=RecordPlan(records_dir, turn_cap, honest) if records else None,
             seats=(Seat(decks[0], profiles[0], modes[0]), Seat(decks[1], profiles[1], modes[1])),
             games=games, batch_seed=seed, workers=workers, forge_root=forge,
             run_dir=tmp_path / "run", clock_s=60, java=(sys.executable, str(STUB)),
@@ -568,7 +571,7 @@ def finished_batch():
     """A hand-built result, so the timing rows of the report can be pinned exactly."""
     config = BatchConfig(
         seats=(Seat(Path("burn.dck"), "Default"), Seat(Path("merfolk.dck"))),
-        games=6, batch_seed=42, workers=2, forge_root=Path("forge"), run_dir=Path("run"), clock_s=600,
+        games=6, batch_seed=42, workers=2, forge_root=Path("forge"), run_dir=Path("run"), clock_s=600, tripwire=False,
     )
     good = WorkerResult(WorkerPlan(0, 111, 3), exit_code=0, profile_used=True, ready_s=20.0, last_result_s=30.0, games=[
         GameResult(1, 3000, 7, winner_seat=1),
@@ -600,6 +603,7 @@ def test_the_report_table():
         "  by clock                        1\n"
         "  by turn_cap                     0\n"
         "  by exception                    0\n"
+        "tripwire                          off\n"
         "wall time                         60.0 s\n"
         "games per hour                    300\n"
         "usable games per hour             180\n"
@@ -857,7 +861,40 @@ def test_each_game_leaves_a_file_and_the_report_counts_them(config, records, tmp
 
 
 def test_the_report_says_nothing_about_records_when_they_are_off(config, records):
-    assert "game records" not in format_summary(run_batch(config()))
+    summary = format_summary(run_batch(config()))
+    assert "game records" not in summary
+    assert "record digest" not in summary
+
+
+def test_the_record_digest_replays_under_another_batch_id(config, records, tmp_path):
+    first = run_batch(config(records=True, run_dir=tmp_path / "one"))
+    second = run_batch(config(records=True, run_dir=tmp_path / "two"))
+    assert first.record_digest == second.record_digest
+    assert f"record digest                     {first.record_digest}" in format_summary(first)
+
+
+def test_the_record_digest_sees_what_the_result_digest_cant(config, records, tmp_path):
+    first = run_batch(config(records=True, run_dir=tmp_path / "one"))
+    second = run_batch(config(records=True, run_dir=tmp_path / "two"))
+    path = second.workers[0].record_files[0]
+    lines = gzip.decompress(path.read_bytes()).decode("utf-8").splitlines()
+    path.write_bytes(gzip.compress("\n".join(lines[:-1]).encode("utf-8")))
+    assert first.digest == second.digest
+    assert first.record_digest != second.record_digest
+
+
+def test_an_unreadable_game_file_changes_the_record_digest_and_breaks_nothing(config, records, tmp_path):
+    batch = run_batch(config(records=True))
+    before = batch.record_digest
+    batch.workers[0].record_files[0].write_bytes(b"cut off")
+    assert batch.record_digest != before
+
+
+def test_a_batch_with_no_files_has_no_record_digest(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_game_files")
+    batch = run_batch(config(games=2, records=True))
+    assert batch.record_digest is None
+    assert "record digest                     no files" in format_summary(batch)
 
 
 def test_records_can_go_to_another_folder(config, records, tmp_path):
@@ -915,6 +952,71 @@ def test_an_exception_game_needs_no_file(config, records, monkeypatch):
     assert run_batch(config(games=2, records=True)).clean
 
 
+def test_files_that_agree_with_the_results_are_counted(config, records):
+    batch = run_batch(config(games=5, workers=2, records=True))
+    assert batch.record_mismatches == []
+    assert "5 match, 0 no file by design, 0 mismatches\n" in format_summary(batch)
+
+
+@pytest.mark.parametrize("scenario", ["clock", "exception"])
+def test_a_game_with_no_file_by_design_is_counted_and_is_no_mismatch(config, records, monkeypatch, scenario):
+    monkeypatch.setenv("STUB_SCENARIO", scenario)
+    batch = run_batch(config(games=2, records=True))
+    assert batch.clean
+    assert "0 match, 2 no file by design, 0 mismatches" in format_summary(batch)
+
+
+@pytest.mark.parametrize("scenario, says", [("file_names_other_winner", "printed winner"), ("file_says_clock", "the file says draw_clock"),
+                                            ("exception_with_file", "but it has a file"), ("no_game_files", "but it has no file")])
+def test_a_file_that_disagrees_with_the_result_fails_the_batch(config, records, monkeypatch, scenario, says):
+    monkeypatch.setenv("STUB_SCENARIO", scenario)
+    batch = run_batch(config(games=2, workers=1, records=True))
+    assert batch.complete
+    assert not batch.clean
+    assert len(batch.record_mismatches) == 2
+    assert says in format_report(batch)
+
+
+def test_the_worker_table_says_when_files_disagree(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "file_names_other_winner")
+    batch = run_batch(config(games=2, workers=1, records=True))
+    assert "game records that disagree with the results" in format_workers(batch)
+
+
+def test_a_file_with_no_result_line_is_a_mismatch(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "extra_file")
+    batch = run_batch(config(games=2, workers=1, records=True))
+    assert not batch.clean
+    assert batch.record_mismatches == ["worker 0, game 3: a file with no result line"]
+
+
+def test_a_game_the_hard_stop_cut_off_may_leave_a_file_with_no_result(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "extra_file")
+    batch = run_batch(config(games=2, workers=1, records=True))
+    batch.workers[0].stopped = True
+    assert batch.record_mismatches == []
+
+
+def test_an_unreadable_file_is_a_mismatch(config, records):
+    batch = run_batch(config(games=2, workers=1, records=True))
+    worker = batch.workers[0]
+    worker.records[0] = replace(worker.records[0], metadata=None)
+    assert any("can't be read" in problem for problem in batch.record_mismatches)
+    assert not batch.clean
+
+
+def test_only_a_batch_with_records_is_checked_against_them(config):
+    batch = run_batch(config())
+    assert batch.clean
+    assert "records against results" not in format_summary(batch)
+
+
+def test_a_long_list_of_mismatches_is_cut_short(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_game_files")
+    report = format_report(run_batch(config(games=25, workers=1, records=True)))
+    assert "and 5 more\n" in report
+
+
 def test_a_batch_id_the_schema_refuses_stops_before_launch(config, records, tmp_path):
     with pytest.raises(SetupError, match="batch id"):
         run_batch(config(records=True, run_dir=tmp_path / "night.1"))
@@ -925,9 +1027,13 @@ def test_a_folder_name_that_is_no_batch_id_is_fine_without_records(config, recor
     run_batch(config(run_dir=tmp_path / "night.1"))
 
 
-def test_a_turn_cap_needs_records(config, records):
-    with pytest.raises(SetupError, match="turn cap"):
-        run_batch(config(turn_cap=30))
+@pytest.mark.parametrize("flags", [["--turn-cap", "30"], ["--no-honest"]])
+def test_what_only_goes_with_records_is_refused_without_them(forge, decks, records, tmp_path, capsys, flags):
+    with pytest.raises(SystemExit):
+        main(["batch", str(decks[0]), str(decks[1]), "--games", "1", "--seed", "7", "--workers", "1", "--forge", str(forge),
+              "--run-dir", str(tmp_path / "cli"), "--java", sys.executable, str(STUB), *flags])
+    assert "need records" in capsys.readouterr().err
+    assert records() == {}
 
 
 def test_a_turn_cap_must_be_above_zero(config, records):
@@ -968,14 +1074,53 @@ def test_no_tripwire_passes_off_through_to_forge(config, records):
     assert "tripwire                          off\n" in format_summary(batch)
 
 
-def test_turning_off_a_tripwire_that_never_ran_is_refused(config):
-    with pytest.raises(SetupError, match="tripwire"):
-        run_batch(config(tripwire=False))
+def test_the_tripwire_runs_without_records(config, records):
+    batch = run_batch(config(games=2))
+    assert all("-tripwire" not in run["argv"] for run in records().values())
+    assert batch.tripwire_clean
+    assert batch.clean
+    assert "tripwire clean                    yes\n" in format_summary(batch)
+
+
+def test_the_tripwire_can_be_turned_off_without_records(config, records):
+    batch = run_batch(config(games=2, tripwire=False))
+    assert all(run["argv"][run["argv"].index("-tripwire") + 1] == "off" for run in records().values())
+    assert batch.clean
+    assert "tripwire                          off\n" in format_summary(batch)
+
+
+def test_a_jar_with_no_tripwire_fails_a_batch_without_records_too(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_tripwire_jar")
+    assert not run_batch(config(games=2)).clean
 
 
 def test_records_turn_honest_play_on(config, records):
     run_batch(config(records=True))
     assert all(run["argv"][run["argv"].index("-honest") + 1] == "on" for run in records().values())
+
+
+def test_a_batch_that_asked_for_honest_play_and_got_it_is_clean(config, records):
+    assert run_batch(config(games=2, records=True)).clean
+
+
+def test_a_jar_that_ignores_honest_fails_the_batch(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_honest_jar")
+    batch = run_batch(config(games=2, records=True))
+    assert batch.complete
+    assert not batch.clean
+    assert "doesn't show honest play" in format_workers(batch)
+
+
+def test_a_batch_that_asked_for_no_honest_play_doesnt_need_it(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_honest_jar")
+    assert run_batch(config(games=2, records=True, honest=False)).clean
+
+
+def test_an_unreadable_game_file_shows_no_honest_play(config, records):
+    batch = run_batch(config(games=2, workers=1, records=True))
+    worker = batch.workers[0]
+    worker.records[0] = replace(worker.records[0], metadata=None)
+    assert "a game record that doesn't show honest play" in batch.ignored_flags(worker)
 
 
 def test_no_honest_leaves_the_flag_out_so_forge_keeps_its_default(config, records):
@@ -987,9 +1132,23 @@ def test_a_batch_without_records_says_nothing_about_honest_play(config, tmp_path
     assert "-honest" not in sim_args(config().seats, tmp_path, 1, 1, 60)
 
 
-def test_turning_off_honest_play_that_never_ran_is_refused(config):
-    with pytest.raises(SetupError, match="honest"):
-        run_batch(config(honest=False))
+def test_with_no_seat_searching_a_clean_tripwire_just_says_yes(config):
+    batch = run_batch(config(games=2, records=True))
+    assert not batch.search_unchecked
+    assert "tripwire clean                    yes\n" in format_summary(batch)
+
+
+def test_a_searching_seat_is_clean_for_the_real_game_only(config):
+    batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
+    assert batch.tripwire_clean
+    assert batch.search_unchecked
+    assert "tripwire clean                    the real game is clean, search copies unchecked until #25\n" in format_summary(batch)
+
+
+def test_a_searching_seat_with_hits_still_says_what_was_unchecked(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "tripwire_hits")
+    batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
+    assert "no, 2 of 2 games had hits, search copies unchecked until #25\n" in format_summary(batch)
 
 
 def test_the_report_gives_max_and_mean_hits_per_game(config, monkeypatch):
@@ -1017,7 +1176,7 @@ def test_a_long_signature_list_is_cut_and_says_so():
     games = [GameResult(1, 3000, 7, winner_seat=1, tripwire_hits=25,
                         tripwire_signatures=tuple((f"forge.ai.Site.m:{line}", 1) for line in range(25)))]
     config = BatchConfig(seats=(Seat(Path("a.dck")), Seat(Path("b.dck"))), games=1, batch_seed=1, workers=1,
-                         forge_root=Path("forge"), run_dir=Path("run"), records=True)
+                         forge_root=Path("forge"), run_dir=Path("run"), records=RecordPlan())
     report = format_report(BatchResult(config, [WorkerResult(WorkerPlan(0, 1, 1), games=games)], wall_s=1.0))
     assert "and 5 more\n" in report
 
@@ -1041,13 +1200,13 @@ def test_a_jar_without_the_tripwire_is_not_a_clean_zero(config, monkeypatch):
 
 def test_one_silent_game_keeps_a_batch_from_being_tripwire_clean():
     config = BatchConfig(seats=(Seat(Path("a.dck")), Seat(Path("b.dck"))), games=2, batch_seed=1, workers=1,
-                         forge_root=Path("forge"), run_dir=Path("run"), records=True)
+                         forge_root=Path("forge"), run_dir=Path("run"), records=RecordPlan())
     games = [GameResult(1, 3000, 7, winner_seat=1, tripwire_hits=0), GameResult(2, 3000, 7, winner_seat=1)]
     batch = BatchResult(config, [WorkerResult(WorkerPlan(0, 1, 2), games=games)], wall_s=1.0)
     assert not batch.tripwire_clean
     assert "1 reported nothing" in format_summary(batch)
 
 
-def test_without_records_the_tripwire_stays_out_of_the_report(config):
-    summary = format_summary(run_batch(config(games=2)))
-    assert "tripwire" not in summary
+def test_a_jar_with_no_tripwire_says_so_in_the_report(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_tripwire_jar")
+    assert "no game reported, so the jar may be stale" in format_summary(run_batch(config(games=2)))

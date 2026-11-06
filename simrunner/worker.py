@@ -54,13 +54,19 @@ class Seat:
 
 @dataclass(frozen=True)
 class RecordPlan:
-    """Where a worker's Forge writes game records. A cap of None takes Forge's default."""
+    """What a batch asks of game records. A folder of None keeps them in the run folder, and a cap of None takes Forge's default."""
 
-    folder: Path
-    batch_id: str
+    folder: Path | None = None
     turn_cap: int | None = None
-    tripwire: bool = True
-    honest: bool = True
+    honest: bool = True  # keep the AI to what a person in its seat could know
+
+
+@dataclass(frozen=True)
+class GameFile:
+    """A game file and its metadata line. A file that can't be read has None."""
+
+    path: Path
+    metadata: dict | None
 
 
 @dataclass(frozen=True)
@@ -85,7 +91,11 @@ class WorkerResult:
     stderr_traces: int = 0
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
-    records_written: int = 0  # game files with this worker's seed
+    records: list[GameFile] = field(default_factory=list)  # game files with this worker's seed
+
+    @property
+    def record_files(self) -> list[Path]:
+        return [record.path for record in self.records]
 
 
 def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
@@ -96,17 +106,21 @@ def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
     return tuple(seat.sim_mode or DEFAULT_SIM_MODE for seat in seats)
 
 
+def any_seat_searches(seats: tuple[Seat, Seat]) -> bool:
+    return any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
+
+
 def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> int:
     """The `-budget` for a batch: what was asked for, else the default if any seat searches. 0 leaves it off."""
     if requested is not None:
         return requested
-    searches = any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
-    return DEFAULT_SEARCH_BUDGET if searches else 0
+    return DEFAULT_SEARCH_BUDGET if any_seat_searches(seats) else 0
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
-             search_budget: int = 0, records: RecordPlan | None = None) -> list[str]:
-    """Return the `forge sim` arguments for one worker."""
+             search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
+             tripwire: bool = True) -> list[str]:
+    """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
     if any(seat.ai_profile for seat in seats):
@@ -116,12 +130,12 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-sim", *modes]
     if search_budget:
         args += ["-budget", str(search_budget)]
+    if not tripwire:
+        args += ["-tripwire", "off"]
     if records:
-        args += ["-record", str(records.folder), "-batch", records.batch_id]
+        args += ["-record", str(records.folder), "-batch", batch_id]
         if records.turn_cap is not None:
             args += ["-turncap", str(records.turn_cap)]
-        if not records.tripwire:
-            args += ["-tripwire", "off"]
         if records.honest:
             args += ["-honest", "on"]
     return args

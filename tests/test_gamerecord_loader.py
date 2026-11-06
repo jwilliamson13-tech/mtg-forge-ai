@@ -8,7 +8,7 @@ import gzip
 
 import pytest
 
-from gamerecord import ExceptionGameError, GameRecordError, load_game
+from gamerecord import ExceptionGameError, GameRecordError, game_digest, load_game, read_metadata
 
 
 def test_a_win_loads_with_its_metadata_and_every_snapshot(game_file):
@@ -54,7 +54,7 @@ def test_a_file_missing_a_required_field_is_rejected(game_file):
 
 
 METADATA_FIELDS = ["schema_version", "batch_id", "seed", "game_number", "seats", "winner", "final_turn",
-                   "end_reason", "tripwire"]
+                   "end_reason", "honest_play", "tripwire"]
 SEAT_FIELDS = ["seat", "deck", "ai_profile", "sim_mode", "search_budget"]
 TRIPWIRE_FIELDS = ["enabled", "hits", "signatures"]
 SNAPSHOT_FIELDS = ["side", "scoreboard", "zones", "stack"]
@@ -445,3 +445,75 @@ def test_a_bad_snapshot_line_is_reported_by_line_and_field(game_lines, write_gam
 def test_a_missing_file_is_a_game_record_error(tmp_path):
     with pytest.raises(GameRecordError):
         load_game(tmp_path / "gone.jsonl.gz")
+
+
+def test_the_game_digest_leaves_out_what_differs_between_two_runs_of_a_game(game_lines, write_game):
+    lines = game_lines("win")
+    number, digest = game_digest(write_game(lines))
+    assert number == lines[0]["game_number"]
+    lines[0]["batch_id"] = "another-night"
+    lines[0]["tripwire"] = {"enabled": False, "hits": 0, "signatures": []}
+    assert game_digest(write_game(lines)) == (number, digest)
+
+
+@pytest.mark.parametrize("change", [lambda lines: lines[0].update(final_turn=99), lambda lines: card(lines).update(damage=9),
+                                    lambda lines: lines.pop()], ids=["metadata", "card", "missing line"])
+def test_the_game_digest_sees_any_change_to_the_game(game_lines, write_game, change):
+    lines = game_lines("win")
+    before = game_digest(write_game(lines))
+    change(lines)
+    assert game_digest(write_game(lines)) != before
+
+
+@pytest.mark.parametrize("content", [b"", gzip.compress(b""), gzip.compress(b"[]\n"), b"not gzip"],
+                         ids=["empty", "no lines", "no metadata", "not gzip"])
+def test_a_file_that_cant_be_hashed_is_a_game_record_error(tmp_path, content):
+    path = tmp_path / "bad.jsonl.gz"
+    path.write_bytes(content)
+    with pytest.raises(GameRecordError):
+        game_digest(path)
+
+
+def test_the_loader_says_whether_the_game_was_played_honestly(game_lines, write_game):
+    lines = game_lines("win")
+    assert load_game(write_game(lines)).honest_play
+    lines[0]["honest_play"] = False
+    assert not load_game(write_game(lines)).honest_play
+
+
+def test_honest_play_doesnt_change_the_game_digest(game_lines, write_game):
+    lines = game_lines("win")
+    before = game_digest(write_game(lines))
+    lines[0]["honest_play"] = False
+    assert game_digest(write_game(lines)) == before
+
+
+def test_read_metadata_takes_only_the_first_line(game_file):
+    assert read_metadata(game_file("win"))["end_reason"] == "win"
+
+
+@pytest.mark.parametrize("content", [b"", gzip.compress(b""), gzip.compress(b"[]\n"), b"not gzip"],
+                         ids=["empty", "no lines", "no metadata", "not gzip"])
+def test_a_file_with_no_metadata_to_read_is_a_game_record_error(tmp_path, content):
+    path = tmp_path / "bad.jsonl.gz"
+    path.write_bytes(content)
+    with pytest.raises(GameRecordError):
+        read_metadata(path)
+
+
+def logged_card(lines):
+    return next(line for line in lines[1:] if line["zones"]["opp_revealed"])["zones"]["opp_revealed"][0]
+
+
+def test_a_logged_card_with_an_id_is_rejected(game_lines, write_game):
+    lines = game_lines("win")
+    logged_card(lines)["id"] = 38
+    with pytest.raises(GameRecordError, match="opp_revealed.*id"):
+        load_game(write_game(lines))
+
+
+def test_a_card_elsewhere_needs_its_id(game_lines, write_game):
+    lines = game_lines("win")
+    card(lines)["id"] = None
+    with pytest.raises(GameRecordError, match="id"):
+        load_game(write_game(lines))

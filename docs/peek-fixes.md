@@ -6,7 +6,7 @@ Issue #21. The tripwire in `docs/forge-build.md` finds forge-ai reading hidden c
 
 `-honest on|off` on `forge sim` sets `Game.AI_HONEST_PLAY`. Forge's default is off, so a plain `forge sim` and every other game keep the stock AI and its peeks. `FlatMonteCarloNamedDiscardTest:90-109` pins one of those peeks, and it still passes.
 
-`simrunner` passes `-honest on` whenever records are on, because records are training data. `--no-honest` leaves the flag out. Forge skips flags it doesn't know, so a stale jar would ignore `-honest`. With the tripwire on, that shows up as hits.
+`simrunner` passes `-honest on` whenever records are on, because records are training data. `--no-honest` leaves the flag out. Forge skips flags it doesn't know, so a stale jar would ignore `-honest`. Each game record says `honest_play`, and the runner fails a batch that asked for honest play and has a file that doesn't show it.
 
 `-honest` works without `-record`. There is no reveal log then, so the AI goes by public cards alone. It can't go with `-t`. `GameCopier` copies the flag, so the AI thinks the same way on a copy. A copy has no reveal log, so what the AI was shown is missing from a search.
 
@@ -17,6 +17,7 @@ Issue #21. The tripwire in `docs/forge-build.md` finds forge-ai reading hidden c
 - `knownCards(viewer, owner)` is the owner's public cards plus what is on the viewer's notepad, `Game.REVEAL_LOG.knownTo(viewer)`. Face-down cards the viewer can't turn over and tokens are left out.
 - `rememberedIn(viewer, owner, zone)` is the notepad's cards last seen in that zone. `RevealLog.Entry.seenIn` holds that zone, and a card shown again updates it. The log can't say where a card is now, so nothing here asks.
 - `handAsKnown(owner)` is for code that takes a player and can't say who is asking. It goes by `Game.AI_DECIDERS`: the real hand for the player deciding, and the remembered hand for anyone else. With no decision open it hands over the real hand, and the tripwire counts that as `no decider`, so a gap stays visible.
+- `opponentCards(viewer)` is what a question about all the opponents' cards goes by: `knownOpponentCards` under honest play, every card they control otherwise.
 - `seenIn`, `seenInAnySeat` and `seenInOpponents` read a zone named by a card script. A public zone comes back whole. An opponent's hidden zone comes back as what was last seen there.
 
 The stack of deciders moved from `HiddenReadWatch` to `Game.AI_DECIDERS`, because honest play needs it with the tripwire off. `-tripwire off -honest on` plays the same games as both on.
@@ -39,7 +40,7 @@ Line numbers are from the commit before each fix.
 
 | Site | Read | Reads now | What the AI does now |
 |---|---|---|---|
-| `ComputerUtilAbility.getAvailableCards:78` | Every player's library top, on every spell choice. 99% of all hits | Own top card. An opponent's card only if it is on the notepad and the AI may play it | The same, except without a log it can't play an opponent's top card under an effect like that |
+| `ComputerUtilAbility.getAvailableCards:78` | Every player's library top, on every spell choice. 96.5% of all hits on Burn vs Merfolk | Own top card. An opponent's card only if it is on the notepad and the AI may play it | The same, except without a log it can't play an opponent's top card under an effect like that |
 | `ComputerUtilMana.getAvailableManaSources:1647` | The payer's hand, for mana from cards like Simian Spirit Guide | `handAsKnown` | Doesn't expect mana from an unseen Spirit Guide, so a `Mana Leak` can come up short. A person makes the same mistake |
 | `ComputerUtilMana.sortManaAbilities:163`, `sparingSourcesFirst:981`, the color choice at L1184 | The payer's hand, for the colors it holds | `handAsKnown` | Only changes a test of an opponent's payment |
 | `ComputerUtil.getBestNearTermDiscardThreat:2455` | The discarder's hand, for a land drop | `handAsKnown` plus the cards the rules handed the chooser | `DiscardEffect` shows the whole hand first in its Reveal and Look modes, and the log has it. `PeekFixesTest.duressRevealsTheHandSoTheThreatCheckNeedsNoPeek` checks that on a real Duress |
@@ -99,7 +100,17 @@ That zero covers the real game only. The search still plays on copies that hold 
 
 **The digests didn't move.** I expected them to differ, and they didn't. Every pair I compared has the same digest with `-honest` on and off, random draws included, while about 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`, with honest play on and with it off.
 
-My reading, which I didn't check site by site: 99% of the hits are `getAvailableCards` picking up a library top the AI can't play anyway, so most of what the tripwire caught was a read that changed no choice. The cases where honest play does change a choice are in `PeekFixesTest`, and they need cards these decks barely hold. None of the decks here has Chalice of the Void, Conjurer's Ban, Cabal Therapy, Fog, Volrath's Shapeshifter or Cemetery Gatekeeper. One has Pithing Needle, one Meddling Mage and one Simian Spirit Guide. A digest also can't see a different name on a card that changed nothing later. So these batches say nothing about how well the AI plays those sites now.
+Those are result digests, which only hash how each game ended. The record digest hashes every snapshot, and it agrees too, on the three batches run with it. So honest play changed no card in these games:
+
+| Batch | Games | Record digest, honest on | Honest off |
+|---|---|---|---|
+| Burn vs Merfolk, seed 31 | 200 | `9cabcac7dec4` | `9cabcac7dec4` |
+| Abhorrent Oculus deck vs Bloodtithe Harvester, seed 35 | 100 | `205a3c56b412` | `205a3c56b412` |
+| Burn full, Merfolk heuristic, seed 2, `--clock 300` | 6 | `82f5db378cf0` | `82f5db378cf0` |
+
+The other pairs have result digests only.
+
+My reading, which I didn't check site by site: 96.5% of the hits on Burn vs Merfolk, 55,784 of 57,786 with `--no-honest`, are `getAvailableCards` picking up a library top the AI can't play anyway, so most of what the tripwire caught was a read that changed no choice. The cases where honest play does change a choice are in `PeekFixesTest`, and they need cards these decks barely hold. None of the decks here has Chalice of the Void, Conjurer's Ban, Cabal Therapy, Fog, Volrath's Shapeshifter or Cemetery Gatekeeper. One has Pithing Needle, one Meddling Mage and one Simian Spirit Guide. A digest also can't see a different name on a card that changed nothing later. So these batches say nothing about how well the AI plays those sites now. They show the fixes are harmless on these decks. They don't show that Fog, Chalice or Clash play well, because no game here reached them.
 
 Flag off, nothing moved. Digests match the ones in `docs/forge-build.md`:
 
@@ -111,9 +122,21 @@ Flag off, nothing moved. Digests match the ones in `docs/forge-build.md`:
 | Same, records on, tripwire on, `--no-honest` | `6f2c4c7c1863` | `6f2c4c7c1863`, with hits in all 20 games |
 | Burn full, 6 games, seed 2, `--no-honest` | `6d38e6c38b07` | `6d38e6c38b07`, with hits in all 6 games |
 
+Run again on the jar with the review's fixes, where the tripwire no longer needs records, all five still match. So do the first two with the tripwire on and with `--no-tripwire`, without records. The two record runs of the third row share a record digest, `d60a45654629`, under different batch ids.
+
 Those hits show the sites still peek with the flag off, so nothing here hid a read from the tripwire. Honest play gives the same digest with the tripwire on and off, `6f2c4c7c1863`.
 
 The cost is small once the payment path stays off the hidden zones. Stompy vs Elves, 30 games, took 88.9 s stock and 103.4 s with honest play and the tripwire. An earlier version took 249.9 s, because `RevealLog.knownTo` scanned both hidden zones on every payment the AI tested, and with the tripwire each read walked the stack. `writtenDown` skips that scan and leaves it to the recorder's call at each priority pass, so a new standing look reaches the AI at the next priority pass, not mid-decision.
+
+## Where the tripwire is silent
+
+A zero says nothing about these. None of them counts as a hit, by design:
+
+- `ComputerUtil.java:1579`, `Player.getCardsActivatableInExternalZones`, in Fog detection. See below.
+- Anything read from a forge-game frame. Rules code running inside a decision gets the real list, so `sa.canPlay()` on an opponent's spell stays silent and the AI still learns the answer.
+- `Card.getZone`, and the like, on a card the AI already holds.
+- The order of the AI's own library, which story 10 exempts.
+- `GameCopier`, which is exempt by class. No watch sits on a copy either.
 
 ## What this doesn't cover
 

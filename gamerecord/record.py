@@ -8,6 +8,7 @@ a long game holds hundreds of thousands of cards and the converter wants dicts a
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import re
 import zlib
@@ -23,6 +24,9 @@ STACK_KINDS = ("spell", "ability")
 # `CardStateName` in Forge, minus FaceDown, which `face_down` says instead.
 FACES = ("Original", "Flipped", "Backside", "Meld", "LeftSplit", "RightSplit", "Secondary", "PreparedSpell",
          "EmptyRoom", "SpecializeW", "SpecializeU", "SpecializeB", "SpecializeR", "SpecializeG")
+
+# Metadata two runs of the same games can differ on: the run folder's name, and what was set up or watched around the play.
+NOT_PLAY = ("batch_id", "honest_play", "tripwire")
 
 # Java's `int` and `long`. Parquet columns use the same widths.
 INT_MAX = 2**31 - 1
@@ -72,6 +76,11 @@ def _one_of(*allowed: object) -> Check:
         if type(value) not in (int, str) or value not in allowed:
             raise GameRecordError(f"{where}: expected one of {allowed}, got {value!r}")
     return check
+
+
+def _nothing(value: object, where: str) -> None:
+    if value is not None:
+        raise GameRecordError(f"{where}: expected null, got {value!r}")
 
 
 def _nullable(inner: Check) -> Check:
@@ -141,6 +150,7 @@ METADATA = Shape({
     "winner": _nullable(SEAT_NUMBER),
     "final_turn": _integer(1),
     "end_reason": _one_of(*END_REASONS),
+    "honest_play": _boolean,
     "tripwire": TRIPWIRE,
 })
 SCOREBOARD = Shape({
@@ -174,6 +184,8 @@ CARD = Shape({
     "blocking": _list_of(_integer()),
     "blocked_by": _list_of(_integer()),
 })
+# A logged card has no id, or the log would tie it to the face-down card it became.
+LOGGED_CARD = Shape({**CARD.fields, "id": _nothing})
 TARGET = Shape({
     "card": _nullable(_integer()),
     "seat": _nullable(SEAT_NUMBER),
@@ -187,8 +199,8 @@ STACK_ITEM = Shape({
     "kind": _one_of(*STACK_KINDS),
     "targets": _list_of(TARGET),
 })
-ZONES = Shape({zone: _list_of(CARD) for zone in (
-    "battlefield", "me_hand", "me_graveyard", "opp_graveyard", "me_exile", "opp_exile", "opp_revealed")})
+ZONES = Shape({**{zone: _list_of(CARD) for zone in (
+    "battlefield", "me_hand", "me_graveyard", "opp_graveyard", "me_exile", "opp_exile")}, "opp_revealed": _list_of(LOGGED_CARD)})
 SNAPSHOT = Shape({
     "side": SEAT_NUMBER,
     "scoreboard": SCOREBOARD,
@@ -206,6 +218,11 @@ class GameRecord:
     def game_id(self) -> str:
         """Unique across batches. A seed belongs to a worker, so it needs the game number too."""
         return f"{self.metadata['batch_id']}-{self.metadata['seed']}-{self.metadata['game_number']}"
+
+    @property
+    def honest_play(self) -> bool:
+        """True when the AI kept to what a person in its seat could know. Without it, the play used peeks."""
+        return self.metadata["honest_play"]
 
 
 def _check_tripwire(summary: dict, where: str) -> None:
@@ -301,6 +318,41 @@ def _read(lines: Iterable[str]) -> GameRecord:
     if not snapshots:
         raise GameRecordError("the file has no snapshots")
     return GameRecord(metadata, snapshots)
+
+
+def read_metadata(path: Path) -> dict:
+    """Return a file's metadata line as written, unchecked, or raise `GameRecordError`.
+
+    This is for looking over a whole batch, where reading every snapshot of every file would be slow.
+    """
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as lines:
+            metadata = json.loads(next(lines))
+    except (OSError, EOFError, zlib.error, ValueError, StopIteration) as e:
+        raise GameRecordError(f"can't read the file: {e!r}") from e
+    if type(metadata) is not dict:
+        raise GameRecordError(f"line 1: expected the metadata object, got {metadata!r}")
+    return metadata
+
+
+def game_digest(path: Path) -> tuple[int, str]:
+    """Return a file's game number and a hash of the game in it, leaving out `NOT_PLAY`.
+
+    Every snapshot goes in, so two files with one hash hold the same game, card by card. The
+    file is hashed as written and not validated, because a replay check shouldn't need a clean bill first.
+    """
+    digest = hashlib.sha256()
+    try:
+        with gzip.open(path, "rb") as lines:
+            metadata = json.loads(next(lines))
+            number = metadata["game_number"]
+            played = {name: value for name, value in metadata.items() if name not in NOT_PLAY}
+            digest.update(json.dumps(played, sort_keys=True).encode("utf-8"))
+            for line in lines:
+                digest.update(line)
+    except (OSError, EOFError, zlib.error, ValueError, KeyError, TypeError, StopIteration) as e:
+        raise GameRecordError(f"can't read the file: {e!r}") from e
+    return number, digest.hexdigest()
 
 
 def load_game(path: Path) -> GameRecord:

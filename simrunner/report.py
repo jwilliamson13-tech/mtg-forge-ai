@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from simrunner.batch import BatchResult
+from simrunner.batch import BatchResult, check_records
 from simrunner.output import DrawCause
 from simrunner.worker import DEFAULT_SIM_MODE, Seat, WorkerResult
 
@@ -10,6 +10,7 @@ from simrunner.worker import DEFAULT_SIM_MODE, Seat, WorkerResult
 OVERNIGHT_HOURS = 8
 KILL_CRITERION_GAMES = 500
 TOP_SIGNATURES = 20
+TOP_MISMATCHES = 20
 
 
 def _table(rows: list[tuple[str, ...]]) -> str:
@@ -40,10 +41,22 @@ def _tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
         return [("tripwire", "no game reported, so the jar may be stale")]
     dirty = sum(count > 0 for count in hits)
     missing = batch.finished - len(hits)
-    verdict = "yes" if batch.tripwire_clean else f"no, {dirty} of {batch.finished} games had hits"
+    if batch.tripwire_clean:
+        verdict = "the real game is clean" if batch.search_unchecked else "yes"
+    else:
+        verdict = f"no, {dirty} of {batch.finished} games had hits"
     if missing:
         verdict += f", {missing} reported nothing"
+    if batch.search_unchecked:
+        verdict += ", search copies unchecked until #25"
     return [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
+
+
+def _records_row(batch: BatchResult) -> tuple[str, str]:
+    checks = [check_records(worker) for worker in batch.workers]
+    return ("records against results", f"{sum(check.matched for check in checks)} match, "
+            f"{sum(check.no_file_by_design for check in checks)} no file by design, "
+            f"{sum(len(check.mismatches) for check in checks)} mismatches")
 
 
 def format_summary(batch: BatchResult) -> str:
@@ -72,7 +85,9 @@ def format_summary(batch: BatchResult) -> str:
     rows += [(f"  by {cause.value}", str(batch.draws(cause))) for cause in DrawCause]
     if config.records:
         rows.append(("game records written", f"{batch.records_written} of {batch.finished} games"))
-        rows += _tripwire_rows(batch)
+        rows.append(_records_row(batch))
+        rows.append(("record digest", batch.record_digest or "no files"))
+    rows += _tripwire_rows(batch)
     rows += [
         ("wall time", f"{batch.wall_s:.1f} s"),
         ("games per hour", f"{batch.games_per_hour:.0f}"),
@@ -106,12 +121,10 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("no log in its throwaway profile")
     if worker.ready_s is not None and not batch.played_requested_modes(worker):
         notes.append("Forge did not name the sim modes asked for, so the jar may be stale")
-    if not batch.applied_search_budget(worker):
-        notes.append("Forge did not report on the search budget, so the jar may be stale")
-    if not batch.wrote_records(worker):
-        notes.append("a game with no game record, so the jar may be stale")
-    if not batch.reported_tripwire(worker):
-        notes.append("a game with no tripwire count, so the jar may be stale")
+    ignored = batch.ignored_flags(worker)
+    notes += [f"{what}, so the jar may be stale" for what in ignored]
+    if not batch.records_agree(worker) and not check_records(worker).missing:
+        notes.append("game records that disagree with the results")
     if worker.fatal:
         notes.append(worker.fatal)
     return "; ".join(notes)
@@ -140,5 +153,14 @@ def format_tripwire(batch: BatchResult) -> str:
     return "\n" + _table(rows) + (f"and {more} more\n" if more > 0 else "")
 
 
+def format_mismatches(batch: BatchResult) -> str:
+    """Where the game files and the result lines disagree."""
+    mismatches = batch.record_mismatches if batch.config.records else []
+    if not mismatches:
+        return ""
+    more = len(mismatches) - TOP_MISMATCHES
+    return "\n" + "\n".join(mismatches[:TOP_MISMATCHES]) + "\n" + (f"and {more} more\n" if more > 0 else "")
+
+
 def format_report(batch: BatchResult) -> str:
-    return format_summary(batch) + "\n" + format_workers(batch) + format_tripwire(batch)
+    return format_summary(batch) + "\n" + format_workers(batch) + format_mismatches(batch) + format_tripwire(batch)

@@ -36,6 +36,7 @@ SNAPSHOT_SCHEMA = pa.schema([
     ("seed", pa.int64()),
     ("game_number", pa.int32()),
     ("final_turn", pa.int32()),
+    ("honest_play", pa.bool_()),
     *SEAT_COLUMNS,
     ("side", pa.int8()),
     ("won", pa.bool_()),
@@ -125,7 +126,7 @@ class _PartitionedTable:
 def snapshot_rows(game: GameRecord) -> list[dict]:
     metadata = game.metadata
     shared = {"game_id": game.game_id, "seed": metadata["seed"], "game_number": metadata["game_number"],
-              "final_turn": metadata["final_turn"]}
+              "final_turn": metadata["final_turn"], "honest_play": metadata["honest_play"]}
     for seat in metadata["seats"]:
         for name in ("deck", "ai_profile", "sim_mode", "search_budget"):
             shared[f"seat{seat['seat']}_{name}"] = seat[name]
