@@ -13,7 +13,7 @@ from setmodel.__main__ import main
 from setmodel.dataset import LIVE_FIELDS, SCOREBOARD_FIELDS, load_corpus
 from setmodel.export import (CARD_TABLE, CONTRACT, MODEL, SCALES, VOCAB, build_contract, export_bundle, export_check,
                              read_card_table)
-from setmodel.features import Caps
+from setmodel.features import Caps, encode
 from setmodel.train import TrainConfig, train
 from tests.setmodel_corpus import (card, card_table, game, manifest, smoke_games, snapshot, vocabulary, write_dump,
                                    write_manifest, write_parquet)
@@ -86,6 +86,15 @@ def test_the_card_table_covers_whole_split_cards_and_shared_token_names(smoke):
     assert ("Lightning Bolt", "front") in entries
     assert ("Fire // Ice", "front") in entries and ("Fire // Ice", "empty_room") in entries
     assert len(entries[("Elemental Token", "front")].tokens) == 1
+
+
+def test_the_card_table_gives_a_whole_split_name_what_training_resolves_on_every_face(smoke):
+    _, corpus, _, bundle = smoke
+    entries = read_card_table(bundle / CARD_TABLE)
+    for face, slot in (("Original", "front"), ("Backside", "back"), ("EmptyRoom", "empty_room")):
+        trained_on = encode(card_table().resolve("Fire // Ice", face).rows, vocabulary(), corpus.caps)
+        exported = entries[("Fire // Ice", slot)]
+        assert (exported.tokens, exported.numbers) == (trained_on.tokens, trained_on.numbers)
 
 
 def test_the_committed_contract_is_the_one_the_code_builds():

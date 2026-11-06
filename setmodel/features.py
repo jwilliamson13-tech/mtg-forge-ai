@@ -150,7 +150,7 @@ class CardTable:
     def entries(self) -> Iterator[tuple[str, str, Resolved]]:
         """(name, slot, resolved) for everything Forge can ask for, in name order."""
         keys = {(name, script.slot) for name, scripts in self._scripts.items() for script in scripts}
-        keys |= {(name, slot) for name in self._whole_names for slot in (FRONT, EMPTY_ROOM)}
+        keys |= {(name, slot) for name in self._whole_names for slot in (FRONT, BACK, EMPTY_ROOM)}
         for name, slot in sorted(keys):
             resolved = self._lookup(name, slot)
             if resolved is not None:
