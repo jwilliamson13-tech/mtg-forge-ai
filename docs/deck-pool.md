@@ -21,6 +21,8 @@ python -m deckpool add-deck LIST.txt --id ID --archetype NAME --split train
 python -m simrunner batch ID1 ID2 --games 2 --seed 1 --records-dir runs/records
 ```
 
+`simrunner pool` plays games across the whole pool. See "Pool batches" in `forge-build.md`.
+
 `pull` runs once. A second run needs `--again`, and it answers from the page cache in `runs/deckpool-cache`, so it only fetches pages it has never seen. It rewrites `pull.json` and the deck files, but it doesn't delete the files of a list that dropped out.
 
 `build-manifest` refuses to run if `decks/manifest.json` exists, because the split is assigned once. Delete the file to rebuild it on purpose. `--leave-out ID ...` keeps decks that can't play out of the manifest, and an id that isn't in the pull fails the build. The command prints the linked groups and the highest overlap across the split.

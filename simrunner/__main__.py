@@ -130,7 +130,7 @@ def _pool(args: argparse.Namespace) -> int:
         args.parser.error(str(e))
     _write_report(config.batch.run_dir, format_pool_report(pool))
     if not pool.complete:
-        why = "stopped at the hard stop" if pool.stopped else f"{len(pool.failed)} chunks failed"
+        why = "stopped at the hard stop" if pool.stopped else f"{len(pool.failed)} chunks failed, {len(pool.not_started)} not started"
         print(f"pool batch incomplete: {why}, {pool.not_finished} of {pool.attempted} games not finished. The same "
               f"--run-dir and --seed continue it. Logs in {config.batch.run_dir}", file=sys.stderr)
         return 1
