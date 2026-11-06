@@ -38,6 +38,9 @@ DEFAULT_SEARCH_BUDGET = 100
 # bounds each game, so this is a backstop for a JVM that stops responding.
 STARTUP_ALLOWANCE_S = 300
 PER_GAME_ALLOWANCE_S = 60
+POLL_S = 0.5
+# Once a worker has ended, its pipes close as soon as what's left in them is read.
+PIPE_DRAIN_S = 10
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,23 @@ class Seat:
     deck: Path
     ai_profile: str | None = None
     sim_mode: str | None = None
+
+
+@dataclass(frozen=True)
+class RecordPlan:
+    """What a batch asks of game records. A folder of None keeps them in the run folder, and a cap of None takes Forge's default."""
+
+    folder: Path | None = None
+    turn_cap: int | None = None
+    honest: bool = True  # keep the AI to what a person in its seat could know
+
+
+@dataclass(frozen=True)
+class GameFile:
+    """A game file and its metadata line. A file that can't be read has None."""
+
+    path: Path
+    metadata: dict | None
 
 
 @dataclass(frozen=True)
@@ -61,6 +81,8 @@ class WorkerResult:
     plan: WorkerPlan
     exit_code: int | None = None
     timed_out: bool = False
+    stopped: bool = False  # the hard stop killed it
+    left_behind: bool = False  # something it started still held its pipes after it ended
     profile_used: bool = False
     ready_s: float | None = None  # seconds from launch until Forge printed its match header
     last_result_s: float | None = None  # seconds from launch until the last Game Result line
@@ -69,6 +91,11 @@ class WorkerResult:
     stderr_traces: int = 0
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
+    records: list[GameFile] = field(default_factory=list)  # game files with this worker's seed
+
+    @property
+    def record_files(self) -> list[Path]:
+        return [record.path for record in self.records]
 
 
 def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
@@ -79,17 +106,21 @@ def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
     return tuple(seat.sim_mode or DEFAULT_SIM_MODE for seat in seats)
 
 
+def any_seat_searches(seats: tuple[Seat, Seat]) -> bool:
+    return any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
+
+
 def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> int:
     """The `-budget` for a batch: what was asked for, else the default if any seat searches. 0 leaves it off."""
     if requested is not None:
         return requested
-    searches = any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
-    return DEFAULT_SEARCH_BUDGET if searches else 0
+    return DEFAULT_SEARCH_BUDGET if any_seat_searches(seats) else 0
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
-             search_budget: int = 0) -> list[str]:
-    """Return the `forge sim` arguments for one worker."""
+             search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
+             tripwire: bool = True) -> list[str]:
+    """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
     if any(seat.ai_profile for seat in seats):
@@ -99,6 +130,14 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-sim", *modes]
     if search_budget:
         args += ["-budget", str(search_budget)]
+    if not tripwire:
+        args += ["-tripwire", "off"]
+    if records:
+        args += ["-record", str(records.folder), "-batch", batch_id]
+        if records.turn_cap is not None:
+            args += ["-turncap", str(records.turn_cap)]
+        if records.honest:
+            args += ["-honest", "on"]
     return args
 
 
@@ -168,8 +207,31 @@ def _pump(stream, log_path: Path, launched: float, lines: list[tuple[float, str]
             log.flush()
 
 
-def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Path,
-               clock_s: int, started: list[subprocess.Popen]) -> WorkerResult:
+def _wait(process: subprocess.Popen, result: WorkerResult, backstop_s: int, kill_at: float | None) -> None:
+    """Wait for a worker to end, and kill it at the hard stop or its backstop, whichever comes first.
+
+    The hard stop is a wall clock time, so it is checked against the wall clock in short
+    waits. One long wait would run late if the machine slept or the clocks changed.
+    """
+    give_up = time.monotonic() + backstop_s
+    while True:
+        try:
+            process.wait(timeout=POLL_S)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+        if kill_at is not None and time.time() >= kill_at:
+            result.stopped = True
+        elif time.monotonic() >= give_up:
+            result.timed_out = True
+        else:
+            continue
+        kill_tree(process)
+        return
+
+
+def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Path, clock_s: int,
+               started: list[subprocess.Popen], kill_at: float | None = None) -> WorkerResult:
     """Run one JVM to its end and read the results out of what it printed.
 
     stdout and stderr stay on separate pipes. On one pipe, the stack trace from a
@@ -184,19 +246,16 @@ def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Pat
     err_lines: list[tuple[float, str]] = []
     out_log = log_stem.with_name(log_stem.name + ".out.log")
     err_log = log_stem.with_name(log_stem.name + ".err.log")
-    pumps = [threading.Thread(target=_pump, args=(process.stdout, out_log, launched, out_lines)),
-             threading.Thread(target=_pump, args=(process.stderr, err_log, launched, err_lines))]
+    pumps = [threading.Thread(target=_pump, args=(process.stdout, out_log, launched, out_lines), daemon=True),
+             threading.Thread(target=_pump, args=(process.stderr, err_log, launched, err_lines), daemon=True)]
     for pump in pumps:
         pump.start()
 
     result = WorkerResult(plan)
-    try:
-        process.wait(timeout=deadline_s(plan.games, clock_s))
-    except subprocess.TimeoutExpired:
-        result.timed_out = True
-        kill_tree(process)
+    _wait(process, result, deadline_s(plan.games, clock_s), kill_at)
     for pump in pumps:
-        pump.join()
+        pump.join(timeout=PIPE_DRAIN_S)
+    result.left_behind = any(pump.is_alive() for pump in pumps)
 
     result.exit_code = process.returncode
     result.profile_used = profile_was_used(folder)

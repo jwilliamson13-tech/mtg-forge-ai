@@ -105,11 +105,16 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-a` is an AI profile per seat, in deck order, such as `-a Default Reckless`. An unknown name prints the valid ones and stops.
 - `-sim` is the simulation mode per seat, in deck order, such as `-sim full heuristic`. The modes are `heuristic`, `hybrid` and `full`, the same three as the desktop lobby's menu. Seats left out stay heuristic. With the flag, each player name ends in `[sim=mode]`, so every result line names the mode. Without it, the output is what stock Forge prints. An unknown mode prints the valid ones and stops, and so does `-sim` with `-t`.
 - `-budget` is the number of search steps an AI decision may take, such as `-budget 100`. A step is one game copied for the search. With it, the wall-clock limit on AI decisions stops mattering, so a run replays from its seed on a busy machine too. What a decision that runs out does is under "Stopped decisions" below. Without the flag the limit stays at 5 seconds. Only `forge sim` sets a budget.
+- `-record DIR` writes one game record per game to that folder, as `docs/game-record.md` describes. It needs `-batch`, `-s` and exactly two decks, and it can't go with `-t`. Anything missing prints why and stops. Without it Forge writes no records, keeps no reveal log and has no turn cap.
+- `-batch ID` is the batch id for those records: letters, digits, `_` and `-`.
+- `-turncap N` stops a recorded game as a draw once turn N is over, default 50. A capped game prints `Stopping game at the turn cap as draw` before its result lines.
+- `-tripwire on|off` is on by default for every `forge sim` run, with or without `-record`, and off for any game outside `forge sim`. It reports in `Tripwire` lines before each result, and in the game record if there is one. It can't go with `-t`, and a tournament has none. See "Tripwire" below.
+- `-honest on|off` keeps the AI to what a person in its seat could know, and off is the default, so a plain `forge sim` is the stock AI with its peeks. It works without `-record`, but only `-record` keeps a reveal log, so the AI then goes by public cards alone. It can't go with `-t`. See `docs/peek-fixes.md`.
 - `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
 
-With `-sim` or `-budget`, each game prints one more line before its `Game Result:` line. Without them, the output is what stock Forge prints.
+With `-sim` or `-budget`, each game prints one more line before its `Game Result:` line. Without them and with `-tripwire off`, the output is what stock Forge prints.
 
 ```
 AI limits: 0 deadline expiries, 2 budget stops, 5120 random draws, 2 stops played, 0 stops passed, 1 stops with a land, 0 land drops missed
@@ -126,7 +131,7 @@ In tournament mode (`-t`), `-D` works differently: it loads every `.dck` in the 
 - **Keep `-Dsentry.enabled=false`.** `Main` starts Sentry with a DSN on the Forge team's server. Reports are off by default through the `USE_SENTRY` preference, and with this property Sentry doesn't start at all. Batches of bot games shouldn't reach that server.
 - **The exit code doesn't mean the game worked.** `Main` always ends with `System.exit(0)`, even after `Could not load deck`. Only a `Game Result:` line proves a game was played.
 - **A stopped game prints a winner.** A game past the clock prints `Stopping slow match as draw`, then `Game Result: ... has won!` for an arbitrary seat. `SimulateMatch` calls `setGameOver(Draw)`, but `Player.onGameOver` marks everyone who hasn't lost as a winner, so both `Game Outcome:` lines say "has won" and `isDraw()` is false. The running score in `Match Result:` counts these fake wins too. I saw this on a real run with `-c 1`. By the source, a game that throws ends the same way, without the clock's line. The sim-runner counts both as draws.
-- **Forge skips flags it doesn't know.** A jar built before `-sim` plays a heuristic game with `-sim full` and doesn't complain. So the `[sim=mode]` tag in the output is the proof that a mode took effect, not the flag on the command line. The same goes for `-budget`, where the proof is the `AI limits:` line.
+- **Forge skips flags it doesn't know.** A jar built before `-sim` plays a heuristic game with `-sim full` and doesn't complain. So the `[sim=mode]` tag in the output is the proof that a mode took effect, not the flag on the command line. The same goes for `-budget`, where the proof is the `AI limits:` line, and for `-record`, where the proof is the files.
 - **Some noise is normal.** Startup prints about 20 `was not assigned to any set` lines. `Did not have activator set` is a `println` in `SpellAbilityRestriction.java`, where Forge fills in the missing activator and carries on. In full sim, `Simulation: SA not found!` on stderr comes from `GameSimulator`: the search couldn't find that ability on its copy of the game, scored it as a failed simulation and moved on. It isn't a crash. On Merfolk it is Merfolk Sovereign's `{T}` ability, which is expected. See "Stopped decisions" below.
 
 ## Running batches
@@ -138,7 +143,9 @@ $decks = "..\forge\forge-gui\res\geneticaidecks"
 python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
 ```
 
-Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a batch with `--sim-mode` doesn't get those modes back in Forge's match header, or if a batch with a search budget gets no `AI limits:` lines. Those last two mean a stale jar, and the worker table says so.
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` doesn't get those modes back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. It also exits 1 if a game file and a result line disagree.
+
+`--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, with or without records. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
 
 ### What the report counts
 
@@ -146,19 +153,87 @@ Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Defa
 - **Attempted** is what you asked for. **Finished** is every game with a `Game Result:` line. Games not finished is the difference, and covers a deck that won't load, an unknown AI profile and a JVM that died.
 - **Wins** come from the `Ai(n)-` prefix, so they are per seat, and seat n holds deck n for the whole batch.
 - **Draws by rules** are games Forge printed as a draw. In the runs below that meant both players lost.
-- **Draws by clock** are games with the `Stopping slow match as draw` line. **Draws by exception** are games where both `Game Outcome:` lines say "has won" without that line. Both print a fake winner, and neither counts as a win.
+- **Draws by clock** are games with the `Stopping slow match as draw` line. **Draws by exception** are games where both `Game Outcome:` lines say "has won" without that line. Both print a fake winner, and neither counts as a win. **Draws by turn cap** are games with the `Stopping game at the turn cap as draw` line.
 - **Usable** means decisive, because draws get dropped before training.
 - **Startup** runs from launching the JVM to Forge printing its match header. **Steady-state games per hour** is each worker's games divided by the time from that header to its last result, summed over workers.
 - **Search budget** is the steps per decision, or off.
 - **AI stops that played a line**, **AI stops that passed**, **AI stops with a land candidate** and **AI land drops missed on stops** add up the last four numbers of the `AI limits:` lines. They say `not reported` for a jar from before issue #51.
 - **AI decision timeouts** counts the `AI eval thread at timeout:` lines, one narrow kind of expiry that the heuristic AI prints. **AI deadline expiries** counts every decision the clock cut short, and includes those. **AI search budget stops** counts the decisions the budget cut short. The last two come from the `AI limits:` lines and say `not reported` for a run without `-sim` or `-budget`.
-- **Result digest** is a hash of every game's seat, turn, draw cause and, when Forge prints it, random draws. Two runs with the same digest played the same games. Winner and turn alone aren't enough: the two runs that opened issue #50 agreed on all ten winners.
+- **Game records written** counts this batch's files against the games finished, when records are on. A game that threw has no file, and neither does one the clock stopped before its first priority pass.
+- **Records against results** reads every finished game against its file, when records are on: winner and end reason. It leaves turns out: `GameLogFormatter` prints `Game Outcome: Turn` as the turn number halved and rounded up, so 20 in a file prints as 10, and Karn's restart would throw that off. It takes the metadata line of each file and leaves the snapshots alone, so a night of files costs seconds. `match` is games that agree. `no file by design` is clock and exception games with no file, the two kinds allowed to have none. `mismatches` is everything else: a file that disagrees, a game that should have a file and doesn't, an exception game with one, a file that can't be read, and a file with no result line. That last one isn't counted after a hard stop, which can land between the two. Any mismatch fails the batch, and the report lists the first 20.
+- **Tripwire hits per game** gives the max and mean over the games that reported. **Tripwire clean** is yes only when every finished game printed a count and every count is 0. A game that printed nothing means the jar has no tripwire. It fails the batch, and a jar like that never reads as a clean zero. With a `hybrid` or `full` seat a zero can't say yes. The row says `the real game is clean, search copies unchecked until #25`, because `GameCopier` is exempt and a copy has no watch, so the search can still see hidden cards. With `--no-tripwire` the row says `off`.
+- **The signature table** after the worker table lists the top 20 signatures by hits across the batch, with the games each one showed up in.
+- **Result digest** is a hash of every game's seat, turn, draw cause and, when Forge prints it, random draws. It only says the runs ended alike. Winner and turn alone aren't enough: the two runs that opened issue #50 agreed on all ten winners. Random draws catch most of the rest, but an AI that chooses differently without drawing leaves them unchanged.
+- **Record digest** is the replay check, when records are on. It hashes every snapshot of every game file, plus the metadata less `batch_id`, `honest_play` and `tripwire`, which can differ between two runs of the same games. The same digest means the same games card by card. Record ids come from the seed, so they replay too. Digests in this file from before it existed are result digests.
 
 The output can't separate everything:
 
-- A game that threw after one player had already lost looks like a normal win on stdout. Only `stack traces on stderr` hints at it, and that count is per worker, not per game, because stdout and stderr have to stay on separate pipes. On one pipe a stopped game's stack trace lands in the middle of the `Game Result:` line.
+- A game that threw after one player had already lost looks like a normal win on stdout. With records on, it shows up as a mismatch, because it has no file. Without them only `stack traces on stderr` hints at it, and that count is per worker, not per game, because stdout and stderr have to stay on separate pipes. On one pipe a stopped game's stack trace lands in the middle of the `Game Result:` line.
 - The exception signature comes from the source. I could not force a throw without patching Forge, so it is only tested against the stub. The clock signature comes from real runs with `--clock 1`.
-- A draw by the turn cap doesn't exist yet, and neither does a per-game end reason. Those arrive with the game records.
+- The report's win and draw counts still come from stdout, so a batch without records has nothing to check them against. With records, a disagreement fails the batch rather than correcting the count.
+
+### Nightly window
+
+`nightly` runs a batch inside a time window and kills whatever is still playing at the end of it. The machine is in use in the mornings, so the stop is hard.
+
+```powershell
+python -m simrunner nightly "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 100000 --seed 1 --start 23:00 --stop 07:00 --clock 600
+```
+
+It takes every `batch` option, plus these:
+
+- `--start` and `--stop` are local clock times, `HH:MM` or `HH:MM:SS`. A stop at or before the start falls on the next day, so the line above means 23:00 tonight to 07:00 tomorrow. Called inside the window, it starts at once and stops at the end of that window. Called after it, it waits for the next one.
+- `--reserve` is the number of logical cores to leave free, 2 by default. The workers are the rest, and never fewer than 1. `--workers` sets the count outright, and the two can't be combined.
+
+Nothing schedules the command. Leave it waiting in a terminal, or start it from Task Scheduler. It checks the decks, the jar and the run folder when you call it, not at 23:00, so a bad path fails while you can still fix it.
+
+Set `--games` higher than the window can play, or the workers finish early and the rest of the night goes unused. The window ends the batch, and `--games` only caps it. Each worker's share goes to Forge as `-n`, which is a Java `int`.
+
+**The stop.** Killing starts 15 seconds before `--stop` (`STOP_LEAD_S`), so the machine is idle at the stop and not just after it. Workers watch the wall clock in half-second waits, so a clock change on the night doesn't move the stop. A worker dies by `taskkill /F /T`, which takes the launcher and the JVM together. That kill gives Forge no chance to print, so a game cut off by the stop has no `Game Result:` line and counts as not finished. It can't turn into a fake win, and neither can a result line cut off halfway, because a partial line matches neither pattern.
+
+**Incomplete.** A batch the stop cut off is marked incomplete in `batch.json` and in the report, and the command exits 1. With `--games` set high that is the normal end of a night, so read exit 1 from `nightly` alongside the status row. The games it finished are real games. They count, and the report's rates use them. What the batch has lost is replay as a whole: the stop lands at a different game on each run, so its digest won't match a rerun. A rerun with the same seed, games and workers still plays the same first games per worker, as under "Seeds" below.
+
+A window that closes before the batch can launch, say because the machine slept through it, launches nothing and is marked incomplete the same way.
+
+What the stop doesn't cover:
+
+- The stop lives in the runner. If the runner itself dies, nothing kills the JVMs, and they play on into the morning. `batch.json` stays at `running`, which is the sign to go looking.
+- `taskkill /T` follows parent links. If a launcher died on its own and left its JVM alive, the tree kill can't find that JVM. The runner doesn't hang on it. It gives up on the pipes after 10 seconds, notes `left a process running` on that worker and fails `clean`, but the process stays up. I haven't seen a launcher die alone. The test for this is a stub.
+- A machine asleep at the stop kills its workers when it wakes, and not before.
+- Each JVM keeps one `Match` for its whole run, and `Match` keeps every game's outcome, so heap use may grow through a night. No run has gone longer than the numbers below show.
+
+### Batch output folder
+
+Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.
+
+```
+runs\<batch>\
+    batch.json            where the batch stands
+    report.txt            the report, once the batch has ended
+    worker-NN.out.log     Forge's stdout for worker NN, written as it arrives
+    worker-NN.err.log     Forge's stderr for worker NN
+    games\                game records, with --records
+    worker-NN\            throwaway profile, deleted when the batch ends
+```
+
+`batch.json` holds:
+
+| Field | Meaning |
+|---|---|
+| `batch` | The folder name |
+| `status` | `running`, `complete` or `incomplete` |
+| `stopped_at_hard_stop` | True when the stop killed a worker or came before launch |
+| `window_start`, `window_stop` | The window as local times, or null for a plain batch |
+| `games_attempted`, `games_finished`, `games_not_finished` | The report's counts |
+
+Only `complete` means every game was played. The file says `running` from launch until the batch ends, so a runner that dies can't leave a batch looking finished: `running` with no runner alive means it died. `incomplete` also covers a worker lost to a crash, with `stopped_at_hard_stop` false. The file doesn't exist while a nightly batch waits for its window. It is replaced in one step, so a reader never sees half of it.
+
+`complete` doesn't mean clean. A stale jar can play every game in the wrong mode, and the report and the exit code are what say so.
+
+`games\` holds the game records, one gzip'd JSONL file per game. The runner always creates it, and only `--records` fills it.
+
+- Records go here and not under `worker-NN\`, because the runner deletes that folder when the batch ends. All workers share this one folder, and the seed and game number in the file name keep their files apart.
+- The hard stop can land while a file is being written, and `taskkill /F` gives Java no chance to finish. The hook writes to a temporary name in `games\` and renames when the file is closed, so a kill leaves a `.tmp` file at worst, and the loader never sees a truncated `.jsonl.gz`.
 
 ### Seeds
 
@@ -289,6 +364,110 @@ What this doesn't cover:
 - No batch had a hybrid seat. `AI_SIM_SEARCH` is on for hybrid, so the evaluator change reaches it through `OnePlaySafetyChecker`.
 - A search that a nested AI's catch let finish is treated as stopped, by reading the source. Both-seats games can reach that path, but no test forces it.
 
+### Game records
+
+`docs/game-record.md` is the format. This is how they get written.
+
+`GameRecorder` in the fork's `forge.view` package subscribes to the real game's own event bus, so the AI's copied games never reach it. `GameEventPlayerPriority` gives it a snapshot from each side, and `SnapshotLine` builds those. It holds the lines in memory and writes the file after `simulateSingleMatch` has finished with the game. Only that method sees every way a game can stop, so it tells the recorder why, and checks with the recorder before it forces the game over. The recorder takes `winner` from Forge's outcome only when the rules had ended the game by then, and a game forced over with no reason gets no file.
+
+The turn cap sits on `GameEventTurnBegan` and marks both players drawn before it ends the game, as a draw effect does. A plain `setGameOver(Draw)` gets the false winner that a clock stop gets. A capped game is a true draw in Forge's own eyes, so after one, seat 1 goes first in the next game.
+
+The hook only reads. It adds no draw from `MyRandom`, and only `-honest` lets the AI read the reveal log. So with `-honest` off a game plays the same with records on or off, unless the cap ends it.
+
+Checked on 2026-11-05 with 2 workers, on a jar built from the fork's `t18-snapshot-hook`. "Before" is the jar from before the hook. Burn vs Merfolk, 20 games, seed 1, `--clock 120` unless the table says otherwise.
+
+| Run | Before | Hook off | Hook on |
+|---|---|---|---|
+| No `-sim` | `84c42eeea82f` | `84c42eeea82f` | not run |
+| `--sim-mode heuristic heuristic`, so the digest has random draws | `6f2c4c7c1863` | `6f2c4c7c1863` | `6f2c4c7c1863` |
+| `--sim-mode full heuristic`, 6 games, seed 2, `--clock 300` | `6d38e6c38b07` | not run | `6d38e6c38b07` |
+
+The hook's cost is under what these runs can show. The 20 heuristic games took 38.1 s with it off and 38.3 s with it on, and the 6 full-sim games 61.4 s before and 58.9 s with it on. A game file is 10 to 30 KB for 150 to 290 lines.
+
+Real files, each loaded by `gamerecord` and converted to Parquet with nothing rejected:
+
+| Batch | Games | End reasons |
+|---|---|---|
+| Burn vs Merfolk, heuristic | 20 | 19 `win`, 1 `draw_rules` |
+| Burn vs Merfolk, `--clock 1` | 8 | 8 `draw_clock`, all with null `winner`, while Forge printed a winner for each |
+| Burn vs Merfolk, `--turn-cap 5` | 6 | 6 `draw_turn_cap`, `final_turn` 6, last snapshot on turn 5 |
+| Mono Black Devotion vs Merfolk, heuristic | 6 | 6 `win` |
+| Abhorrent Oculus vs Bloodtithe Harvester, heuristic | 8 | 8 `win` |
+| Conspicuous Snoop vs Merfolk, heuristic | 6 | 6 `win` |
+| Burn full, Merfolk heuristic | 6 | 6 `win` |
+
+I read these files as well as validating them. The Oculus batch has manifested cards named to their controller and null to the other side, attacks on a planeswalker, blocks, marked damage, a stack two deep and a back face. In the Devotion batch the log held Duress and Silvergill Adept reveals past end steps, and let go of a card when it was cast or played. In the Snoop batch it picked up library tops that no reveal call ever announced. A Miracle trigger puts a card's name on the stack while the card is still in hand, and that card stays on the log until it is cast.
+
+What this doesn't cover:
+
+- No real game had a face-down spell on the stack, or a morph at all. The face-down spell rule has a Java test only.
+- No clock stop came before the first priority pass, so that no-file case has a Java test only, and so does a real exception.
+- No batch had a split card, so the open question in `docs/game-record.md` about `Fire // Ice` stays open.
+- Karn's restart is handled by reading the source. No run hit it.
+
+### Tripwire
+
+The tripwire (#20) catches forge-ai reading a hand or library that isn't the deciding player's, or the real side of a face-down card that player may not see. #21 fixes what it finds, and `docs/peek-fixes.md` lists those fixes. A batch of training games counts as honest only when it reports zero, so it leans toward a false hit over a miss.
+
+The spec says size-only reads bypass the check because they go through a different call. They don't. `forge-ai` has 116 `getCardsIn(Hand|Library).size()` and `.isEmpty()` sites on the same call as a real read. Nothing marked a decision made during resolution either, and that's where naming, Clash and fetch-type run. So the check became two parts.
+
+**The recording view.** `HiddenReadWatch` hangs off `Game.HIDDEN_READ_WATCH`. `Zone.getCards` asks it what to hand over. When forge-ai asks for an opponent's hand or library, it gets a view of the real list. `size()` and `isEmpty()` pass through, and any other use is one hit. `Zone.get`, `Zone.iterator` and `Zone.contains(predicate)` hand over no collection, so they count at once. `Player.getCardsIn` over several zones combines them into one such view, because copying them would be a read and `ChangeZoneAi` only asks whether the result is empty. No site in `forge-ai` changed.
+
+Who asked is settled when the zone hands the cards over, from the first stack frame that isn't plumbing. Plumbing is a named list of `getCardsIn`-style methods, plus `java`, `jdk` and `forge.util`. What they did is settled later, by the view. Both can't happen at the point of use: in `CardLists.filter(opp.getCardsIn(Hand), ...)` the frame that iterates is a forge-game helper, and it would pass for the rules engine.
+
+**The decider.** forge-game can't see forge-ai, so every AI decision reaches the AI through a controller call. `ScopedPlayerControllerAi` overrides each of them to bracket it with `enter` and `exit`, on `Game.AI_DECIDERS`, a stack each game has. Honest play reads it too, so it doesn't depend on the watch. That covers resolve-time choices, and it works across the heuristic AI's eval thread, because the stack isn't per thread. `AITimeoutTracker` sessions don't do this job. They skip resolution, and they open under the wrong player when one AI predicts another's attack. `HiddenReadWatchTest.everyControllerDecisionIsBracketed` fails if an upstream merge adds a decision without an override, which is how it found `payCostDuringRoll`, a method with no `@Override` on it. A forge-ai read with no decider open counts as a hit, marked `no decider: `, so a way into the AI that no bracket covers can't hide behind a zero.
+
+**What doesn't count:**
+
+- The AI's own zones, and cards the rules let it see, by `CardView.canBeShownTo`. An empty zone gives nothing away.
+- Rules code running inside a decision: costs, legality, static abilities, `AbilityUtils.calculateAmount`. The first frame past the plumbing is forge-game, so the rules get the real list.
+- Copies. `HIDDEN_READ_WATCH` is never copied, so a copy has no watch. `GameCopier` reading the real game to make one is exempt by class, and it counts nowhere. A search can still see hidden cards on the copy. That is #25's job, and this tripwire says nothing about it.
+- `Game.getCardState`, which looks up a card the AI already holds, and `PlayerZone.getCardsPlayerCanActivate`, which returns only what that player may play or look at.
+
+**What it can't see:**
+
+- Deck lists: `getRegisteredPlayer().getDeck()`. `ComputerUtil:2368`, `ChangeZoneAi:1513`, `SpecialCardAi:403` and `PlayerControllerAi:140` read an opponent's, and `-honest` closes all four by hand. Nothing would catch a fifth.
+- A face-down card's real side reached some other way than `Card.getState`, `getOriginalState`, `getPaperCard` and `getRules`, such as `getStates()` or a `CardState` object kept from before it turned over.
+- Rules questions the AI asks about an opponent, when forge-game does the reading. `sa.canPlay()` on an opponent's spell stays silent, and the AI learns the answer anyway. `ComputerUtilCost.canPayCost` for an opponent does hit, because it runs through `ComputerUtilMana`, which is forge-ai.
+- Where a card it already holds has gone: `Zone.contains(card)`, `Card.getZone()`, `Game.getZoneOf`. #21's fix for `NamedDiscard` needs `Zone.contains(card)` to stay uncounted.
+- The order of the AI's own library, which story 10 exempts (`ComputerUtilAbility:58`).
+- Subgames. A `SubgameEffect` game is a new `Game` with no watch.
+
+The Fog hand read can't happen in a real game, going by its call sites, so the ticket's Fog test calls `ComputerUtil.hasAFogEffect(opp, ai, false)` directly. The proof that resolve-time decisions are covered is in two other tests, which open no decision themselves. They put Conjurer's Ban and Whirlpool Whelm on the real stack and resolve it. `PlayerControllerAi.chooseCardName` hits on the first, and `ClashAi.chooseSinglePlayer:75` on the second, with the library size read at L67 in the same method staying silent. With plain controllers the same resolve hits as `no decider: `.
+
+Each game prints `Tripwire: N hits` and one `Tripwire hit: N SIGNATURE` line per signature before its result lines. The hits go to stdout as well as the record for three reasons. A game that threw gets no file, a run without `-record` has no file at all, and the record has no count per signature.
+
+Checked on 2026-11-05 with 2 workers, on a jar built from the fork's `t20-tripwire`. The digests are the ones under "Game records", with the same decks and seeds.
+
+| Run | Digest before | Records off | Records on, tripwire off | Records on, tripwire on |
+|---|---|---|---|---|
+| No `-sim` | `84c42eeea82f` | `84c42eeea82f` | not run | not run |
+| `--sim-mode heuristic heuristic` | `6f2c4c7c1863` | `6f2c4c7c1863` | `6f2c4c7c1863` | `6f2c4c7c1863` |
+| `--sim-mode full heuristic`, 6 games, seed 2, `--clock 300` | `6d38e6c38b07` | not run | `6d38e6c38b07` | `6d38e6c38b07` |
+
+So a game plays the same with the tripwire on. The view has to stay a `List` for that, because `Aggregates.random` draws differently from anything else. The 20 heuristic games took 41.1 s with it off and 43.9 s with it on, startup included, and the 6 full-sim games 62.1 s and 61.9 s.
+
+Two real batches, heuristic seats, `--clock 120`, 30 games each:
+
+| Batch | Seed | Hits per game | Games with hits | `no decider` hits |
+|---|---|---|---|---|
+| Burn vs Merfolk (`GAL_`) | 11 | max 506, mean 276.90 | 30 of 30 | 0 |
+| Mono Black Devotion vs Bloodtithe Harvester (`GAM_`, `GAS_`) | 12 | max 563, mean 339.63 | 30 of 30 | 0 |
+
+The signatures, by first frame, summed over both batches:
+
+| Site | Hits | Read |
+|---|---|---|
+| `ComputerUtilAbility.getAvailableCards:78` | 18252 | `p.getCardsIn(Library).get(0)` for every player, on every spell choice. About 99% of all hits. The opponent's top card goes in with the candidates, and `getSpellAbilities` then keeps what the AI may play |
+| `ComputerUtilMana.getAvailableManaSources:1647` | 134 | The hand of an opponent the AI is testing a payment for, through `canPayCost` and `counterSpellRestriction` |
+| `ComputerUtil.getBestNearTermDiscardThreat:2455` | 48 | `CardLists.count` on the discarder's hand, inside `chooseCardsToDiscardFrom` while a discard spell resolves. Going by `DiscardEffect`, a spell like Duress reveals the hand first, so #21 should be able to answer this from the reveal log. I didn't check that game by game |
+| `PlayerControllerAi.orderMoveToZoneList:665` | 38 | `getCardsInGame()` searching every zone for Volrath's Shapeshifter |
+| `ComputerUtilMana.sortManaAbilities:163` | 24 | The same payment test, on the payer's hand |
+
+None of them is the Fog hand read, which fits the reading of its call sites. `getBestNearTermDiscardThreat` and `orderMoveToZoneList` run inside controller calls that no `AITimeoutTracker` session opens, so real games exercised the new scope too, not only the tests.
+
+An early run on the same pair had 459 hits at `ChangeZoneAi.hiddenTriggerAI:528`. That was a count read, through the several-zones overload, and it's why that overload now builds a view. The hits are gone from the final jar.
+
 ### Why each worker has its own profile
 
 Reading the source, sharing almost works. `ExceptionHandler` gives each JVM its own log slot with `CREATE_NEW` and a `FileLock`, and a sim only reads preferences. But `FModel.initialize` checks `isDirectory()`, then throws if `mkdirs()` returns false, and `mkdirs()` returns false when another JVM got there first. So ten JVMs starting on an empty profile, which is what `mvn clean` leaves, can crash each other. Later tickets will also write more files during a run. One profile each costs a few folders, so each worker gets one.
@@ -354,9 +533,9 @@ What this doesn't cover:
 
 - Burn vs Merfolk games last about 6 turns. Search time grows with the choices on offer, so a slower matchup will run below these rates. No other deck pair was timed.
 - Each leg killed its workers at the deadline, so 4 games per leg in progress at that moment aren't counted. The worst game could be longer than the table shows.
-- No game came near the clock or turn 50. Forge has no turn cap yet, so that one was read from the `Turn` line.
+- No game came near the clock or turn 50. These runs were before the turn cap, so that one was read from the `Turn` line.
 - Full on seat 1 won 65 of 147, and the same deck with the heuristic AI won 167 of 414. That is 44% against 41%, inside the noise, so these runs show no strength gain from full sim. They weren't built to measure one.
-- `PRUNE_HIDDEN_INFO` is still off, so the search sees the opponent's hand and library. The hook and tripwire aren't in yet either, and both will add cost.
+- `PRUNE_HIDDEN_INFO` is still off, so the search sees the opponent's hand and library. The hook and tripwire weren't in yet either. "Game records" below has the hook's cost.
 
 Memory peaked at 5.2 GB across 4 JVMs. No run produced a stack trace.
 

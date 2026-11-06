@@ -72,6 +72,12 @@ def test_a_clock_stop_is_a_draw_even_though_forge_prints_a_winner():
     assert game.draw_cause is DrawCause.CLOCK
 
 
+def test_the_turn_cap_line_makes_a_draw_a_draw_by_turn_cap():
+    capped, normal = parse("Stopping game at the turn cap as draw\n" + RULES_DRAW + WIN)
+    assert capped.draw_cause is DrawCause.TURN_CAP
+    assert normal.is_win
+
+
 def test_both_players_winning_without_the_clock_line_is_an_exception():
     [game] = parse(FORCED_END)
     assert game.draw_cause is DrawCause.EXCEPTION
@@ -169,3 +175,39 @@ def test_a_jar_from_before_the_stop_counts_reports_none():
 
 def test_a_game_without_the_line_has_no_ai_limits():
     assert parse(WIN)[0].ai_limits is None
+
+
+def test_tripwire_lines_belong_to_the_game_they_precede():
+    games = parse_games([
+        "Tripwire: 5 hits",
+        "Tripwire hit: 4 forge.ai.ComputerUtil.hasAFogEffect:1582 < forge.ai.AiBlockController.assignBlockers:1152",
+        "Tripwire hit: 1 no decider: forge.ai.ability.ClashAi.chooseSinglePlayer:75",
+        "Game Outcome: Turn 7",
+        "Game Result: Game 1 ended in 2679 ms. Ai(1)-Burn has won!",
+        "Tripwire: 0 hits",
+        "Game Outcome: Turn 3",
+        "Game Result: Game 2 ended in 2679 ms. Ai(2)-Merfolk has won!",
+    ])
+    assert games[0].tripwire_hits == 5
+    assert games[0].tripwire_signatures == (
+        ("forge.ai.ComputerUtil.hasAFogEffect:1582 < forge.ai.AiBlockController.assignBlockers:1152", 4),
+        ("no decider: forge.ai.ability.ClashAi.chooseSinglePlayer:75", 1))
+    assert games[1].tripwire_hits == 0
+    assert games[1].tripwire_signatures == ()
+
+
+def test_a_stopped_game_keeps_its_tripwire_lines():
+    games = parse_games([
+        "Stopping slow match as draw",
+        "Tripwire: 2 hits",
+        "Tripwire hit: 2 forge.ai.ability.ClashAi.chooseSinglePlayer:75",
+        "Game Result: Game 1 ended in 1013 ms. Ai(1)-Burn has won!",
+    ])
+    assert games[0].draw_cause == DrawCause.CLOCK
+    assert games[0].tripwire_hits == 2
+
+
+def test_a_game_without_tripwire_lines_reports_none():
+    [game] = parse_games(["Game Result: Game 1 ended in 2679 ms. Ai(1)-Burn has won!"])
+    assert game.tripwire_hits is None
+    assert game.tripwire_signatures == ()

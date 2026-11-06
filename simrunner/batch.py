@@ -3,18 +3,33 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import re
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 
+from gamerecord import GameRecordError, game_digest, read_metadata
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
-from simrunner.worker import (JVM_PROPERTIES, Seat, WorkerPlan, WorkerResult, kill_tree,
+from simrunner.window import Window
+from simrunner.worker import (JVM_PROPERTIES, GameFile, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
                               prepare_folder, remove_folder, requested_sim_modes, resolve_search_budget,
                               run_worker, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
+STATUS_FILE = "batch.json"
+GAMES_FOLDER = "games"  # Forge's game records. See docs/forge-build.md.
+# The hook writes the batch id into each record, and the schema limits it. See docs/game-record.md.
+BATCH_ID = re.compile(r"[A-Za-z0-9_-]+")
+# How a printed result reads as a record's end reason. A game that threw gets no file at all.
+END_REASONS = {None: "win", DrawCause.RULES: "draw_rules", DrawCause.CLOCK: "draw_clock", DrawCause.TURN_CAP: "draw_turn_cap"}
+# A clock stop before the first priority pass leaves no file, and a game that threw never does.
+NO_FILE_BY_DESIGN = (DrawCause.CLOCK, DrawCause.EXCEPTION)
 
 
 class SetupError(Exception):
@@ -34,6 +49,64 @@ class BatchConfig:
     java: tuple[str, ...] = ("java",)
     keep_profiles: bool = False
     search_budget: int | None = None  # None picks the default for the seats, and 0 leaves it off
+    window: Window | None = None  # None runs the batch now, with no hard stop
+    records: RecordPlan | None = None  # None has Forge write no game records
+    tripwire: bool = True  # catch forge-ai reading hidden cards
+
+    @property
+    def batch_id(self) -> str:
+        return self.run_dir.name
+
+    @property
+    def games_folder(self) -> Path:
+        return (self.records and self.records.folder) or self.run_dir / GAMES_FOLDER
+
+
+@dataclass(frozen=True)
+class RecordCheck:
+    """One worker's printed results read against its game files."""
+
+    matched: int = 0
+    no_file_by_design: int = 0  # games with no file, of a kind that may have none
+    missing: int = 0  # games that should have a file and have none
+    mismatches: tuple[str, ...] = ()  # every disagreement, missing files included
+
+
+def _disagreement(game: GameResult, metadata: dict) -> str | None:
+    """What a game's file says differently from its result line, if anything."""
+    if game.draw_cause == DrawCause.EXCEPTION:
+        return f"game {game.number}: printed as a game that threw, but it has a file"
+    reason = END_REASONS[game.draw_cause]
+    if metadata.get("end_reason") != reason:
+        return f"game {game.number}: printed {reason}, the file says {metadata.get('end_reason')}"
+    if metadata.get("winner") != game.winner_seat:
+        return f"game {game.number}: printed winner {game.winner_seat}, the file says {metadata.get('winner')}"
+    return None
+
+
+def check_records(worker: WorkerResult) -> RecordCheck:
+    """Read each finished game against its file, and each file against a finished game.
+
+    A worker the hard stop killed can leave a file for a game that never printed its result,
+    which is no disagreement: that game counts as not finished.
+    """
+    files = {record.metadata.get("game_number"): record.metadata for record in worker.records if record.metadata}
+    mismatches = [f"{record.path.name}: can't be read" for record in worker.records if not record.metadata]
+    matched = no_file = missing = 0
+    for game in worker.games:
+        metadata = files.pop(game.number, None)
+        if metadata is None and game.draw_cause in NO_FILE_BY_DESIGN:
+            no_file += 1
+        elif metadata is None:
+            missing += 1
+            mismatches.append(f"game {game.number}: printed {END_REASONS[game.draw_cause]}, but it has no file")
+        elif problem := _disagreement(game, metadata):
+            mismatches.append(problem)
+        else:
+            matched += 1
+    if not worker.stopped:
+        mismatches += [f"game {number}: a file with no result line" for number in sorted(files, key=str)]
+    return RecordCheck(matched, no_file, missing, tuple(mismatches))
 
 
 @dataclass
@@ -57,6 +130,16 @@ class BatchResult:
     @property
     def not_finished(self) -> int:
         return self.attempted - self.finished
+
+    @property
+    def complete(self) -> bool:
+        """True when every game was played. Clean asks for more than this."""
+        return self.not_finished == 0
+
+    @property
+    def stopped(self) -> bool:
+        """True when the hard stop killed a worker, or came before any could launch."""
+        return bool(self.config.window) and (not self.workers or any(worker.stopped for worker in self.workers))
 
     def wins(self, seat: int) -> int:
         return sum(game.winner_seat == seat for game in self.games)
@@ -134,10 +217,12 @@ class BatchResult:
 
     @property
     def digest(self) -> str:
-        """A fingerprint of who won what, leaving out timing. Same games, same digest.
+        """A fingerprint of who won what, leaving out timing.
 
         Forge's random draw count goes in when it prints one. Two games can share a winner
-        and a final turn and still have played differently, but they can't share the draws.
+        and a final turn and still have played differently, but they rarely share the draws.
+        It says nothing about what happened on the way, so a claim that two runs played the
+        same games goes by `record_digest`.
         """
         rows = []
         for worker in self.workers:
@@ -146,19 +231,104 @@ class BatchResult:
                 rows.append(f"{row}:{game.ai_limits.random_draws}" if game.ai_limits else row)
         return hashlib.sha256("\n".join(rows).encode("ascii")).hexdigest()[:12]
 
+    @property
+    def record_digest(self) -> str | None:
+        """A fingerprint of every game file's content. Same digest, the same games card by card.
+
+        It leaves out what can differ between two runs of the same games: the run folder's name,
+        `honest_play` and the tripwire's report. None when the batch wrote no files.
+        """
+        rows = [f"{worker.plan.index}:{number}:{digest}" for worker in self.workers
+                for number, digest in sorted(_file_digest(path) for path in worker.record_files)]
+        return hashlib.sha256("\n".join(rows).encode("ascii")).hexdigest()[:12] if rows else None
+
+    @property
+    def records_written(self) -> int:
+        return sum(len(worker.record_files) for worker in self.workers)
+
+    def ignored_flags(self, worker: WorkerResult) -> list[str]:
+        """Forge skips flags it doesn't know, so a stale jar plays on and says nothing. This is what each flag's proof left out."""
+        ignored = []
+        if self.search_budget and not all(game.ai_limits for game in worker.games):
+            ignored.append("Forge did not report on the search budget")
+        if self.config.records and check_records(worker).missing:
+            ignored.append("a game with no game record")
+        if self.config.records and self.config.records.honest and not all(
+                record.metadata and record.metadata.get("honest_play") is True for record in worker.records):
+            ignored.append("a game record that doesn't show honest play")
+        if self.tripwire_on and not all(game.tripwire_hits is not None for game in worker.games):
+            ignored.append("a game with no tripwire count")
+        return ignored
+
+    def records_agree(self, worker: WorkerResult) -> bool:
+        """A game file and a result line that tell different stories mean one of them is wrong."""
+        return not self.config.records or not check_records(worker).mismatches
+
+    @property
+    def record_mismatches(self) -> list[str]:
+        return [f"worker {worker.plan.index}, {problem}" for worker in self.workers
+                for problem in check_records(worker).mismatches]
+
+    @property
+    def tripwire_on(self) -> bool:
+        return self.config.tripwire
+
+    @property
+    def tripwire_hits(self) -> list[int]:
+        """Hits per game, for the games that reported any count at all."""
+        return [game.tripwire_hits for game in self.games if game.tripwire_hits is not None]
+
+    @property
+    def tripwire_clean(self) -> bool:
+        """True when every finished game ran the tripwire and it caught nothing. A game that said nothing proves nothing.
+
+        This covers the real game. With a searching seat, `search_unchecked` says what it leaves out.
+        """
+        return (self.tripwire_on and self.finished > 0 and len(self.tripwire_hits) == self.finished
+                and not any(self.tripwire_hits))
+
+    @property
+    def search_unchecked(self) -> bool:
+        """True when a seat searches: the tripwire watches the real game only, so copies with hidden cards go unseen."""
+        return self.tripwire_on and any_seat_searches(self.config.seats)
+
+    def tripwire_signatures(self) -> list[tuple[str, int, int]]:
+        """Each signature with its hits and the games it showed up in, most hits first."""
+        hits = Counter()
+        games = Counter()
+        for game in self.games:
+            for signature, count in game.tripwire_signatures:
+                hits[signature] += count
+                games[signature] += 1
+        return sorted(((signature, count, games[signature]) for signature, count in hits.items()),
+                      key=lambda row: (-row[1], row[0]))
+
     def played_requested_modes(self, worker: WorkerResult) -> bool:
         """Forge skips flags it doesn't know, so only its own header proves the modes took effect."""
         return worker.sim_modes == requested_sim_modes(self.config.seats)
 
-    def applied_search_budget(self, worker: WorkerResult) -> bool:
-        """Forge skips flags it doesn't know, so a jar without `-budget` would play on the wall clock."""
-        return not self.search_budget or all(game.ai_limits for game in worker.games)
-
     @property
     def clean(self) -> bool:
         """True when every game was played, in the modes asked for, and every worker stayed in its own profile."""
-        return self.not_finished == 0 and all(worker.profile_used and self.played_requested_modes(worker)
-                                              and self.applied_search_budget(worker) for worker in self.workers)
+        return self.complete and all(worker.profile_used and not worker.left_behind
+                                     and self.played_requested_modes(worker)
+                                     and not self.ignored_flags(worker)
+                                     and self.records_agree(worker) for worker in self.workers)
+
+
+def _game_file(path: Path) -> GameFile:
+    try:
+        return GameFile(path, read_metadata(path))
+    except GameRecordError:
+        return GameFile(path, None)
+
+
+def _file_digest(path: Path) -> tuple[int, str]:
+    """A file that can't be read still changes the digest, and costs the report nothing else."""
+    try:
+        return game_digest(path)
+    except GameRecordError:
+        return 0, f"unreadable {path.name}"
 
 
 def plan_workers(games: int, batch_seed: int, workers: int) -> list[WorkerPlan]:
@@ -184,6 +354,10 @@ def _check(config: BatchConfig) -> None:
         raise SetupError("games and workers must both be at least 1")
     if config.search_budget is not None and config.search_budget < 0:
         raise SetupError("the search budget can't be negative")
+    if config.records and config.records.turn_cap is not None and config.records.turn_cap < 1:
+        raise SetupError("a turn cap has to be at least 1")
+    if config.records and not BATCH_ID.fullmatch(config.batch_id):
+        raise SetupError(f"the run folder's name is the batch id, which takes letters, digits, _ and -: {config.batch_id}")
     if config.forge_root.resolve() in config.run_dir.resolve().parents:
         # `mvn clean` could follow a leftover link into forge-gui/res.
         raise SetupError(f"the run folder must be outside the Forge clone: {config.run_dir}")
@@ -191,16 +365,56 @@ def _check(config: BatchConfig) -> None:
         raise SetupError(f"the run folder already holds worker folders: {config.run_dir}")
 
 
+def _stamp(moment: datetime | None) -> str | None:
+    return moment.isoformat(timespec="seconds") if moment else None
+
+
+def _write_status(config: BatchConfig, status: str, batch: BatchResult | None = None) -> None:
+    """Record where the batch stands. Only `complete` means every game was played.
+
+    It reads `running` until the batch ends, so a runner that dies leaves no false finish behind.
+    """
+    finished = batch.finished if batch else 0
+    fields = {
+        "batch": config.run_dir.name,
+        "status": status,
+        "stopped_at_hard_stop": batch.stopped if batch else False,
+        "window_start": _stamp(config.window.start) if config.window else None,
+        "window_stop": _stamp(config.window.stop) if config.window else None,
+        "games_attempted": config.games,
+        "games_finished": finished,
+        "games_not_finished": config.games - finished,
+    }
+    path = config.run_dir / STATUS_FILE
+    fresh = path.with_suffix(".tmp")
+    fresh.write_text(json.dumps(fields, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(fresh, path)  # a reader never sees half a file
+
+
 def run_batch(config: BatchConfig) -> BatchResult:
     _check(config)
     jar = find_jar(config.forge_root)
     forge_gui = config.forge_root.resolve() / "forge-gui"
-    config.run_dir.mkdir(parents=True, exist_ok=True)
+    (config.run_dir / GAMES_FOLDER).mkdir(parents=True, exist_ok=True)
+    config.games_folder.mkdir(parents=True, exist_ok=True)
+    if config.window:
+        config.window.wait_for_start()
+    if config.window and config.window.closed:
+        batch = BatchResult(config, [], 0.0)
+    else:
+        _write_status(config, "running")
+        batch = _play(config, jar, forge_gui)
+    _write_status(config, "complete" if batch.complete else "incomplete", batch)
+    return batch
 
+
+def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
     folders = []
     jobs = []
     started = []
     pool = None
+    # Each worker runs in its own folder, so Forge needs the full path.
+    records = replace(config.records, folder=config.games_folder.resolve()) if config.records else None
     try:
         for plan in plan_workers(config.games, config.batch_seed, config.workers):
             folder = config.run_dir / f"worker-{plan.index:02d}"
@@ -208,13 +422,20 @@ def run_batch(config: BatchConfig) -> BatchResult:
             deck_dir = prepare_folder(folder, forge_gui, config.seats)
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES, "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
-                                 resolve_search_budget(config.seats, config.search_budget))]
-            jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started))
+                                 resolve_search_budget(config.seats, config.search_budget), records, config.batch_id,
+                                 config.tripwire)]
+            jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started,
+                         config.window.kill_at if config.window else None))
 
         began = time.monotonic()
         pool = ThreadPoolExecutor(max_workers=len(jobs))
         workers = [future.result() for future in [pool.submit(run_worker, *job) for job in jobs]]
-        return BatchResult(config, workers, time.monotonic() - began)
+        wall_s = time.monotonic() - began
+        if records:
+            for worker in workers:
+                worker.records = [_game_file(path) for path in
+                                  sorted(records.folder.glob(f"{config.batch_id}_{worker.plan.seed}_*.jsonl.gz"))]
+        return BatchResult(config, workers, wall_s)
     finally:
         for process in started:
             if process.poll() is None:
