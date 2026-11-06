@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+// NAME : Boros Aggro
+// CREATOR : Mangaflorence
+// FORMAT : Legacy
+1 [A] Mountain
+2 [A] Plains
+4 [ZEN] Arid Mesa
+2 [ZEN] Marsh Flats
+4 [A] Swords to Plowshares
+2 [A] Plateau
+4 [TE] Wasteland
+2 [LG] Karakas
+2 [] Sunbaked Canyon
+2 [TE] Goblin Bombardment
+1 [] Elegant Parlor
+3 [] Sand Scout
+3 [] Static Prison
+4 [] Amped Raptor
+4 [] Ocelot Pride
+4 [] Ajani, Nacatl Pariah
+4 [] Guide of Souls
+2 [ON] Windswept Heath
+2 [] Lazotep Quarry
+2 [] Agate Instigator
+4 [] Voice of Victory
+2 [] Hexing Squelcher
+SB:  2 [NPH] Surgical Extraction
+SB:  1 [DGM] Wear / Tear
+SB:  1 [WL] Null Rod
+SB:  3 [EX] Price of Progress
+SB:  3 [A] Red Elemental Blast
+SB:  4 [] Deafening Silence
+SB:  1 [] Erode

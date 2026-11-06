@@ -1,8 +1,8 @@
 """Plain-text decklists to Forge deck files, with every name checked.
 
-A list is lines of `count name`, optionally with a set after the name, in the
-form MTGGoldfish exports. The sideboard follows a blank line or a `Sideboard`
-header. Names are matched against a set of known names, ignoring case, accents
+A list is lines of `count name`, with an optional set after the name or in
+brackets before it (`4 [ZEN] Arid Mesa`, the MTGTop8 .dec export). `//` lines are comments.
+The sideboard follows a blank line, a `Sideboard` header or an `SB:` prefix. Names are matched against a set of known names, ignoring case, accents
 and punctuation. A name that doesn't match fails the whole conversion, and the
 error lists every such name.
 """
@@ -14,7 +14,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 SPLIT_SEP = " // "
-_LINE = re.compile(r"^(?:SB:\s*)?(\d+)x?\s+(.+?)\s*$", re.IGNORECASE)
+_LINE = re.compile(r"^(?:SB:\s*)?(\d+)x?\s+(?:\[[^\]]*\]\s*)?(.+?)\s*$", re.IGNORECASE)
 _SET_TAIL = re.compile(r"\s+\(([A-Za-z0-9]{2,6})\)(?:\s+\S+)?$")
 _SIDE_HEADERS = {"sideboard", "sideboard:", "sb", "sb:"}
 _SKIP_HEADERS = {"deck", "deck:", "maindeck", "main", "mainboard", "companion", "companion:"}
@@ -55,6 +55,8 @@ class NameSet:
         hit = self._by_key.get(normalize(name))
         if hit is not None:
             return hit
+        if SPLIT_SEP not in name and " / " in name:  # MTGTop8 writes `Wear / Tear`
+            name = name.replace(" / ", SPLIT_SEP)
         if SPLIT_SEP in name:
             halves = [self._by_key.get(normalize(h)) for h in name.split(SPLIT_SEP)]
             if all(halves):
@@ -78,6 +80,8 @@ def parse_decklist(text: str) -> Decklist:
         if not line:
             if seen_main:
                 in_side = True
+            continue
+        if line.startswith("//"):
             continue
         low = line.lower()
         if low in _SIDE_HEADERS:

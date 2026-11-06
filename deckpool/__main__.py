@@ -2,6 +2,8 @@
 
 Converts the plain-text list, checks its names, writes the original text and the
 Forge file into `decks/`, and adds the deck to the manifest.
+
+`python -m deckpool pull` is the one-off MTGTop8 Legacy pull; it refuses a second run without `--again`.
 """
 
 from __future__ import annotations
@@ -45,9 +47,23 @@ def main(argv: list[str] | None = None) -> int:
     add.add_argument("--split", required=True, choices=mf.SPLITS)
     add.add_argument("--source", default="user")
     add.add_argument("--cards", default=str(DEFAULT_CARDS), help="sweep output with the known card names")
+    pull = commands.add_parser("pull", help="one-off pull of the Legacy pool from mtgtop8.com")
+    pull.add_argument("--again", action="store_true", help="run even though decks/pull.json says the pool was pulled")
+    pull.add_argument("--cache", default=str(mf.DEFAULT_ROOT / "runs" / "deckpool-cache"),
+                      help="where fetched pages are saved, so a resume never refetches")
+    pull.add_argument("--cards", default=str(DEFAULT_CARDS), help="sweep output with the known card names")
     args = parser.parse_args(argv)
     if not Path(args.cards).is_file():
         parser.error(f"no card names at {args.cards}; run the sweep first")
+    if args.command == "pull":
+        from deckpool import pull as pl
+        try:
+            record = pl.run_pull(mf.DEFAULT_ROOT, Path(args.cache), load_name_set(Path(args.cards)), again=args.again)
+        except (pl.AlreadyPulled, pl.PullStopped) as e:
+            print(f"pull stopped: {e}", file=sys.stderr)
+            return 1
+        print(f"pulled {len(record['decks'])} decks in {record['requests']} requests")
+        return 0
     try:
         deck = add_deck(Path(args.list), args.id, args.archetype, args.split, args.source,
                         load_name_set(Path(args.cards)))
