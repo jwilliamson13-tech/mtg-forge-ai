@@ -124,7 +124,7 @@ All seven are required, and an empty zone is `[]`. The opponent's hand and eithe
 
 | Field | Type | Meaning |
 |---|---|---|
-| `battlefield` | array of cards | Both players' permanents. |
+| `battlefield` | array of cards | Both players' permanents, in `id` order. |
 | `me_hand` | array of cards | This side's hand. |
 | `me_graveyard` | array of cards | This side's graveyard. |
 | `opp_graveyard` | array of cards | The opponent's graveyard. |
@@ -132,7 +132,7 @@ All seven are required, and an empty zone is `[]`. The opponent's hand and eithe
 | `opp_exile` | array of cards | The opponent's exile zone. |
 | `opp_revealed` | array of cards | This side's log of the opponent's revealed cards. See below. |
 
-`battlefield` leaves out phased-out cards, which the rules treat as not there.
+`battlefield` leaves out phased-out cards, which the rules treat as not there. It is in `id` order so that the two sides' lists don't line up, because one side's list can name what the other's hides.
 
 ### Revealed-card log
 
@@ -150,11 +150,26 @@ Two limits:
 
 The log is kept behind `Game.REVEAL_LOG`, which only `forge sim` sets, so default play has none. `knownTo(player)` is the one read, and #21's peek fixes use it too.
 
+### Record ids
+
+An `id` is opaque. It exists so that attachments, combat and targets can point at a card, and it is not a model input.
+
+- It belongs to one side of one game. The two sides call the same card by different ids, and an id means nothing in another game. Join on `id` only inside `(game_id, side)`.
+- A card gets a fresh id each time it changes zone, as the rules treat it as a new object. So a card has one id in hand, another on the stack and another on the battlefield, and a card that leaves the battlefield and comes back is a new card. Turning over, tapping and changing controller keep the id.
+- `attached_to`, `attacking_card`, `blocking`, `blocked_by`, a stack item's `id` and a target's `card` all use the same side's ids.
+- `id` is never `Card.getId()`. Forge numbers cards in deck order before the shuffle, so that number is the same card in every game of a batch. In the first batches with face-down cards, ids from the other 99 games named 121 of 121 face-down permanents.
+
+The hook (`RecordIds` in `forge.view`) takes the id from a SHA-256 hash of `<seed>:<game_number>:<side>:<n>`, where `n` counts the ids this side has handed out, and keeps the first four bytes less the sign bit. If that id is taken, it moves on to the next `n`. The seed is in the metadata, so the card's own number can't go into the hash, or anyone could try every number. All anyone can get from an id is the order this side first saw things in. It draws nothing from `MyRandom`, and the same seed gives the same ids, so a replay's ids match.
+
+`python -m gamerecord hiddencheck FOLDER` repeats both attacks on a folder of game files and exits 1 if either names a hidden card: an id with a name in another game, and an id the other side's rows put a name to. Both have to come to zero.
+
+Ids can't protect one thing. A file holds both sides, so the other side's row of the same moment shows a face-down card under its real name, and it can often be picked out by public state, such as being the only face-down card that player has. `hiddencheck` prints that count too, and it won't reach zero. A training row has to come from one side and never be joined to the other side's rows.
+
 ### Card
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | integer | `Card.getId()`, stable within a game. It exists so attachments can point at a card, and is not a model input. |
+| `id` | integer | The card's record id. See "Record ids". |
 | `name` | string, or null | `Card.getName()` in the card's current state. Null only for a hidden card. |
 | `face` | string, one of the faces, or null | `Card.getCurrentStateName()`. Null only for a hidden card. |
 | `power` | integer, or null | `Card.getNetPower()` if the card is a creature right now, else null. |
@@ -162,15 +177,15 @@ The log is kept behind `Game.REVEAL_LOG`, which only `forge sim` sets, so defaul
 | `tapped` | boolean | `Card.isTapped()`. |
 | `counters` | object, counter type to integer 1 or more | One entry per counter type on the card, `{}` for none. Keys are `CounterType.toString()`, such as `P1P1` or `LOYALTY`. `getName()` gives `+1/+1`, which is the wrong one. |
 | `summoning_sick` | boolean | `Card.isSick()`, on the battlefield only. Forge's flag is true for a creature in hand. |
-| `attached_to` | integer, or null | The `id` of the card this is attached to. It must be on the battlefield in the same snapshot, and is null when the host is anywhere else. |
+| `attached_to` | integer, or null | The record id of the card this is attached to. It must be on the battlefield in the same snapshot, and is null when the host is anywhere else. |
 | `attached_to_seat` | integer 1 or 2, or null | The seat of the player this is attached to, for Curse auras and the like. |
 | `controller` | integer 1 or 2 | The seat of `Card.getController()`. |
 | `face_down` | boolean | `Card.isFaceDown()`. |
 | `damage` | integer, 0 or more | `Card.getDamage()`, the damage marked on it this turn. |
 | `attacking_seat` | integer 1 or 2, or null | The seat this card is attacking, from `Combat.getDefenderByAttacker`. |
-| `attacking_card` | integer, or null | The `id` of the planeswalker or battle this card is attacking. It must be on the battlefield in the same snapshot. |
-| `blocking` | array of integers | The `id` of each attacker this card blocks, sorted. All must be on the battlefield in the same snapshot. |
-| `blocked_by` | array of integers | The `id` of each creature blocking this card, sorted. All must be on the battlefield in the same snapshot. |
+| `attacking_card` | integer, or null | The record id of the planeswalker or battle this card is attacking. It must be on the battlefield in the same snapshot. |
+| `blocking` | array of integers | The record id of each attacker this card blocks, sorted. All must be on the battlefield in the same snapshot. |
+| `blocked_by` | array of integers | The record id of each creature blocking this card, sorted. All must be on the battlefield in the same snapshot. |
 
 `Card.getEntityAttachedTo()` returns a `GameEntity`, which can be a card or a player. That is why attachment takes two fields. At most one of them is set. Attacking works the same way, and neither is set for a card that isn't attacking.
 
@@ -186,7 +201,7 @@ An empty Room's state has no name, so `name` gives the whole card's name and `fa
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | integer | The source card's `Card.getId()`. A target that is a spell on the stack gives this. |
+| `id` | integer | The source card's record id. A target that is a spell on the stack gives this. |
 | `name` | string, or null | The source card's name, by the same rule as a card. Null only for a hidden source. |
 | `face` | string, one of the faces, or null | The source card's face, by the same rule as a card. |
 | `face_down` | boolean | Whether the source card is face down. A face-down spell is hidden from a side that may not look at it, exactly as a face-down card is. |
@@ -205,7 +220,7 @@ An empty Room's state has no name, so `name` gives the whole card's name and `fa
 
 | Field | Type | Meaning |
 |---|---|---|
-| `card` | integer, or null | The `id` of a targeted card. For a targeted spell, its source card. It can be in any zone or on the stack, so it needn't appear in the snapshot's zones. |
+| `card` | integer, or null | The record id of a targeted card. For a targeted spell, its source card. It can be in any zone or on the stack, so it needn't appear in the snapshot's zones. |
 | `seat` | integer 1 or 2, or null | The seat of a targeted player. |
 
 Exactly one of the two is set.
@@ -268,7 +283,7 @@ import pyarrow.dataset as ds
 table = ds.dataset("OUT/snapshots", format="parquet", partitioning="hive").to_table()
 ```
 
-`(game_id, snapshot_index)` joins the three tables. A card-less snapshot has no rows in `cards`, and a snapshot with an empty stack has none in `stack`.
+`(game_id, snapshot_index)` joins the three tables. Each snapshot is one side's, so `id` only means something within that side's rows. A card-less snapshot has no rows in `cards`, and a snapshot with an empty stack has none in `stack`.
 
 ### snapshots table
 
