@@ -56,21 +56,6 @@ def face_rows(face: Face) -> list[tuple[list[str], list[KeyedNumber]]]:
     return [(tokens, numbers), *((ability_tokens(a), list(a.numbers)) for a in _walk(face.abilities))]
 
 
-def face_rows(face: Face) -> list[tuple[list[str], list[KeyedNumber]]]:
-    """(tokens, numbers) per encoder row: the identity fields, then each ability and sub-ability."""
-    tokens = [f"type={t}" for t in face.types]
-    tokens += [f"color={c}" for c in face.colors]
-    tokens += [f"pip={p}" for p in face.mana_cost.special]
-    numbers = [KeyedNumber("generic", face.mana_cost.generic)]
-    numbers += [KeyedNumber(f"pip.{p}", n) for p, n in face.mana_cost.pips.items()]
-    for field, value in _printed_stats(face):
-        if isinstance(value, str):
-            tokens.append(f"{field}={value}")
-        elif isinstance(value, int):
-            numbers.append(KeyedNumber(field, value))
-    return [(tokens, numbers), *((ability_tokens(a), list(a.numbers)) for a in _walk(face.abilities))]
-
-
 def face_tokens(face: Face) -> list[str]:
     """Every categorical token on a face: identity fields, then each ability and sub-ability."""
     return [token for tokens, _ in face_rows(face) for token in tokens]
