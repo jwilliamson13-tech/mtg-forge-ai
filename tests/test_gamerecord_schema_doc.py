@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from gamerecord.convert import CARD_SCHEMA, SNAPSHOT_SCHEMA
+from gamerecord.convert import CARD_SCHEMA, SNAPSHOT_SCHEMA, STACK_SCHEMA
 from gamerecord.record import (CARD, END_REASONS, FACES, METADATA, SCHEMA_VERSION, SCOREBOARD, SEAT, SIM_MODES,
-                               SNAPSHOT, TRIPWIRE, ZONES)
+                               SNAPSHOT, STACK_ITEM, STACK_KINDS, TARGET, TRIPWIRE, ZONES)
 
 DOC = (Path(__file__).parent.parent / "docs" / "game-record.md").read_text(encoding="utf-8")
 ROW = re.compile(r"^\| `([^`]+)` \| ([^|]+?) \|", re.MULTILINE)
@@ -33,6 +33,8 @@ def table_under(heading):
     ("### Scoreboard", SCOREBOARD),
     ("### Zones", ZONES),
     ("### Card", CARD),
+    ("### Stack item", STACK_ITEM),
+    ("### Target", TARGET),
 ], ids=lambda value: value if isinstance(value, str) else "")
 def test_each_json_table_names_exactly_the_validated_fields_with_a_type(heading, shape):
     documented = table_under(heading)
@@ -40,8 +42,8 @@ def test_each_json_table_names_exactly_the_validated_fields_with_a_type(heading,
     assert all(documented.values())
 
 
-@pytest.mark.parametrize("heading, schema", [("### snapshots table", SNAPSHOT_SCHEMA), ("### cards table", CARD_SCHEMA)],
-                         ids=["snapshots", "cards"])
+@pytest.mark.parametrize("heading, schema", [("### snapshots table", SNAPSHOT_SCHEMA), ("### cards table", CARD_SCHEMA),
+                                             ("### stack table", STACK_SCHEMA)], ids=["snapshots", "cards", "stack"])
 def test_each_parquet_table_names_exactly_the_written_columns_and_types(heading, schema):
     documented = table_under(heading)
     assert documented.pop("batch_id") == "string (partition)"
@@ -53,6 +55,7 @@ def test_the_document_states_the_version():
 
 
 @pytest.mark.parametrize("heading, values", [("### End reasons", END_REASONS), ("### Sim modes", SIM_MODES),
-                                             ("### Faces", FACES)], ids=["end reasons", "sim modes", "faces"])
+                                             ("### Faces", FACES), ("### Stack kinds", STACK_KINDS)],
+                         ids=["end reasons", "sim modes", "faces", "stack kinds"])
 def test_each_closed_list_matches_the_code(heading, values):
     assert list(table_under(heading)) == list(values)

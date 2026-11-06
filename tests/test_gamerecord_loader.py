@@ -57,12 +57,15 @@ METADATA_FIELDS = ["schema_version", "batch_id", "seed", "game_number", "seats",
                    "end_reason", "tripwire"]
 SEAT_FIELDS = ["seat", "deck", "ai_profile", "sim_mode", "search_budget"]
 TRIPWIRE_FIELDS = ["enabled", "hits", "signatures"]
-SNAPSHOT_FIELDS = ["side", "scoreboard", "zones"]
+SNAPSHOT_FIELDS = ["side", "scoreboard", "zones", "stack"]
 SCOREBOARD_FIELDS = ["me_life", "opp_life", "me_poison", "opp_poison", "me_library", "opp_library", "opp_hand",
                      "turn", "me_active", "me_on_play"]
 ZONES = ["battlefield", "me_hand", "me_graveyard", "opp_graveyard", "me_exile", "opp_exile", "opp_revealed"]
 CARD_FIELDS = ["id", "name", "face", "power", "toughness", "tapped", "counters", "summoning_sick", "attached_to",
-               "attached_to_seat", "controller", "face_down"]
+               "attached_to_seat", "controller", "face_down", "damage", "attacking_seat", "attacking_card", "blocking",
+               "blocked_by"]
+STACK_FIELDS = ["id", "name", "face", "face_down", "controller", "kind", "targets"]
+TARGET_FIELDS = ["card", "seat"]
 
 
 def fields_in(names, reach):
@@ -97,9 +100,18 @@ def card(lines):
     return lines[3]["zones"]["battlefield"][0]
 
 
+def stack_item(lines):
+    return lines[3]["stack"][0]
+
+
+def target(lines):
+    return lines[3]["stack"][0]["targets"][0]
+
+
 EVERY_FIELD = (fields_in(METADATA_FIELDS, metadata) + fields_in(SEAT_FIELDS, seat) + fields_in(TRIPWIRE_FIELDS, tripwire)
                + fields_in(SNAPSHOT_FIELDS, snapshot) + fields_in(SCOREBOARD_FIELDS, scoreboard)
-               + fields_in(ZONES, zones) + fields_in(CARD_FIELDS, card))
+               + fields_in(ZONES, zones) + fields_in(CARD_FIELDS, card)
+               + fields_in(STACK_FIELDS, stack_item) + fields_in(TARGET_FIELDS, target))
 
 
 @pytest.mark.parametrize("name, reach", EVERY_FIELD)
@@ -251,6 +263,85 @@ def test_a_wrong_value_is_rejected_and_named(game_lines, write_game, reach, name
     lines = game_lines("win")
     reach(lines)[name] = value
     with pytest.raises(GameRecordError, match=name):
+        load_game(write_game(lines))
+
+
+def test_the_stack_loads_top_first_with_a_spell_hidden_from_one_side(game_file):
+    game = load_game(game_file("win"))
+
+    seat_1, seat_2 = game.snapshots[2]["stack"], game.snapshots[3]["stack"]
+    assert [item["kind"] for item in seat_1] == ["ability", "spell"]
+    assert seat_1[0]["targets"] == [{"card": None, "seat": 2}, {"card": 32, "seat": None}]
+    assert seat_1[1]["name"] is None
+    assert seat_2[1]["name"] == "Willbender"
+
+
+def test_combat_and_damage_load_on_the_card(game_file):
+    game = load_game(game_file("win"))
+
+    battlefield = {card["id"]: card for card in game.snapshots[2]["zones"]["battlefield"]}
+    assert (battlefield[13]["attacking_seat"], battlefield[13]["blocked_by"]) == (2, [32])
+    assert (battlefield[32]["blocking"], battlefield[32]["damage"]) == ([13], 1)
+
+
+def stack_top(lines):
+    return lines[3]["stack"][1]
+
+
+@pytest.mark.parametrize("change", [{"name": "Willbender"}, {"face": "Original"}])
+def test_a_stack_item_has_name_and_face_both_or_neither(game_lines, write_game, change):
+    lines = game_lines("win")
+    stack_top(lines).update(change)
+    with pytest.raises(GameRecordError, match="name and face"):
+        load_game(write_game(lines))
+
+
+def test_a_nameless_stack_item_must_be_face_down(game_lines, write_game):
+    lines = game_lines("win")
+    stack_top(lines)["face_down"] = False
+    with pytest.raises(GameRecordError, match="face_down"):
+        load_game(write_game(lines))
+
+
+def test_a_stack_item_is_a_spell_or_an_ability(game_lines, write_game):
+    lines = game_lines("win")
+    stack_top(lines)["kind"] = "trigger"
+    with pytest.raises(GameRecordError, match="kind"):
+        load_game(write_game(lines))
+
+
+@pytest.mark.parametrize("value", [{"card": None, "seat": None}, {"card": 32, "seat": 2}])
+def test_a_target_is_a_card_or_a_seat(game_lines, write_game, value):
+    lines = game_lines("win")
+    stack_item(lines)["targets"][0] = value
+    with pytest.raises(GameRecordError, match="target"):
+        load_game(write_game(lines))
+
+
+def attacker(lines):
+    return next(c for c in lines[3]["zones"]["battlefield"] if c["id"] == 13)
+
+
+def test_a_card_attacks_a_seat_or_a_card_but_not_both(game_lines, write_game):
+    lines = game_lines("win")
+    attacker(lines)["attacking_card"] = 32
+    with pytest.raises(GameRecordError, match="attacking"):
+        load_game(write_game(lines))
+
+
+@pytest.mark.parametrize("change", [{"attacking_seat": None, "attacking_card": 999}, {"blocking": [999]},
+                                    {"blocked_by": [999]}], ids=["attacking_card", "blocking", "blocked_by"])
+def test_combat_points_at_cards_on_the_battlefield(game_lines, write_game, change):
+    lines = game_lines("win")
+    attacker(lines).update(change)
+    with pytest.raises(GameRecordError, match="battlefield"):
+        load_game(write_game(lines))
+
+
+def test_marked_damage_cant_be_negative(game_lines, write_game):
+    lines = game_lines("win")
+    attacker(lines)["damage"] = -1
+    with pytest.raises(GameRecordError, match="damage"):
         load_game(write_game(lines))
 
 

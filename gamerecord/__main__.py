@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     convert = commands.add_parser("convert", help="convert a folder of game files to Parquet, keeping wins only")
     convert.add_argument("folder", help="folder of .jsonl.gz game files, searched with its subfolders")
-    convert.add_argument("out", help="folder for the snapshots and cards tables")
+    convert.add_argument("out", help="folder for the snapshots, cards and stack tables")
     convert.set_defaults(handler=_convert, parser=convert)
     return parser
 

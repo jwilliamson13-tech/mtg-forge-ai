@@ -4,9 +4,9 @@ The game record is the only interface between Forge and Python. The Java hook (#
 
 The current `schema_version` is 1.
 
-Any change to a field, a type or a rule here bumps the version, and this document, the hook and `gamerecord/record.py` change in the same step. The loader refuses every other version, so a file from a mismatched build fails at load time. `tests/test_gamerecord_schema_doc.py` fails if this document and the validator name different fields.
+Any change to a field, a type or a rule here bumps the version once real files exist to protect, and this document, the hook and `gamerecord/record.py` change in the same step. The stack, combat and marked damage fields went in at version 1, because no game file existed yet. The loader refuses every other version, so a file from a mismatched build fails at load time. `tests/test_gamerecord_schema_doc.py` fails if this document and the validator name different fields.
 
-Sources for each field are Forge classes as read at commit `c72fcbfdcc0`. No hook has written a real file yet, so these mappings have never run.
+Sources for each field are Forge classes as read at commit `c72fcbfdcc0`. The hook is `GameRecorder` and `SnapshotLine` in the fork's `forge.view` package, and `-record` turns it on. See "Running batches" in `forge-build.md`.
 
 ## File
 
@@ -19,7 +19,14 @@ The name is `<batch_id>_<seed>_<game_number>_<deck1>_vs_<deck2>.jsonl.gz`. In a 
 
 The game number has to be in the name. Forge seeds one `java.util.Random` per JVM and plays all of a worker's `-n` games from that stream, so every game from a worker shares a seed and a deck pair. Without the number, each game would overwrite the last.
 
-The hook buffers a game in memory and writes the file at game end. It writes under a temporary name that doesn't end in `.jsonl.gz` and renames the file once closed, so a killed worker can't leave a half-written game that looks finished. A game that throws writes nothing.
+The hook buffers a game in memory and writes the file at game end. It writes under a temporary name that doesn't end in `.jsonl.gz` and renames the file once closed, so a killed worker can't leave a half-written game that looks finished.
+
+Some games leave no file at all:
+
+- A game that throws. So does a game where the hook itself fails, because a file with holes in it is worse than none.
+- A game with no snapshots, which the loader would reject. A clock stop before the first priority pass does this, because mulligans come first.
+
+Every field in this document is written, null ones included. The hook has to serialize nulls, because Gson drops them by default.
 
 ## Metadata line
 
@@ -31,7 +38,7 @@ The hook buffers a game in memory and writes the file at game end. It writes und
 | `game_number` | integer, 1 or more | This game's place in the worker's run, the `n` of `Game Result: Game n`. |
 | `seats` | array of two seat objects | Seat 1, then seat 2. |
 | `winner` | integer 1 or 2, or null | The winning seat. Null for every end reason except `win`. |
-| `final_turn` | integer, 1 or more | The turn the game ended on. |
+| `final_turn` | integer, 1 or more | The turn the game ended on. A capped game has already begun the next turn when it stops, so a cap of 50 gives 51 here, and its last snapshot says 50. |
 | `end_reason` | string, one of the end reasons | Why the game ended. |
 | `tripwire` | tripwire summary object | Hidden-information reads during this game. |
 
@@ -57,7 +64,7 @@ Seat 1 is the first deck given to `-d`, printed by Forge as `Ai(1)`. `game_id` i
 
 ### Tripwire summary
 
-The hook writes this object from the start. Until #20 lands it writes `{"enabled": false, "hits": 0, "signatures": []}`.
+The hook writes this object from the start. Until #20 fills it in, it writes `{"enabled": false, "hits": 0, "signatures": []}`.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -86,6 +93,7 @@ Never take `winner` from Forge's outcome on a stopped game. `SimulateMatch` stop
 | `side` | integer 1 or 2 | The seat this snapshot is written from. |
 | `scoreboard` | scoreboard object | The rules-level numbers. |
 | `zones` | zones object | Every card this side can see. |
+| `stack` | array of stack items | The stack, top first, so in the order it resolves. `[]` when empty. |
 
 The hook writes two snapshots per moment, one from each side, at every priority pass. A single line can't serve both sides, because `me_hand`, `opp_revealed` and hidden names differ between them. Each line is already one training row, labeled from `side` and `winner`.
 
@@ -120,9 +128,25 @@ All seven are required, and an empty zone is `[]`. The opponent's hand and eithe
 | `opp_graveyard` | array of cards | The opponent's graveyard. |
 | `me_exile` | array of cards | This side's exile zone. |
 | `opp_exile` | array of cards | The opponent's exile zone. |
-| `opp_revealed` | array of cards | The cards in this side's `AiCardMemory.REVEALED_CARDS`. |
+| `opp_revealed` | array of cards | This side's log of the opponent's revealed cards. See below. |
 
-A revealed card can also sit in another zone in the same snapshot, so a card `id` can appear twice.
+`battlefield` leaves out phased-out cards, which the rules treat as not there.
+
+### Revealed-card log
+
+`opp_revealed` reads a log the hook keeps per side, per game, `forge.game.RevealLog`. It works the way a person with a notepad would. Forge's `AiCardMemory.REVEALED_CARDS` can't do this: it clears at the AI's own end step, and it holds own and library cards too.
+
+- A card goes on the log the moment the opponent's hidden card is revealed to this side, from any zone. A card this side may look at without a reveal, such as a library top played face up, goes on at the next snapshot. A face-down card shown to this side counts as hidden too.
+- It stays until this side can see it in a public zone. A shuffle, a return to the library or a move to a face-down exile changes nothing, because a person couldn't see that either, and dropping the card there would itself leak information.
+- Own cards never go on the log.
+- The line is what was written down, not the live card: `name`, `face`, `power` and `toughness` from the moment it was revealed, `controller` its owner, and every other field at its empty value. So `power` and `toughness` are the side's base values, and a logged card played face down can't be tied to its tapped, damaged or countered face-down self by matching state. Its `id` still ties them, which is one more reason `id` isn't a model input.
+
+Two limits:
+
+- A card that goes hidden to public to hidden within one resolution, with no priority pass between, stays on the log. The fact was public by then, so nothing leaks.
+- A player who has mind-slaved the opponent sees that hand, and the log doesn't record that.
+
+The log is kept behind `Game.REVEAL_LOG`, which only `forge sim` sets, so default play has none. `knownTo(player)` is the one read, and #21's peek fixes use it too.
 
 ### Card
 
@@ -135,15 +159,54 @@ A revealed card can also sit in another zone in the same snapshot, so a card `id
 | `toughness` | integer, or null | `Card.getNetToughness()` if the card is a creature right now, else null. |
 | `tapped` | boolean | `Card.isTapped()`. |
 | `counters` | object, counter type to integer 1 or more | One entry per counter type on the card, `{}` for none. Keys are `CounterType.toString()`, such as `P1P1` or `LOYALTY`. `getName()` gives `+1/+1`, which is the wrong one. |
-| `summoning_sick` | boolean | `Card.isSick()`. |
-| `attached_to` | integer, or null | The `id` of the card this is attached to. It must be on the battlefield in the same snapshot. |
+| `summoning_sick` | boolean | `Card.isSick()`, on the battlefield only. Forge's flag is true for a creature in hand. |
+| `attached_to` | integer, or null | The `id` of the card this is attached to. It must be on the battlefield in the same snapshot, and is null when the host is anywhere else. |
 | `attached_to_seat` | integer 1 or 2, or null | The seat of the player this is attached to, for Curse auras and the like. |
 | `controller` | integer 1 or 2 | The seat of `Card.getController()`. |
 | `face_down` | boolean | `Card.isFaceDown()`. |
+| `damage` | integer, 0 or more | `Card.getDamage()`, the damage marked on it this turn. |
+| `attacking_seat` | integer 1 or 2, or null | The seat this card is attacking, from `Combat.getDefenderByAttacker`. |
+| `attacking_card` | integer, or null | The `id` of the planeswalker or battle this card is attacking. It must be on the battlefield in the same snapshot. |
+| `blocking` | array of integers | The `id` of each attacker this card blocks, sorted. All must be on the battlefield in the same snapshot. |
+| `blocked_by` | array of integers | The `id` of each creature blocking this card, sorted. All must be on the battlefield in the same snapshot. |
 
-`Card.getEntityAttachedTo()` returns a `GameEntity`, which can be a card or a player. That is why attachment takes two fields. At most one of them is set.
+`Card.getEntityAttachedTo()` returns a `GameEntity`, which can be a card or a player. That is why attachment takes two fields. At most one of them is set. Attacking works the same way, and neither is set for a card that isn't attacking.
 
-A face-down card is hidden when `side` may not look at it, by `Card.mayPlayerLook`. A hidden card has null `name` and null `face`, and keeps its public state: `face_down` true, its 2/2, its counters. This stops a snapshot from leaking what the opponent's morph is. When `side` may look, `name` and `face` give the card's up side, with `face` as its state once turned up, because `FaceDown` is not a legal value.
+`blocked_by` is empty for an attacker whose blockers have all left combat, though the rules still call it blocked. The record doesn't say so.
+
+A face-down card is hidden when `side` may not look at it, by `CardView.canFaceDownBeShownTo`, the rule Forge's UI uses. `Card.mayPlayerLook` is not enough: it hides a player's own morph from them. A hidden card has null `name` and null `face`, and keeps its public state: `face_down` true, its 2/2, its counters. This stops a snapshot from leaking what the opponent's morph is. When `side` may look, `name` and `face` give the card's up side, with `face` as its state once turned up, because `FaceDown` is not a legal value.
+
+A face-down card outside the battlefield has null `power` and `toughness`. Forge reports the 2/2 of the face-down state for it, but a card face down in exile isn't a creature.
+
+An empty Room's state has no name, so `name` gives the whole card's name and `face` is `EmptyRoom`.
+
+### Stack item
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | integer | The source card's `Card.getId()`. A target that is a spell on the stack gives this. |
+| `name` | string, or null | The source card's name, by the same rule as a card. Null only for a hidden source. |
+| `face` | string, one of the faces, or null | The source card's face, by the same rule as a card. |
+| `face_down` | boolean | Whether the source card is face down. A face-down spell is hidden from a side that may not look at it, exactly as a face-down card is. |
+| `controller` | integer 1 or 2 | The seat of `SpellAbility.getActivatingPlayer()`. |
+| `kind` | string, one of the stack kinds | What this item is. |
+| `targets` | array of targets | Every target of the item and its sub-abilities, `[]` for none. |
+
+### Stack kinds
+
+| Value | Meaning |
+|---|---|
+| `spell` | A spell. |
+| `ability` | An activated or triggered ability. |
+
+### Target
+
+| Field | Type | Meaning |
+|---|---|---|
+| `card` | integer, or null | The `id` of a targeted card. For a targeted spell, its source card. It can be in any zone or on the stack, so it needn't appear in the snapshot's zones. |
+| `seat` | integer 1 or 2, or null | The seat of a targeted player. |
+
+Exactly one of the two is set.
 
 ### Faces
 
@@ -177,8 +240,10 @@ These are Forge's `CardStateName` values minus `FaceDown`. A value Forge adds la
 - `winner` is set for `win` and null for every other end reason.
 - `seats` is seat 1, then seat 2.
 - A snapshot's `turn` can't pass `final_turn`.
-- `name` and `face` are both set or both null, and null needs `face_down` true.
+- `name` and `face` are both set or both null, and null needs `face_down` true, on a card or a stack item.
 - `power` and `toughness` are both set or both null.
+- A card attacks a seat or a card, not both, and the cards named by `attacking_card`, `blocking` and `blocked_by` are on the battlefield.
+- A target is a card or a seat, not both and not neither.
 - A tripwire that was off reports no hits and no signatures. Signatures are unique. `hits` is at least the number of signatures, and hits need at least one signature.
 
 A truncated gzip, bad JSON or bad UTF-8 also raises `GameRecordError`.
@@ -189,7 +254,7 @@ A truncated gzip, bad JSON or bad UTF-8 also raises `GameRecordError`.
 python -m gamerecord convert FOLDER OUT
 ```
 
-This reads every `*.jsonl.gz` under `FOLDER` and writes `OUT/snapshots/batch_id=<id>/part-0.parquet` and `OUT/cards/batch_id=<id>/part-0.parquet`. It keeps wins only, because a draw has no label. Draws stay in the raw files.
+This reads every `*.jsonl.gz` under `FOLDER` and writes `OUT/snapshots/batch_id=<id>/part-0.parquet`, `OUT/cards/batch_id=<id>/part-0.parquet` and `OUT/stack/batch_id=<id>/part-0.parquet`. It keeps wins only, because a draw has no label. Draws stay in the raw files.
 
 It prints what it kept and dropped by end reason, then each rejected file and why. An exception file counts as dropped. Any other file the loader refuses is rejected, and the rest of the folder still converts. The exit code is 1 if it rejected anything.
 
@@ -201,7 +266,7 @@ import pyarrow.dataset as ds
 table = ds.dataset("OUT/snapshots", format="parquet", partitioning="hive").to_table()
 ```
 
-`(game_id, snapshot_index)` joins the two tables. A card-less snapshot has no rows in `cards`.
+`(game_id, snapshot_index)` joins the three tables. A card-less snapshot has no rows in `cards`, and a snapshot with an empty stack has none in `stack`.
 
 ### snapshots table
 
@@ -258,6 +323,29 @@ One row per card per snapshot, long format.
 | `attached_to_seat` | int8 | |
 | `controller` | int8 | |
 | `face_down` | bool | |
+| `damage` | int32 | |
+| `attacking_seat` | int8 | |
+| `attacking_card` | int32 | |
+| `blocking` | list<item: int32> | |
+| `blocked_by` | list<item: int32> | |
+
+### stack table
+
+One row per stack item per snapshot, long format.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `batch_id` | string (partition) | From the folder name, not stored in the file. |
+| `game_id` | string | Joins to `snapshots`. |
+| `snapshot_index` | int32 | Joins to `snapshots`. |
+| `position` | int32 | Place on the stack, 0 for the top. |
+| `id` | int32 | The stack item fields as written, here and below. |
+| `name` | string | |
+| `face` | string | |
+| `face_down` | bool | |
+| `controller` | int8 | |
+| `kind` | string | |
+| `targets` | list<item: struct<card: int32, seat: int8>> | |
 
 ## Open questions for later tickets
 
