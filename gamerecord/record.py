@@ -74,6 +74,11 @@ def _one_of(*allowed: object) -> Check:
     return check
 
 
+def _nothing(value: object, where: str) -> None:
+    if value is not None:
+        raise GameRecordError(f"{where}: expected null, got {value!r}")
+
+
 def _nullable(inner: Check) -> Check:
     def check(value: object, where: str) -> None:
         if value is not None:
@@ -174,6 +179,8 @@ CARD = Shape({
     "blocking": _list_of(_integer()),
     "blocked_by": _list_of(_integer()),
 })
+# A logged card has no id, or the log would tie it to the face-down card it became.
+LOGGED_CARD = Shape({**CARD.fields, "id": _nothing})
 TARGET = Shape({
     "card": _nullable(_integer()),
     "seat": _nullable(SEAT_NUMBER),
@@ -187,8 +194,8 @@ STACK_ITEM = Shape({
     "kind": _one_of(*STACK_KINDS),
     "targets": _list_of(TARGET),
 })
-ZONES = Shape({zone: _list_of(CARD) for zone in (
-    "battlefield", "me_hand", "me_graveyard", "opp_graveyard", "me_exile", "opp_exile", "opp_revealed")})
+ZONES = Shape({**{zone: _list_of(CARD) for zone in (
+    "battlefield", "me_hand", "me_graveyard", "opp_graveyard", "me_exile", "opp_exile")}, "opp_revealed": _list_of(LOGGED_CARD)})
 SNAPSHOT = Shape({
     "side": SEAT_NUMBER,
     "scoreboard": SCOREBOARD,

@@ -445,3 +445,21 @@ def test_a_bad_snapshot_line_is_reported_by_line_and_field(game_lines, write_gam
 def test_a_missing_file_is_a_game_record_error(tmp_path):
     with pytest.raises(GameRecordError):
         load_game(tmp_path / "gone.jsonl.gz")
+
+
+def logged_card(lines):
+    return next(line for line in lines[1:] if line["zones"]["opp_revealed"])["zones"]["opp_revealed"][0]
+
+
+def test_a_logged_card_with_an_id_is_rejected(game_lines, write_game):
+    lines = game_lines("win")
+    logged_card(lines)["id"] = 38
+    with pytest.raises(GameRecordError, match="opp_revealed.*id"):
+        load_game(write_game(lines))
+
+
+def test_a_card_elsewhere_needs_its_id(game_lines, write_game):
+    lines = game_lines("win")
+    card(lines)["id"] = None
+    with pytest.raises(GameRecordError, match="id"):
+        load_game(write_game(lines))

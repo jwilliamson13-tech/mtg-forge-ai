@@ -141,7 +141,8 @@ All seven are required, and an empty zone is `[]`. The opponent's hand and eithe
 - A card goes on the log the moment the opponent's hidden card is revealed to this side, from any zone. A card this side may look at without a reveal, such as a library top played face up, goes on at the next snapshot. A face-down card shown to this side counts as hidden too.
 - It stays until this side can see it in a public zone. A shuffle, a return to the library or a move to a face-down exile changes nothing, because a person couldn't see that either, and dropping the card there would itself leak information.
 - Own cards never go on the log.
-- The line is what was written down, not the live card: `name`, `face`, `power` and `toughness` from the moment it was revealed, `controller` its owner, and every other field at its empty value. So `power` and `toughness` are the side's base values, and a logged card played face down can't be tied to its tapped, damaged or countered face-down self by matching state. Its `id` still ties them, which is one more reason `id` isn't a model input.
+- The line is what was written down, not the live card: `name`, `face`, `power` and `toughness` from the moment it was revealed, `controller` its owner, and every other field at its empty value. So `power` and `toughness` are the side's base values, and a logged card played face down can't be tied to its tapped, damaged or countered face-down self by matching state.
+- A logged card has no id. `id` is null on these lines and nowhere else, because an id would tie the entry to its face-down self. The lines are in `name` order, not the log's own, which follows deck order.
 
 Two limits:
 
@@ -169,7 +170,7 @@ Ids can't protect one thing. A file holds both sides, so the other side's row of
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | integer | The card's record id. See "Record ids". |
+| `id` | integer, or null | The card's record id. See "Record ids". Null only on `opp_revealed`. |
 | `name` | string, or null | `Card.getName()` in the card's current state. Null only for a hidden card. |
 | `face` | string, one of the faces, or null | `Card.getCurrentStateName()`. Null only for a hidden card. |
 | `power` | integer, or null | `Card.getNetPower()` if the card is a creature right now, else null. |
@@ -258,6 +259,7 @@ These are Forge's `CardStateName` values minus `FaceDown`. A value Forge adds la
 - `seats` is seat 1, then seat 2.
 - A snapshot's `turn` can't pass `final_turn`.
 - `name` and `face` are both set or both null, and null needs `face_down` true, on a card or a stack item.
+- `id` is null on an `opp_revealed` card and set on every other card and stack item.
 - `power` and `toughness` are both set or both null.
 - A card attacks a seat or a card, not both, and the cards named by `attacking_card`, `blocking` and `blocked_by` are on the battlefield.
 - A target is a card or a seat, not both and not neither.
@@ -328,7 +330,7 @@ One row per card per snapshot, long format.
 | `game_id` | string | Joins to `snapshots`. |
 | `snapshot_index` | int32 | Joins to `snapshots`. |
 | `zone` | string | The zones object key this card was under. |
-| `id` | int32 | The card fields as written, here and below. |
+| `id` | int32 | The card fields as written, here and below. Null for `opp_revealed`. |
 | `name` | string | |
 | `face` | string | |
 | `power` | int32 | |
