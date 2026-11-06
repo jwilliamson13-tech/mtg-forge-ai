@@ -64,15 +64,17 @@ Seat 1 is the first deck given to `-d`, printed by Forge as `Ai(1)`. `game_id` i
 
 ### Tripwire summary
 
-The hook writes this object from the start. Until #20 fills it in, it writes `{"enabled": false, "hits": 0, "signatures": []}`.
+With `-tripwire off`, the hook writes `{"enabled": false, "hits": 0, "signatures": []}`. "Tripwire" in `forge-build.md` says what counts as a hit.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `enabled` | boolean | Whether the tripwire ran this game. |
 | `hits` | integer, 0 or more | How many hidden-zone reads it caught. |
-| `signatures` | array of strings | The unique stack signatures behind those hits. |
+| `signatures` | array of strings | The unique stack signatures behind those hits, sorted. |
 
 `enabled` is there because 0 hits from a tripwire that was off says nothing. A batch is clean only when every game has `enabled` true and `hits` 0.
+
+A signature is up to three `forge.ai` frames, nearest first, as `Class.method:line`, joined with ` < `. The first frame is the line that asked for the cards. A signature that starts with `no decider: ` is a forge-ai read that no controller call had opened. Line numbers belong to the jar, so compare signatures only within one build. The record has no count per signature, and the sim-runner gets those from Forge's stdout.
 
 ### End reasons
 

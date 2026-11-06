@@ -9,6 +9,7 @@ from simrunner.worker import DEFAULT_SIM_MODE, Seat, WorkerResult
 # HANDOFF.md: the nightly window is 23:00 to 07:00, and kill criterion 1 is about 500 usable games a night.
 OVERNIGHT_HOURS = 8
 KILL_CRITERION_GAMES = 500
+TOP_SIGNATURES = 20
 
 
 def _table(rows: list[tuple[str, ...]]) -> str:
@@ -29,6 +30,20 @@ def _status(batch: BatchResult) -> str:
     if batch.complete:
         return "complete"
     return "incomplete, stopped at the hard stop" if batch.stopped else "incomplete"
+
+
+def _tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
+    if not batch.tripwire_on:
+        return [("tripwire", "off")]
+    hits = batch.tripwire_hits
+    if not hits:
+        return [("tripwire", "no game reported, so the jar may be stale")]
+    dirty = sum(count > 0 for count in hits)
+    missing = batch.finished - len(hits)
+    verdict = "yes" if batch.tripwire_clean else f"no, {dirty} of {batch.finished} games had hits"
+    if missing:
+        verdict += f", {missing} reported nothing"
+    return [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
 
 
 def format_summary(batch: BatchResult) -> str:
@@ -57,6 +72,7 @@ def format_summary(batch: BatchResult) -> str:
     rows += [(f"  by {cause.value}", str(batch.draws(cause))) for cause in DrawCause]
     if config.records:
         rows.append(("game records written", f"{batch.records_written} of {batch.finished} games"))
+        rows += _tripwire_rows(batch)
     rows += [
         ("wall time", f"{batch.wall_s:.1f} s"),
         ("games per hour", f"{batch.games_per_hour:.0f}"),
@@ -94,6 +110,8 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("Forge did not report on the search budget, so the jar may be stale")
     if not batch.wrote_records(worker):
         notes.append("a game with no game record, so the jar may be stale")
+    if not batch.reported_tripwire(worker):
+        notes.append("a game with no tripwire count, so the jar may be stale")
     if worker.fatal:
         notes.append(worker.fatal)
     return "; ".join(notes)
@@ -111,5 +129,16 @@ def format_workers(batch: BatchResult) -> str:
     return _table(rows)
 
 
+def format_tripwire(batch: BatchResult) -> str:
+    """The signatures to fix first. Every one is in the game records too."""
+    signatures = batch.tripwire_signatures()
+    if not signatures:
+        return ""
+    rows = [("hits", "games", "signature")]
+    rows += [(str(hits), str(games), signature) for signature, hits, games in signatures[:TOP_SIGNATURES]]
+    more = len(signatures) - TOP_SIGNATURES
+    return "\n" + _table(rows) + (f"and {more} more\n" if more > 0 else "")
+
+
 def format_report(batch: BatchResult) -> str:
-    return format_summary(batch) + "\n" + format_workers(batch)
+    return format_summary(batch) + "\n" + format_workers(batch) + format_tripwire(batch)

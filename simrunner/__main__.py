@@ -60,6 +60,7 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
         records=args.records or args.records_dir is not None,
         records_dir=Path(args.records_dir) if args.records_dir else None, turn_cap=args.turn_cap,
+        tripwire=not args.no_tripwire,
     )
     try:
         batch = run_batch(config)
@@ -105,6 +106,8 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
                                              "(default: games in the run folder)")
     batch.add_argument("--turn-cap", type=int, help="with records, the last turn a game may play before it "
                                                     "stops as a draw (default: Forge's 50)")
+    batch.add_argument("--no-tripwire", action="store_true",
+                       help="with records, leave out the check for forge-ai reading hidden cards (default: on)")
 
 
 def build_parser() -> argparse.ArgumentParser:
