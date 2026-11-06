@@ -20,7 +20,7 @@ def _vocab_cutoff(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--min-count", type=int, default=5, help="vocabulary cutoff, as in docs/vocabulary.md")
 
 
-def _training(parser: argparse.ArgumentParser) -> None:
+def _training_options(parser: argparse.ArgumentParser) -> None:
     _inputs(parser)
     _vocab_cutoff(parser)
     defaults = TrainConfig()
@@ -112,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     join.set_defaults(handler=_join)
 
     train = commands.add_parser("train", help="train a model and write its artifact and metrics report")
-    _training(train)
+    _training_options(train)
     train.set_defaults(handler=_train)
 
     export = commands.add_parser("export", help="write the ONNX bundle and check it against PyTorch, exit 1 if it fails")
@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     export.set_defaults(handler=_export)
 
     ablate = commands.add_parser("ablate", help="retrain with each input group removed and write the table")
-    _training(ablate)
+    _training_options(ablate)
     ablate.set_defaults(handler=_ablate)
 
     pair = commands.add_parser("pairtest", help="score a card pair together and alone, and print the verdict")

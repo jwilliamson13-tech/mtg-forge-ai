@@ -263,7 +263,7 @@ class _Features:
         self.encoded: list[Encoded] = [EMPTY_CARD]
         self.index: dict[tuple[str, str], int] = {}
 
-    def of(self, table: pa.Table) -> np.ndarray:
+    def indices(self, table: pa.Table) -> np.ndarray:
         """A feature index per row: 0 for a hidden card, -1 for an unmatched name."""
         pairs = pc.binary_join_element_wise(_array(table, "name"), _array(table, "face"), "\0").dictionary_encode()
         codes = _numpy(pc.fill_null(pairs.indices, -1)).astype(np.int64)
@@ -319,7 +319,7 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
     card_table, stack_table = _read(parquet / "cards", CARD_COLUMNS), _read(parquet / "stack", STACK_COLUMNS)
 
     card_row = np.concatenate([owning_row(card_table), owning_row(stack_table)])
-    feature = np.concatenate([features.of(card_table), features.of(stack_table)])
+    feature = np.concatenate([features.indices(card_table), features.indices(stack_table)])
     zone = np.concatenate([[ZONE_IDS[name] for name in card_table["zone"].to_pylist()],
                            np.full(stack_table.num_rows, ZONE_IDS["stack"])]).astype(np.int64)
     live = np.concatenate([_card_live(card_table), _stack_live(stack_table)])
