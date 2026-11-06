@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from cardscript.vocab import Vocabulary, build_vocabulary
-from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, Corpus, load_corpus, load_manifest
-from setmodel.features import CardTable, Caps
+from cardscript.vocab import Vocabulary
+from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, Corpus
+from setmodel.features import Caps
 from setmodel.model import ModelConfig, SetModel, weighted_loss
 
 MODEL_FILE = "model.pt"
@@ -200,14 +200,6 @@ def load_model(folder: str | Path) -> tuple[SetModel, Vocabulary, Caps, dict]:
     model.load_state_dict(state)
     model.eval()
     return model, Vocabulary.from_dict(artifact["vocab"]), Caps(**artifact["caps"]), artifact["metadata"]
-
-
-def load_inputs(parquet: str | Path, cards: str | Path, manifest: str | Path, min_count: int) -> tuple[Corpus, Vocabulary, CardTable]:
-    """The corpus and vocabulary one command works from. The vocabulary comes from the dump, as in `docs/sweep.md`."""
-    with open(cards, encoding="utf-8") as lines:
-        vocab = build_vocabulary((json.loads(line) for line in lines), min_count=min_count)
-    table = CardTable.load(cards)
-    return load_corpus(parquet, table, vocab, load_manifest(manifest)), vocab, table
 
 
 def run(corpus: Corpus, vocab: Vocabulary, config: TrainConfig, out: str | Path) -> dict:

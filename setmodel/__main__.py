@@ -45,22 +45,19 @@ def _print(text: str) -> None:
 
 
 def _join(args: argparse.Namespace) -> int:
-    from cardscript.vocab import build_vocabulary
-    from setmodel.dataset import load_corpus, load_manifest
-    from setmodel.features import CardTable
+    from setmodel.dataset import load_inputs
 
-    with open(args.cards, encoding="utf-8") as lines:
-        vocab = build_vocabulary((json.loads(line) for line in lines), min_count=args.min_count)
-    corpus = load_corpus(args.parquet, CardTable.load(args.cards), vocab, load_manifest(args.manifest))
+    corpus, _ = load_inputs(args.parquet, args.cards, args.manifest, args.min_count)
     _print(corpus.report.format())
     _print(f"truncation {corpus.truncation()}\n")
     return 0
 
 
 def _train(args: argparse.Namespace) -> int:
-    from setmodel.train import METRICS_FILE, load_inputs, run
+    from setmodel.dataset import load_inputs
+    from setmodel.train import METRICS_FILE, run
 
-    corpus, vocab, _ = load_inputs(args.parquet, args.cards, args.manifest, args.min_count)
+    corpus, vocab = load_inputs(args.parquet, args.cards, args.manifest, args.min_count)
     _print(corpus.report.format())
     metrics = run(corpus, vocab, _config(args), args.out)
     _print(f"device {metrics['device']}\nheld out {metrics['held_out']}\nwrote {Path(args.out) / METRICS_FILE}\n")
@@ -85,10 +82,10 @@ def _export(args: argparse.Namespace) -> int:
 
 
 def _ablate(args: argparse.Namespace) -> int:
+    from setmodel.dataset import load_inputs
     from setmodel.review import run_ablations
-    from setmodel.train import load_inputs
 
-    corpus, vocab, _ = load_inputs(args.parquet, args.cards, args.manifest, args.min_count)
+    corpus, vocab = load_inputs(args.parquet, args.cards, args.manifest, args.min_count)
     _print(run_ablations(corpus, vocab, _config(args), args.out))
     return 0
 

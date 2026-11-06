@@ -28,7 +28,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
-from cardscript.vocab import Vocabulary
+from cardscript.vocab import Vocabulary, build_vocabulary
 from gamerecord.record import SCOREBOARD, ZONES
 from setmodel.features import EMPTY_CARD, CardTable, Caps, Encoded, densify, encode, face_slot, key_scales
 
@@ -370,3 +370,10 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
         card_offsets=np.concatenate([[0], np.cumsum(np.bincount(card_row, minlength=snapshots.num_rows))]),
         card_feature=feature, card_zone=zone, card_live=live, feature_keys=features.keys, encoded=features.encoded,
         token_ids=token_ids, token_mask=token_mask, numbers=numbers, number_mask=number_mask, report=report, caps=caps)
+
+
+def load_inputs(parquet: str | Path, cards: str | Path, manifest: str | Path, min_count: int) -> tuple[Corpus, Vocabulary]:
+    """The corpus and vocabulary one command works from. The vocabulary comes from the dump, as in `docs/sweep.md`."""
+    with open(cards, encoding="utf-8") as lines:
+        vocab = build_vocabulary((json.loads(line) for line in lines), min_count=min_count)
+    return load_corpus(parquet, CardTable.load(cards), vocab, load_manifest(manifest)), vocab
