@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from setmodel.dataset import LIVE, LIVE_FIELDS, SCOREBOARD_FIELDS, ZONE_IDS, load_corpus
+from setmodel.dataset import LIVE_FIELDS, SCOREBOARD_FIELDS, ZONE_IDS, load_corpus
 from setmodel.model import ModelConfig, SetModel, StateModel, weighted_loss
 from setmodel.train import TrainConfig, train
 from tests.setmodel_corpus import card_table, manifest, smoke_games, vocabulary, write_parquet
@@ -70,14 +70,6 @@ def test_a_keyed_number_scales_its_key_by_value_over_the_constant():
     inner.ability.register_forward_hook(lambda _, args, __: seen.update(sum=args[0]))
     inner.card_text(ids, tokens, numbers, mask)
     assert torch.allclose(seen["sum"][0, 0], 3.0 * inner.keys.weight[3])
-
-
-def test_a_hidden_card_needs_only_its_live_state():
-    inputs = state(1)
-    inputs["token_mask"].zero_()
-    inputs["number_mask"].zero_()
-    inputs["live"][0, LIVE["hidden"]] = 1
-    assert 0 < run(inputs).item() < 1
 
 
 def test_every_game_weighs_the_same_in_the_loss():

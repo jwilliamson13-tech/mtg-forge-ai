@@ -4,7 +4,6 @@ The hidden information tests compare what the model would be fed, so they catch 
 to the other side's rows however it is written.
 """
 
-import copy
 import json
 
 import numpy as np
@@ -252,5 +251,5 @@ def test_a_key_scale_resists_an_outlier():
 def test_snapshots_and_cards_stay_together_when_a_table_is_read_out_of_order(tmp_path):
     games = [game(number, [snapshot(1, life=number, battlefield=[card("Grizzly Bears", 1, power=2, toughness=2)] * number)])
              for number in (3, 1, 2)]
-    corpus = corpus_of(copy.deepcopy(games), tmp_path)
+    corpus = corpus_of(games, tmp_path)
     assert corpus.scoreboard[:, 0].tolist() == np.diff(corpus.card_offsets).tolist()
