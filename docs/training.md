@@ -19,7 +19,15 @@ Don't upgrade past 2.14 on this card. The sources, read on 2026-11-06:
 
 On the 1080 Ti, under Python 3.13.3 and driver 580.97, `torch.cuda.get_arch_list()` on the installed wheel gives `sm_50, sm_60, sm_61, sm_70, sm_75, sm_80, sm_86, sm_90`. A 4096 by 4096 matmul ran on `cuda:0`, and so did the smoke training and the real-file run below.
 
-The tests use the CPU and need no GPU. They do need torch, `onnx`, `onnxscript` and `onnxruntime`, the same way the Parquet tests need `pyarrow`.
+## Tests
+
+The test suite needs `requirements-dev.txt` installed in a venv. Run it with the venv's Python, from the repo root:
+
+```
+venv\Scripts\python -m pytest
+```
+
+Global Python on this machine has no `onnx`, so pytest there stops at collection on `tests/test_setmodel_export.py` and runs nothing. The tests use the CPU and need no GPU. They do need torch, `onnx`, `onnxscript` and `onnxruntime`, the same way the Parquet tests need `pyarrow`.
 
 ## Commands
 
