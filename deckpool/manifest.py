@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,6 +20,7 @@ TRAIN, HELD_OUT = "train", "held_out"
 SPLITS = (TRAIN, HELD_OUT)
 TRACKED_SLOTS = 4
 HELD_OUT_ARCHETYPES = 10
+DECK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")  # becomes a file name, so no separators or dots
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PATH = DEFAULT_ROOT / "decks" / "manifest.json"
 
@@ -68,6 +70,8 @@ class Manifest:
         """Raise ManifestError if a rule is broken. Runs on load and save, so a hand edit can't slip through."""
         ids, splits = set(), {}
         for d in self.decks:
+            if not DECK_ID.fullmatch(d.id):
+                raise ManifestError(f"bad deck id {d.id!r}: use letters, digits, dashes and underscores")
             if d.split not in SPLITS:
                 raise ManifestError(f"{d.id}: bad split {d.split!r}")
             if d.id in ids:

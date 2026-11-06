@@ -48,6 +48,12 @@ def test_duplicate_ids_and_bad_splits_are_refused():
         m.add_deck(deck("b-1", "B", "test"))
 
 
+@pytest.mark.parametrize("bad_id", ["../../evil", "a/b", "a\b", "..", "", "a.b"])
+def test_a_deck_id_that_is_not_a_plain_name_is_refused(bad_id):
+    with pytest.raises(mf.ManifestError, match="bad deck id"):
+        mf.Manifest().add_deck(deck(bad_id, "A"))
+
+
 def test_tracked_slots_default_empty_and_take_only_held_out_pairs(tmp_path):
     m = mf.Manifest([deck("a-1", "A", "held_out"), deck("b-1", "B", "held_out"), deck("c-1", "C")])
     assert m.tracked_matchups == [None] * 4
