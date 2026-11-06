@@ -4,7 +4,7 @@ The game record is the only interface between Forge and Python. The Java hook (#
 
 The current `schema_version` is 1.
 
-Any change to a field, a type or a rule here bumps the version once real files exist to protect, and this document, the hook and `gamerecord/record.py` change in the same step. The stack, combat and marked damage fields went in at version 1, because no game file existed yet. The loader refuses every other version, so a file from a mismatched build fails at load time. `tests/test_gamerecord_schema_doc.py` fails if this document and the validator name different fields.
+Any change to a field, a type or a rule here bumps the version once real files exist to protect, and this document, the hook and `gamerecord/record.py` change in the same step. The stack, combat and marked damage fields went in at version 1, because no game file existed yet. So did `honest_play`, opaque ids and the null `id` on log lines, because the only files by then were throwaway test batches. The loader refuses every other version, so a file from a mismatched build fails at load time. `tests/test_gamerecord_schema_doc.py` fails if this document and the validator name different fields, and `tests/test_gamerecord_real_game.py` runs the loader on a file the hook really wrote, which has to be replaced when the schema changes.
 
 Sources for each field are Forge classes as read at commit `c72fcbfdcc0`. The hook is `GameRecorder` and `SnapshotLine` in the fork's `forge.view` package, and `-record` turns it on. See "Running batches" in `forge-build.md`.
 

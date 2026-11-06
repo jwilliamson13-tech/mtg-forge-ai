@@ -12,6 +12,7 @@ data/
 *.jsonl
 *.jsonl.gz
 !tests/fixtures/games/*.jsonl
+!tests/fixtures/games/real_game.jsonl.gz
 *.onnx
 runs/
 

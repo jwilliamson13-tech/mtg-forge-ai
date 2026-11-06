@@ -7,6 +7,7 @@ rewriting their line endings.
 
 tests/fixtures/games/ holds hand-written game records as plain JSONL, so a diff can
 show them. `game_file` gzips one into a test's temp folder, the form Forge writes.
+`real_game.jsonl.gz` beside them is a file as the Java hook wrote it.
 
 `script` and `fixture_path` return functions rather than values, so a test can
 load several fixtures by name. That is the usual pytest factory-fixture idiom.

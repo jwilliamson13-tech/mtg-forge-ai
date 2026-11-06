@@ -235,8 +235,8 @@ class BatchResult:
     def record_digest(self) -> str | None:
         """A fingerprint of every game file's content. Same digest, the same games card by card.
 
-        It leaves out what differs between two runs of the same games: the run folder's name
-        and the tripwire's report. None when the batch wrote no files.
+        It leaves out what can differ between two runs of the same games: the run folder's name,
+        `honest_play` and the tripwire's report. None when the batch wrote no files.
         """
         rows = [f"{worker.plan.index}:{number}:{digest}" for worker in self.workers
                 for number, digest in sorted(_file_digest(path) for path in worker.record_files)]
