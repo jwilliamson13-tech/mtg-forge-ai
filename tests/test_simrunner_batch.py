@@ -5,16 +5,21 @@ import json
 import os
 import subprocess
 import sys
+import time
+from dataclasses import replace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from simrunner import window as window_module
 from simrunner import worker as worker_module
 from simrunner.__main__ import main
 from simrunner.batch import BatchConfig, BatchResult, SetupError, run_batch
 from simrunner.output import AiLimits, DrawCause, GameResult
 from simrunner.report import format_report, format_summary, format_workers
 from simrunner.seeds import derive_seed
+from simrunner.window import Window
 from simrunner.worker import DEFAULT_SEARCH_BUDGET, Seat, WorkerPlan, WorkerResult
 
 STUB = Path(__file__).parent / "stub_java.py"
@@ -427,6 +432,138 @@ def test_a_used_run_folder_with_worker_folders_is_refused(config, tmp_path):
         worker_module.remove_folder(folder)
 
 
+def window_closing_in(seconds, lead_s=0.0):
+    now = datetime.now()
+    return Window(now - timedelta(minutes=1), now + timedelta(seconds=seconds), lead_s)
+
+
+def test_workers_stop_at_the_hard_stop_and_the_batch_is_incomplete(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "cut_off_after_one")
+    began = time.monotonic()
+    batch = run_batch(config(games=6, workers=2, window=window_closing_in(4)))
+    assert time.monotonic() - began < 30  # the stub would sleep for 600
+    assert all(worker.stopped and not worker.timed_out for worker in batch.workers)
+    assert batch.stopped
+    assert not batch.complete
+    assert not batch.clean
+
+
+def test_a_stopped_batch_keeps_finished_games_and_drops_the_one_cut_off(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "cut_off_after_one")
+    batch = run_batch(config(games=6, workers=2, window=window_closing_in(4)))
+    assert (batch.attempted, batch.finished, batch.not_finished) == (6, 2, 4)
+    assert [game.number for game in batch.games] == [1, 1]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the launcher with a child JVM is a Windows thing")
+def test_the_hard_stop_also_kills_the_jvm_its_launcher_started(config, monkeypatch, tmp_path):
+    pids = tmp_path / "pids"
+    pids.mkdir()
+    monkeypatch.setenv("STUB_RECORD_DIR", str(pids))
+    monkeypatch.setenv("STUB_SCENARIO", "hang_in_child")
+    batch = run_batch(config(games=2, workers=2, window=window_closing_in(4)))
+    assert all(worker.stopped for worker in batch.workers)
+    found = [path.read_text(encoding="utf-8") for path in pids.glob("child-*.pid")]
+    assert len(found) == 2
+    listing = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True).stdout
+    assert not [pid for pid in found if f'"{pid}"' in listing]
+    assert not list((tmp_path / "run").glob("worker-*/"))
+
+
+def test_killing_starts_early_enough_that_workers_are_gone_by_the_stop(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "hang")
+    window = window_closing_in(5, lead_s=3.0)
+    batch = run_batch(config(games=2, workers=2, window=window))
+    assert all(worker.stopped for worker in batch.workers)
+    assert datetime.now() < window.stop
+
+
+def test_a_process_left_holding_the_pipes_cant_hang_the_runner(config, monkeypatch, tmp_path):
+    monkeypatch.setenv("STUB_SCENARIO", "launcher_dies")
+    monkeypatch.setattr(worker_module, "PIPE_DRAIN_S", 1)
+    began = time.monotonic()
+    batch = run_batch(config(games=2, workers=2, window=window_closing_in(120)))
+    assert time.monotonic() - began < 6  # the leftover process holds the pipes for 8
+    assert all(worker.left_behind for worker in batch.workers)
+    assert not batch.clean
+    assert "left a process running" in format_workers(batch)
+    assert read_status(tmp_path)["status"] == "incomplete"
+
+
+def read_status(tmp_path):
+    return json.loads((tmp_path / "run" / "batch.json").read_text(encoding="utf-8"))
+
+
+def test_a_stopped_batch_says_so_on_disk(config, monkeypatch, tmp_path):
+    monkeypatch.setenv("STUB_SCENARIO", "cut_off_after_one")
+    window = window_closing_in(4)
+    run_batch(config(games=6, workers=2, window=window))
+    assert read_status(tmp_path) == {
+        "batch": "run", "status": "incomplete", "stopped_at_hard_stop": True,
+        "window_start": window.start.isoformat(timespec="seconds"),
+        "window_stop": window.stop.isoformat(timespec="seconds"),
+        "games_attempted": 6, "games_finished": 2, "games_not_finished": 4,
+    }
+
+
+def test_a_batch_that_beats_the_stop_is_complete(config, tmp_path):
+    batch = run_batch(config(window=window_closing_in(120)))
+    assert batch.complete and batch.clean and not batch.stopped
+    status = read_status(tmp_path)
+    assert (status["status"], status["stopped_at_hard_stop"]) == ("complete", False)
+
+
+def test_a_batch_without_a_window_gets_a_status_too(config, tmp_path):
+    run_batch(config())
+    status = read_status(tmp_path)
+    assert (status["status"], status["window_start"], status["window_stop"]) == ("complete", None, None)
+
+
+def test_a_worker_lost_to_a_crash_also_marks_the_batch_incomplete(config, monkeypatch, tmp_path):
+    monkeypatch.setenv("STUB_SCENARIO", "dies_after_one")
+    run_batch(config(games=6, workers=2))
+    status = read_status(tmp_path)
+    assert (status["status"], status["stopped_at_hard_stop"]) == ("incomplete", False)
+
+
+def test_the_status_reads_running_while_workers_run(config, records):
+    # A runner that dies mid-batch never rewrites this, so it can't leave a batch looking complete.
+    run_batch(config())
+    assert {run["status_at_launch"]["status"] for run in records().values()} == {"running"}
+
+
+def test_the_batch_waits_for_the_window_to_open(config, records):
+    now = datetime.now()
+    began = time.monotonic()
+    batch = run_batch(config(window=Window(now + timedelta(seconds=2), now + timedelta(minutes=2), 0.0)))
+    assert time.monotonic() - began >= 2
+    assert batch.complete
+    assert len(records()) == 2
+
+
+def test_a_window_already_closed_launches_nothing(config, records, tmp_path):
+    batch = run_batch(config(games=6, window=window_closing_in(-1)))
+    assert records() == {}
+    assert batch.stopped and not batch.complete
+    assert not list((tmp_path / "run").glob("worker-*/"))
+    status = read_status(tmp_path)
+    assert (status["status"], status["stopped_at_hard_stop"], status["games_not_finished"]) == ("incomplete", True, 6)
+
+
+def test_setup_errors_show_at_once_and_not_when_the_window_opens(config, decks):
+    decks[0].unlink()
+    now = datetime.now()
+    began = time.monotonic()
+    with pytest.raises(SetupError, match="not a file"):
+        run_batch(config(window=Window(now + timedelta(minutes=5), now + timedelta(minutes=10), 0.0)))
+    assert time.monotonic() - began < 5
+
+
+def test_the_run_folder_keeps_a_place_for_game_records(config, tmp_path):
+    run_batch(config())
+    assert (tmp_path / "run" / "games").is_dir()
+
+
 def finished_batch():
     """A hand-built result, so the timing rows of the report can be pinned exactly."""
     config = BatchConfig(
@@ -478,6 +615,42 @@ def test_the_report_table():
         "stack traces on stderr            1\n"
         f"result digest                     {finished_batch().digest}\n"
     )
+
+
+def windowed(batch, *workers):
+    window = Window(datetime(2026, 11, 5, 23, 0), datetime(2026, 11, 6, 7, 0))
+    return BatchResult(replace(batch.config, window=window), list(workers or batch.workers), batch.wall_s)
+
+
+def test_the_report_of_a_stopped_batch_says_it_is_incomplete():
+    finished = finished_batch()
+    cut_off = replace(finished.workers[1], stopped=True, exit_code=1)
+    batch = windowed(finished, finished.workers[0], cut_off)
+    summary = format_summary(batch)
+    assert "window                            2026-11-05 23:00:00 to 2026-11-06 07:00:00\n" in summary
+    assert "status                            incomplete, stopped at the hard stop\n" in summary
+    assert "killed at hard stop" in format_workers(batch)
+
+
+def test_the_report_of_a_window_batch_that_finished_says_complete():
+    finished = finished_batch()
+    done = replace(finished.workers[1], games=[*finished.workers[1].games, GameResult(3, 3000, 6, winner_seat=1)])
+    assert "status                            complete\n" in format_summary(windowed(finished, finished.workers[0], done))
+
+
+def test_the_report_of_a_window_batch_that_lost_a_worker_blames_no_stop():
+    assert "status                            incomplete\n" in format_summary(windowed(finished_batch()))
+
+
+def test_the_report_of_a_batch_with_no_window_has_no_window_rows():
+    summary = format_summary(finished_batch())
+    assert "status" not in summary
+    assert "window" not in summary
+
+
+def test_the_report_of_a_window_that_closed_before_launch_still_prints():
+    batch = BatchResult(windowed(finished_batch()).config, [], 0.0)
+    assert "status                            incomplete, stopped at the hard stop\n" in format_report(batch)
 
 
 def test_the_report_names_each_seats_sim_mode():
@@ -574,6 +747,77 @@ def test_a_setup_error_is_a_usage_error(decks, forge, tmp_path, capsys):
         main(cli_args(decks, forge, tmp_path / "run"))
     assert stop.value.code == 2
     assert "not a file" in capsys.readouterr().err
+
+
+def clock(moment):
+    return moment.strftime("%H:%M:%S")
+
+
+def nightly_args(decks, forge, run_dir, start, stop, *extra):
+    return ["nightly", str(decks[0]), str(decks[1]), "--games", "4", "--seed", "42", "--clock", "60",
+            "--start", clock(start), "--stop", clock(stop), "--forge", str(forge), "--run-dir", str(run_dir),
+            "--java", sys.executable, str(STUB), *extra]
+
+
+def test_a_nightly_run_that_beats_the_stop_exits_zero(decks, forge, tmp_path, capsys):
+    now = datetime.now()
+    args = nightly_args(decks, forge, tmp_path / "run", now - timedelta(minutes=1), now + timedelta(minutes=5),
+                        "--workers", "2")
+    assert main(args) == 0
+    out = capsys.readouterr().out
+    assert "status                            complete\n" in out
+    assert (tmp_path / "run" / "report.txt").read_text(encoding="utf-8") == out
+
+
+def test_a_nightly_run_cut_off_by_the_stop_exits_nonzero_and_says_why(decks, forge, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "cut_off_after_one")
+    monkeypatch.setattr(window_module, "STOP_LEAD_S", 0.0)
+    now = datetime.now()
+    args = nightly_args(decks, forge, tmp_path / "run", now - timedelta(minutes=1), now + timedelta(seconds=4),
+                        "--workers", "2")
+    assert main(args) == 1
+    captured = capsys.readouterr()
+    assert "status                            incomplete, stopped at the hard stop\n" in captured.out
+    assert "batch incomplete: stopped at the hard stop, 2 of 4 games not finished" in captured.err
+    assert read_status(tmp_path)["status"] == "incomplete"
+
+
+@pytest.mark.parametrize("extra, workers", [((), 3), (("--reserve", "3"), 2), (("--reserve", "9"), 1)])
+def test_the_worker_count_is_cores_minus_the_reserve(decks, forge, tmp_path, monkeypatch, records, extra, workers):
+    monkeypatch.setattr(os, "cpu_count", lambda: 5)
+    now = datetime.now()
+    args = nightly_args(decks, forge, tmp_path / "run", now - timedelta(minutes=1), now + timedelta(minutes=5), *extra)
+    assert main(args) == 0
+    assert len(records()) == workers
+
+
+@pytest.mark.parametrize("extra, message", [
+    (("--reserve", "-1"), "reserve can't be negative"),
+    (("--reserve", "2", "--workers", "2"), "not allowed with argument"),
+])
+def test_bad_worker_settings_are_usage_errors(decks, forge, tmp_path, capsys, extra, message):
+    now = datetime.now()
+    with pytest.raises(SystemExit) as stop:
+        main(nightly_args(decks, forge, tmp_path / "run", now, now + timedelta(minutes=5), *extra))
+    assert stop.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_a_start_equal_to_the_stop_is_a_usage_error(decks, forge, tmp_path, capsys):
+    now = datetime.now()
+    with pytest.raises(SystemExit) as stop:
+        main(nightly_args(decks, forge, tmp_path / "run", now, now))
+    assert stop.value.code == 2
+    assert "can't be the same" in capsys.readouterr().err
+
+
+def test_a_bad_clock_time_is_a_usage_error(decks, forge, tmp_path, capsys):
+    args = nightly_args(decks, forge, tmp_path / "run", datetime.now(), datetime.now())
+    args[args.index("--stop") + 1] = "7am"
+    with pytest.raises(SystemExit) as stop:
+        main(args)
+    assert stop.value.code == 2
+    assert "--stop" in capsys.readouterr().err
 
 
 def test_the_module_runs_as_a_script(decks, forge, tmp_path):
