@@ -1028,6 +1028,30 @@ def test_records_turn_honest_play_on(config, records):
     assert all(run["argv"][run["argv"].index("-honest") + 1] == "on" for run in records().values())
 
 
+def test_a_batch_that_asked_for_honest_play_and_got_it_is_clean(config, records):
+    assert run_batch(config(games=2, records=True)).clean
+
+
+def test_a_jar_that_ignores_honest_fails_the_batch(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_honest_jar")
+    batch = run_batch(config(games=2, records=True))
+    assert batch.complete
+    assert not batch.clean
+    assert "doesn't show honest play" in format_workers(batch)
+
+
+def test_a_batch_that_asked_for_no_honest_play_doesnt_need_it(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_honest_jar")
+    assert run_batch(config(games=2, records=True, honest=False)).clean
+
+
+def test_an_unreadable_game_file_shows_no_honest_play(config, records):
+    batch = run_batch(config(games=2, workers=1, records=True))
+    worker = batch.workers[0]
+    worker.records[0] = replace(worker.records[0], metadata=None)
+    assert not batch.played_honestly(worker)
+
+
 def test_no_honest_leaves_the_flag_out_so_forge_keeps_its_default(config, records):
     run_batch(config(games=2, records=True, honest=False))
     assert all("-honest" not in run["argv"] for run in records().values())

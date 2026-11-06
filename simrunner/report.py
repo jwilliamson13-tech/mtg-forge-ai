@@ -116,6 +116,8 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("Forge did not report on the search budget, so the jar may be stale")
     if not batch.wrote_records(worker):
         notes.append("a game with no game record, so the jar may be stale")
+    if not batch.played_honestly(worker):
+        notes.append("a game record that doesn't show honest play, so the jar may be stale")
     if not batch.reported_tripwire(worker):
         notes.append("a game with no tripwire count, so the jar may be stale")
     if worker.fatal:

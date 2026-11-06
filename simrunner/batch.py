@@ -13,11 +13,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from gamerecord import GameRecordError, game_digest
+from gamerecord import GameRecordError, game_digest, read_metadata
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
-from simrunner.worker import (JVM_PROPERTIES, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
+from simrunner.worker import (JVM_PROPERTIES, GameFile, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
                               prepare_folder, remove_folder, requested_sim_modes, resolve_search_budget,
                               run_worker, sim_args)
 
@@ -206,6 +206,15 @@ class BatchResult:
         expected = sum(game.draw_cause not in (DrawCause.CLOCK, DrawCause.EXCEPTION) for game in worker.games)
         return not self.config.records or len(worker.record_files) >= expected
 
+    def played_honestly(self, worker: WorkerResult) -> bool:
+        """Forge skips flags it doesn't know, so a jar without `-honest` would play on with its peeks.
+
+        Only the records can prove it took effect, and they say so per game.
+        """
+        if not (self.config.records and self.config.honest):
+            return True
+        return all(record.metadata and record.metadata.get("honest_play") is True for record in worker.records)
+
     @property
     def tripwire_on(self) -> bool:
         return self.config.tripwire
@@ -259,7 +268,15 @@ class BatchResult:
                                      and self.played_requested_modes(worker)
                                      and self.applied_search_budget(worker)
                                      and self.wrote_records(worker)
+                                     and self.played_honestly(worker)
                                      and self.reported_tripwire(worker) for worker in self.workers)
+
+
+def _game_file(path: Path) -> GameFile:
+    try:
+        return GameFile(path, read_metadata(path))
+    except GameRecordError:
+        return GameFile(path, None)
 
 
 def _file_digest(path: Path) -> tuple[int, str]:
@@ -374,7 +391,8 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
         wall_s = time.monotonic() - began
         if records:
             for worker in workers:
-                worker.record_files = sorted(records.folder.glob(f"{records.batch_id}_{worker.plan.seed}_*.jsonl.gz"))
+                worker.records = [_game_file(path) for path in
+                                  sorted(records.folder.glob(f"{records.batch_id}_{worker.plan.seed}_*.jsonl.gz"))]
         return BatchResult(config, workers, wall_s)
     finally:
         for process in started:

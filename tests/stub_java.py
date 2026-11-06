@@ -14,7 +14,8 @@ priority pass. The `stale_jar` scenario ignores the flag, as a jar from before i
 
 It prints a game's tripwire lines, unless `-tripwire off` says not to.
 The `no_tripwire_jar` scenario is a jar from before them, and `tripwire_hits` gives every
-game hits, more of them in odd games.
+game hits, more of them in odd games. The `no_honest_jar` scenario ignores `-honest`, and
+writes files without saying it played honestly.
 """
 
 import gzip
@@ -129,8 +130,15 @@ def write_game_file(argv: list[str], n: int, scenario: str) -> None:
         return
     folder = Path(option(argv, "-record")[0])
     name = f"{option(argv, '-batch')[0]}_{option(argv, '-s')[0]}_{n}_seat1_vs_seat2.jsonl.gz"
-    with gzip.open(folder / name, "wb") as game:
-        game.write(GAME_FIXTURE.read_bytes())
+    lines = GAME_FIXTURE.read_text(encoding="utf-8").splitlines(keepends=True)
+    metadata = json.loads(lines[0])
+    if scenario == "no_honest_jar":
+        del metadata["honest_play"]
+    else:
+        metadata["honest_play"] = option_is(argv, "-honest", "on")
+    with gzip.open(folder / name, "wt", encoding="utf-8") as game:
+        game.write(json.dumps(metadata) + "\n")
+        game.writelines(lines[1:])
 
 
 def main() -> int:

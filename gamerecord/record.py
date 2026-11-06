@@ -25,8 +25,8 @@ STACK_KINDS = ("spell", "ability")
 FACES = ("Original", "Flipped", "Backside", "Meld", "LeftSplit", "RightSplit", "Secondary", "PreparedSpell",
          "EmptyRoom", "SpecializeW", "SpecializeU", "SpecializeB", "SpecializeR", "SpecializeG")
 
-# Metadata two runs of the same games can differ on: the run folder's name, and what only watched the play.
-NOT_PLAY = ("batch_id", "tripwire")
+# Metadata two runs of the same games can differ on: the run folder's name, and what was set up or watched around the play.
+NOT_PLAY = ("batch_id", "honest_play", "tripwire")
 
 # Java's `int` and `long`. Parquet columns use the same widths.
 INT_MAX = 2**31 - 1
@@ -150,6 +150,7 @@ METADATA = Shape({
     "winner": _nullable(SEAT_NUMBER),
     "final_turn": _integer(1),
     "end_reason": _one_of(*END_REASONS),
+    "honest_play": _boolean,
     "tripwire": TRIPWIRE,
 })
 SCOREBOARD = Shape({
@@ -217,6 +218,11 @@ class GameRecord:
     def game_id(self) -> str:
         """Unique across batches. A seed belongs to a worker, so it needs the game number too."""
         return f"{self.metadata['batch_id']}-{self.metadata['seed']}-{self.metadata['game_number']}"
+
+    @property
+    def honest_play(self) -> bool:
+        """True when the AI kept to what a person in its seat could know. Without it, the play used peeks."""
+        return self.metadata["honest_play"]
 
 
 def _check_tripwire(summary: dict, where: str) -> None:
@@ -312,6 +318,21 @@ def _read(lines: Iterable[str]) -> GameRecord:
     if not snapshots:
         raise GameRecordError("the file has no snapshots")
     return GameRecord(metadata, snapshots)
+
+
+def read_metadata(path: Path) -> dict:
+    """Return a file's metadata line as written, unchecked, or raise `GameRecordError`.
+
+    This is for looking over a whole batch, where reading every snapshot of every file would be slow.
+    """
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as lines:
+            metadata = json.loads(next(lines))
+    except (OSError, EOFError, zlib.error, ValueError, StopIteration) as e:
+        raise GameRecordError(f"can't read the file: {e!r}") from e
+    if type(metadata) is not dict:
+        raise GameRecordError(f"line 1: expected the metadata object, got {metadata!r}")
+    return metadata
 
 
 def game_digest(path: Path) -> tuple[int, str]:

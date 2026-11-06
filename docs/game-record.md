@@ -41,6 +41,7 @@ Every field in this document is written, null ones included. The hook has to ser
 | `winner` | integer 1 or 2, or null | The winning seat. Null for every end reason except `win`. |
 | `final_turn` | integer, 1 or more | The turn the game ended on. A capped game has already begun the next turn when it stops, so a cap of 50 gives 51 here, and its last snapshot says 50. |
 | `end_reason` | string, one of the end reasons | Why the game ended. |
+| `honest_play` | boolean | Whether the AI played under `-honest on`, keeping to what a person in its seat could know. It is one setting for the run, so it covers both seats. See `peek-fixes.md`. |
 | `tripwire` | tripwire summary object | Hidden-information reads during this game. |
 
 Seat 1 is the first deck given to `-d`, printed by Forge as `Ai(1)`. `game_id` is not a field. The loader derives it as `<batch_id>-<seed>-<game_number>`.
@@ -250,11 +251,11 @@ These are Forge's `CardStateName` values minus `FaceDown`. A value Forge adds la
 
 ## Replay digest
 
-`gamerecord.game_digest(path)` returns a file's game number and a SHA-256 of the game: its metadata less `batch_id` and `tripwire`, then every snapshot line as written. Those two fields are left out because they differ between two runs of the same games. The batch id is the run folder's name, and the tripwire only watched. `simrunner` hashes these per batch into the report's `record digest`, which is what a claim that two runs played the same games should rest on.
+`gamerecord.game_digest(path)` returns a file's game number and a SHA-256 of the game: its metadata less `batch_id`, `honest_play` and `tripwire`, then every snapshot line as written. Those three fields are left out because they differ between two runs of the same games. The batch id is the run folder's name, the tripwire only watched, and leaving out `honest_play` is what lets a digest say honest play changed no game. `simrunner` hashes these per batch into the report's `record digest`, which is what a claim that two runs played the same games should rest on.
 
 ## What the loader checks
 
-`gamerecord.load_game(path)` returns a `GameRecord` with `metadata`, `snapshots` and `game_id`, or raises `GameRecordError`. Beyond the fields and types above, it enforces these rules:
+`gamerecord.load_game(path)` returns a `GameRecord` with `metadata`, `snapshots`, `game_id` and `honest_play`, or raises `GameRecordError`. Beyond the fields and types above, it enforces these rules:
 
 - It checks `schema_version` first and refuses anything but 1.
 - A field this document doesn't name is an error, the same as a missing field.
@@ -304,6 +305,7 @@ One row per snapshot of a kept game.
 | `seed` | int64 | From metadata. |
 | `game_number` | int32 | From metadata. |
 | `final_turn` | int32 | From metadata. |
+| `honest_play` | bool | From metadata. |
 | `seat1_deck` | string | From `seats`. |
 | `seat1_ai_profile` | string | From `seats`. |
 | `seat1_sim_mode` | string | From `seats`. |

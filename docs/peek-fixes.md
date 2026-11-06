@@ -6,7 +6,7 @@ Issue #21. The tripwire in `docs/forge-build.md` finds forge-ai reading hidden c
 
 `-honest on|off` on `forge sim` sets `Game.AI_HONEST_PLAY`. Forge's default is off, so a plain `forge sim` and every other game keep the stock AI and its peeks. `FlatMonteCarloNamedDiscardTest:90-109` pins one of those peeks, and it still passes.
 
-`simrunner` passes `-honest on` whenever records are on, because records are training data. `--no-honest` leaves the flag out. Forge skips flags it doesn't know, so a stale jar would ignore `-honest`. With the tripwire on, that shows up as hits.
+`simrunner` passes `-honest on` whenever records are on, because records are training data. `--no-honest` leaves the flag out. Forge skips flags it doesn't know, so a stale jar would ignore `-honest`. Each game record says `honest_play`, and the runner fails a batch that asked for honest play and has a file that doesn't show it.
 
 `-honest` works without `-record`. There is no reveal log then, so the AI goes by public cards alone. It can't go with `-t`. `GameCopier` copies the flag, so the AI thinks the same way on a copy. A copy has no reveal log, so what the AI was shown is missing from a search.
 

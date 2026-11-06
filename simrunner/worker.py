@@ -63,6 +63,14 @@ class RecordPlan:
 
 
 @dataclass(frozen=True)
+class GameFile:
+    """A game file and its metadata line. A file that can't be read has None."""
+
+    path: Path
+    metadata: dict | None
+
+
+@dataclass(frozen=True)
 class WorkerPlan:
     index: int
     seed: int
@@ -84,7 +92,11 @@ class WorkerResult:
     stderr_traces: int = 0
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
-    record_files: list[Path] = field(default_factory=list)  # game files with this worker's seed
+    records: list[GameFile] = field(default_factory=list)  # game files with this worker's seed
+
+    @property
+    def record_files(self) -> list[Path]:
+        return [record.path for record in self.records]
 
 
 def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
