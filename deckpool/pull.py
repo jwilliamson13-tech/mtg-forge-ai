@@ -21,6 +21,7 @@ from pathlib import Path
 
 from deckpool import manifest as mf
 from deckpool.convert import MIN_MAIN_CARDS, DeckError, NameSet, UnresolvedNames, convert, normalize, parse_decklist
+from deckpool.overlap import main_cards
 
 BASE = "https://mtgtop8.com"
 USER_AGENT = "mtg-forge-ai-deckpool/1.0"
@@ -232,6 +233,7 @@ def run_pull(root: Path, cache: Path, names: NameSet, fetcher: Fetcher | None = 
     decks, dropped, short = [], [], []
     for rank, arch in enumerate(chosen, 1):
         kept = 0
+        mains = {}  # main deck by the id of the list that has it, to skip a repeat
         for arch_id in arch.ids:
             if kept >= LISTS_PER_ARCHETYPE:
                 break
@@ -240,18 +242,27 @@ def run_pull(root: Path, cache: Path, names: NameSet, fetcher: Fetcher | None = 
                 if kept >= LISTS_PER_ARCHETYPE:
                     break
                 if not label_belongs(ref.label, arch.name, all_names):
-                    dropped.append({"archetype": arch.name, "url": ref.url, "reason": f"labeled {ref.label!r}"})
+                    dropped.append({"archetype": arch.name, "url": ref.url, "label": ref.label,
+                                    "reason": "label names another archetype"})
                     continue
                 text = fetcher.get(ref.export_url).replace("\r\n", "\n")
                 reason, unresolved = check_export(text, names)
                 if reason:
-                    dropped.append({"archetype": arch.name, "url": ref.url,
+                    dropped.append({"archetype": arch.name, "url": ref.url, "label": ref.label,
                                     "reason": reason + (f": {unresolved}" if unresolved else "")})
                     continue
+                deck_id = f"{slug(arch.name)}-{kept + 1}"
+                forge = convert(text, names, deck_id)
+                main = main_cards(forge)
+                repeat = next((kept_id for kept_id, kept_main in mains.items() if kept_main == main), None)
+                if repeat:
+                    dropped.append({"archetype": arch.name, "url": ref.url, "label": ref.label,
+                                    "reason": f"same main deck as {repeat}"})
+                    continue
                 kept += 1
-                deck_id = f"{slug(arch.name)}-{kept}"
-                mf.write_deck_files(root, deck_id, text, convert(text, names, deck_id))
-                decks.append({"id": deck_id, "archetype": arch.name, "source": ref.url,
+                mains[deck_id] = main
+                mf.write_deck_files(root, deck_id, text, forge)
+                decks.append({"id": deck_id, "archetype": arch.name, "label": ref.label, "source": ref.url,
                               "player": ref.player, "date": ref.played.isoformat()})
         if kept < LISTS_PER_ARCHETYPE:
             short.append({"archetype": arch.name, "lists": kept})

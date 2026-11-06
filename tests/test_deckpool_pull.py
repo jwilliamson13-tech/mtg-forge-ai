@@ -81,7 +81,7 @@ class FakeResponse:
         return self.body
 
 
-def fake_site(blocked: str | None = None):
+def fake_site(blocked: str | None = None, same_lists: bool = False):
     pages = {"format?": (FIXTURES / "format_LE.html").read_bytes(),
              "archetype?": (FIXTURES / "archetype_1852.html").read_bytes(),
              "/dec?": (FIXTURES / "dec_908677.txt").read_bytes()}
@@ -94,7 +94,10 @@ def fake_site(blocked: str | None = None):
             raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
         if url.endswith("/robots.txt"):
             return FakeResponse((pull.EXPECTED_ROBOTS + "\n").encode())
-        return FakeResponse(next(body for key, body in pages.items() if key in url))
+        body = next(body for key, body in pages.items() if key in url)
+        if "/dec?" in url and not same_lists:
+            body += f"{len(seen)} [A] Mountain\n".encode()  # every list on the fake site is its own
+        return FakeResponse(body)
     return opener, seen
 
 
@@ -114,6 +117,8 @@ def test_the_pull_spaces_requests_names_itself_and_refuses_a_second_run(tmp_path
     # every page is the Boros Aggro fixture: other archetypes skip its Boros Aggro lists and keep the Boros Energy ones
     assert len(record["archetypes"]) == 40 and len(record["decks"]) == 120
     assert record["archetypes_short_of_three"] == [] and record["dropped"]
+    assert record["decks"][0]["label"] == "Boros Energy"
+    assert {d["label"] for d in record["dropped"]} == {"Boros Aggro"}
     assert sleeps and min(sleeps) >= 6.0 and len(sleeps) == len(seen) - 1
     assert {agent for _, agent in seen} == {"mtg-forge-ai-deckpool/1.0"}
     assert all(url.startswith("https://mtgtop8.com/") for url, _ in seen)
@@ -124,6 +129,15 @@ def test_the_pull_spaces_requests_names_itself_and_refuses_a_second_run(tmp_path
     before = len(seen)
     pull.run_pull(root, tmp_path / "cache", ALL_NAMES, fetcher, again=True, progress=lambda *_: None)
     assert len(seen) == before  # the cache answered every page
+
+
+def test_a_list_with_the_same_main_as_a_kept_one_is_skipped(tmp_path):
+    opener, _ = fake_site(same_lists=True)
+    record = pull.run_pull(tmp_path / "repo", tmp_path / "cache", ALL_NAMES, make_fetcher(tmp_path, opener, []),
+                           progress=lambda *_: None)
+    assert len(record["decks"]) == 40  # one per archetype: every other list repeats it
+    assert record["archetypes_short_of_three"][0] == {"archetype": "Hogaak", "lists": 1}
+    assert any(d["reason"] == "same main deck as hogaak-1" for d in record["dropped"])
 
 
 def test_a_403_stops_the_pull_without_a_retry(tmp_path):
