@@ -12,7 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 VERSION = 1
-SPLITS = ("train", "held_out")
+TRAIN, HELD_OUT = "train", "held_out"
+SPLITS = (TRAIN, HELD_OUT)
 TRACKED_SLOTS = 4
 HELD_OUT_ARCHETYPES = 10
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
@@ -47,32 +48,18 @@ class Manifest:
                 return deck
         raise ManifestError(f"no deck with id {deck_id!r} in the manifest")
 
-    def split_of(self, archetype: str) -> str | None:
-        return next((d.split for d in self.decks if d.archetype == archetype), None)
-
     def add_deck(self, deck: Deck) -> None:
-        if deck.split not in SPLITS:
-            raise ManifestError(f"split must be one of {SPLITS}, not {deck.split!r}")
-        if any(d.id == deck.id for d in self.decks):
-            raise ManifestError(f"deck id {deck.id!r} is already in the manifest")
-        existing = self.split_of(deck.archetype)
-        if existing is not None and existing != deck.split:
-            raise ManifestError(f"archetype {deck.archetype!r} is already {existing}; "
-                                f"all its lists share one split, so {deck.id!r} can't be {deck.split}")
+        Manifest([*self.decks, deck], self.tracked_matchups).validate()
         self.decks.append(deck)
 
     def set_tracked(self, slot: int, pair) -> None:
         """Fill one slot, or empty it with None. Both ids must be held-out decks."""
         if not 0 <= slot < TRACKED_SLOTS:
             raise ManifestError(f"slot must be 0 to {TRACKED_SLOTS - 1}")
-        if pair is not None:
-            pair = list(pair)
-            if len(pair) != 2:
-                raise ManifestError("a tracked matchup is a pair of deck ids")
-            for deck_id in pair:
-                if self.get(deck_id).split != "held_out":
-                    raise ManifestError(f"tracked matchups use held-out decks; {deck_id!r} is not")
-        self.tracked_matchups[slot] = pair
+        slots = list(self.tracked_matchups)
+        slots[slot] = None if pair is None else list(pair)
+        Manifest(self.decks, slots).validate()
+        self.tracked_matchups = slots
 
     def validate(self) -> None:
         """Raise ManifestError if a rule is broken. Runs on load and save, so a hand edit can't slip through."""
@@ -84,10 +71,11 @@ class Manifest:
                 raise ManifestError(f"duplicate deck id {d.id!r}")
             ids.add(d.id)
             if splits.setdefault(d.archetype, d.split) != d.split:
-                raise ManifestError(f"archetype {d.archetype!r} has lists in both splits")
+                raise ManifestError(f"archetype {d.archetype!r} has lists in both splits; "
+                                    f"all its lists share one split, so {d.id!r} can't be {d.split}")
         if len(self.tracked_matchups) != TRACKED_SLOTS:
             raise ManifestError(f"tracked_matchups needs exactly {TRACKED_SLOTS} slots")
-        held = {d.id for d in self.decks if d.split == "held_out"}
+        held = {d.id for d in self.decks if d.split == HELD_OUT}
         for pair in self.tracked_matchups:
             if pair is not None and (len(pair) != 2 or not set(pair) <= held):
                 raise ManifestError(f"tracked matchup {pair!r} must be two held-out deck ids")
@@ -140,5 +128,5 @@ def build_from_pull(record: dict, seed: int, left_out=()) -> Manifest:
     manifest = Manifest()
     for d in decks:
         manifest.add_deck(Deck(d["id"], f"decks/forge/{d['id']}.dck", d["source"], d["archetype"],
-                               "held_out" if d["archetype"] in held else "train"))
+                               HELD_OUT if d["archetype"] in held else TRAIN))
     return manifest
