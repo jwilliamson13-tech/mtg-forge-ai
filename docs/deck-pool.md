@@ -65,3 +65,7 @@ A line is a count and a name, with an optional set: `4 Lightning Bolt`, `4 [ZEN]
 A `Sideboard` header, `// Sideboard` or an `SB:` prefix marks the sideboard, and then blank lines mean nothing. With no marker, one blank line splits main from sideboard, and two or more fail the parse, because the blocks could be card types. An Arena `Companion` block goes to the sideboard, once.
 
 `A // B` stays whole for a split card and becomes `A` for a double-faced card. A back face or a split half alone (`Stomp`, `Insectile Aberration`, `Wear`) passes validation, and Forge loads the whole card from it. A game on 2026-11-06 with 15 copies of each played Bonecrusher Giant, Delver of Secrets and Wear // Tear, with all 60 cards in the deck. No deck in the pool uses such a name.
+
+## Hand edits to the manifest
+
+On 2026-11-06 Josh picked the tracked matchups and wanted a Tron deck in them. Cloudpost / Tron Ramp moved to held out and Ninja moved to train, so 10 archetypes stay held out. `build-manifest --seed 20261106` alone no longer gives this manifest.
