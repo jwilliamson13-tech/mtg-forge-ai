@@ -1,0 +1,27 @@
+// Deck file created with mtgtop8.com
+1 [] Jack-o'-Lantern
+1 [TSP] Dread Return
+1 [ISD] Memory's Journey
+2 [] Giant's Boulder
+2 [US] Duress
+2 [JU] Cabal Therapy
+3 [TE] Reanimate
+3 [] Agadeem's Awakening
+4 [] Lively Dirge
+4 [TE] Lotus Petal
+4 [A] Dark Ritual
+4 [LRW] Thoughtseize
+4 [] Fell the Profane
+1 [] Thassa's Oracle
+4 [GTC] Balustrade Spy
+4 [PLC] Simian Spirit Guide
+4 [] Poxwalkers
+4 [] Witch Enchanter
+4 [] Boggart Trawler
+4 [AL] Elvish Spirit Guide
+SB:  3 [] Unstoppable Slasher
+SB:  2 [WL] Serenity
+SB:  3 [MR] Goblin Charbelcher
+SB:  2 [] Static Prison
+SB:  2 [] Razorgrass Ambush
+SB:  3 [] Barrowgoyf

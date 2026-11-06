@@ -1,0 +1,32 @@
+// Deck file created with mtgtop8.com
+4 [] Ajani, Nacatl Pariah
+4 [] Amped Raptor
+4 [ON] Windswept Heath
+1 [] Elegant Parlor
+3 [TE] Goblin Bombardment
+4 [] Guide of Souls
+3 [TE] Wasteland
+2 [] Lazotep Quarry
+4 [A] Swords to Plowshares
+4 [] Ocelot Pride
+1 [A] Taiga
+2 [] Static Prison
+4 [] Voice of Victory
+2 [LG] Karakas
+3 [] Once Upon a Time
+4 [ZEN] Arid Mesa
+1 [A] Savannah
+2 [A] Plateau
+2 [LRW] Gaddock Teeg
+1 [] Phlage, Titan of Fire's Fury
+1 [IA] Snow-Covered Plains
+1 [IA] Snow-Covered Mountain
+1 [ON] Wooded Foothills
+2 [] Questing Druid
+SB:  2 [] Disruptor Flute
+SB:  3 [] Deafening Silence
+SB:  3 [EX] Price of Progress
+SB:  1 [SHM] Faerie Macabre
+SB:  2 [] Wrath of the Skies
+SB:  2 [IA] Pyroblast
+SB:  2 [NPH] Surgical Extraction

@@ -1,0 +1,38 @@
+// Deck file created with mtgtop8.com
+2 [] Thassa's Oracle
+1 [ZEN] Verdant Catacombs
+1 [A] Swamp
+1 [] Consider
+1 [A] Island
+1 [AVR] Cavern of Souls
+4 [AL] Force of Will
+1 [MI] Lion's Eye Diamond
+4 [WL] Doomsday
+2 [FUT] Edge of Autumn
+3 [LRW] Thoughtseize
+1 [UL] Unearth
+2 [] Flow State
+1 [US] Duress
+4 [LRW] Ponder
+3 [PT] Personal Tutor
+3 [TE] Lotus Petal
+3 [NE] Daze
+1 [ON] Flooded Strand
+4 [A] Dark Ritual
+1 [ZEN] Misty Rainforest
+4 [ON] Polluted Delta
+1 [ZEN] Scalding Tarn
+4 [IA] Brainstorm
+1 [] Undercity Sewers
+4 [A] Underground Sea
+2 [FUT] Street Wraith
+SB:  2 [] Barrowgoyf
+SB:  1 [CMD] Flusterstorm
+SB:  1 [] Vraska's Final Mercy
+SB:  2 [] Dauthi Voidwalker
+SB:  1 [] Long Goodbye
+SB:  2 [] Orcish Bowmasters
+SB:  1 [] Hide on the Ceiling
+SB:  2 [] Force of Negation
+SB:  1 [] Consign to Memory
+SB:  2 [] Murktide Regent

@@ -1,0 +1,27 @@
+// Deck file created with mtgtop8.com
+5 [A] Mountain
+4 [AVR] Cavern of Souls
+4 [TE] Ancient Tomb
+3 [EX] City of Traitors
+1 [] Petrified Hamlet
+4 [] Howlsquad Heavy
+4 [] Broadside Bombardiers
+4 [PLC] Simian Spirit Guide
+4 [P2] Goblin Matron
+3 [] Muxus, Goblin Grandee
+3 [] Hexing Squelcher
+3 [M15] Goblin Rabblemaster
+2 [PLC] Stingscourger
+1 [M13] Krenko, Mob Boss
+1 [] General Kreat, the Boltbringer
+1 [] Breeches, Eager Pillager
+1 [] Goblin Trashmaster
+4 [DK] Blood Moon
+4 [MR] Chalice of the Void
+4 [MR] Chrome Mox
+SB:  3 [] Disruptor Flute
+SB:  2 [] Unlicensed Hearse
+SB:  2 [] Fury
+SB:  2 [MR] Seething Song
+SB:  2 [AL] Pyrokinesis
+SB:  4 [] Cut Propulsion

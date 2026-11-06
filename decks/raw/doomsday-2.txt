@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+1 [AVR] Cavern of Souls
+1 [] Consider
+3 [LRW] Thoughtseize
+1 [A] Swamp
+4 [FUT] Street Wraith
+1 [ZEN] Scalding Tarn
+4 [LRW] Ponder
+4 [ON] Polluted Delta
+1 [ZEN] Misty Rainforest
+3 [TE] Lotus Petal
+1 [ON] Bloodstained Mire
+1 [MI] Lion's Eye Diamond
+2 [FUT] Edge of Autumn
+1 [A] Island
+4 [AL] Force of Will
+1 [ON] Flooded Strand
+4 [WL] Doomsday
+3 [NE] Daze
+1 [] Jace, Wielder of Mysteries
+1 [] Thassa's Oracle
+4 [A] Dark Ritual
+1 [] Undercity Sewers
+4 [IA] Brainstorm
+4 [A] Underground Sea
+3 [PT] Personal Tutor
+2 [M11] Preordain
+SB:  4 [] Barrowgoyf
+SB:  1 [US] Duress
+SB:  2 [] Force of Negation
+SB:  4 [] Murktide Regent
+SB:  1 [] Voice of Victory
+SB:  3 [AER] Fatal Push

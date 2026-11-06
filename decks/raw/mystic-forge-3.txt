@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+4 [] Glaring Fleshraker
+2 [] Tezzeret, Cruel Captain
+2 [] Urza's Workshop
+1 [] Portable Hole
+2 [] Manifold Key
+2 [] Mystic Forge
+4 [] Karn, the Great Creator
+4 [TE] Ancient Tomb
+1 [SOK] Pithing Needle
+1 [US] Voltaic Key
+4 [UL] Grim Monolith
+4 [AQ] Urza's Tower
+1 [AQ] Urza's Power Plant
+1 [AQ] Urza's Mine
+4 [] Kozilek's Command
+2 [] Eldrazi Confluence
+4 [] Planar Nexus
+4 [] The One Ring
+2 [] Ugin, Eye of the Storms
+4 [] Urza's Saga
+4 [TE] Lotus Petal
+1 [A] Plains
+1 [ZEN] Expedition Map
+1 [LG] Karakas
+SB:  1 [] Perilous Snare
+SB:  2 [] Disruptor Flute
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [SOM] Liquimetal Coating
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [SH] Ensnaring Bridge
+SB:  1 [] Extinguisher Battleship
+SB:  2 [NPH] Surgical Extraction
+SB:  3 [] Petrified Hamlet
+SB:  2 [NPH] Dismember

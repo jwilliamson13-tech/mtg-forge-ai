@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+4 [] Tamiyo, Inquisitive Student
+1 [ZEN] Verdant Catacombs
+3 [] Bilbo, Thief in the Night
+1 [ON] Bloodstained Mire
+1 [ZEN] Scalding Tarn
+4 [AER] Fatal Push
+1 [ON] Flooded Strand
+1 [A] Swamp
+3 [] Flow State
+1 [A] Island
+4 [A] Underground Sea
+4 [TE] Wasteland
+4 [ON] Polluted Delta
+4 [AL] Force of Will
+1 [MM] Snuff Out
+2 [] Kaito, Bane of Nightmares
+4 [LRW] Ponder
+4 [IA] Brainstorm
+4 [LRW] Thoughtseize
+1 [] Brazen Borrower
+3 [] Barrowgoyf
+1 [ZEN] Misty Rainforest
+3 [] Orcish Bowmasters
+1 [] Undercity Sewers
+SB:  1 [] Brazen Borrower
+SB:  1 [NE] Massacre
+SB:  1 [SOM] Nihil Spellbomb
+SB:  2 [] Consign to Memory
+SB:  2 [IA] Hydroblast
+SB:  1 [] Bloodchief's Thirst
+SB:  1 [] Sheoldred's Edict
+SB:  2 [] Force of Negation
+SB:  1 [DK] Ashes to Ashes
+SB:  2 [] Dauthi Voidwalker
+SB:  1 [LG] Karakas

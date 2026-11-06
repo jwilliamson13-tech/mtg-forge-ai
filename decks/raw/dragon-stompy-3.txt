@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+4 [] Broadside Bombardiers
+4 [PLC] Simian Spirit Guide
+3 [] Fury
+3 [FUT] Magus of the Moon
+3 [] Pyrogoyf
+2 [] Laelia, the Blade Reforged
+4 [] Fable of the Mirror-Breaker
+4 [MR] Chalice of the Void
+4 [MR] Chrome Mox
+3 [] The One Ring
+4 [] Sundering Eruption
+3 [] Shatterskull Smashing
+4 [DK] Blood Moon
+3 [] Karn, the Great Creator
+4 [TE] Ancient Tomb
+4 [EX] City of Traitors
+4 [A] Mountain
+SB:  1 [] The One Ring
+SB:  3 [GP] Leyline of the Void
+SB:  2 [] Disruptor Flute
+SB:  2 [IA] Pyroblast
+SB:  2 [DS] Trinisphere
+SB:  1 [SH] Ensnaring Bridge
+SB:  1 [SOM] Liquimetal Coating
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [] The Stone Brain
+SB:  1 [DK] Tormod's Crypt

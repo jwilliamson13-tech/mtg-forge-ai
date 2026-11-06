@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+4 [] Ajani, Nacatl Pariah
+3 [JU] Cabal Therapy
+2 [LG] Karakas
+1 [] Silent Clearing
+4 [TE] Wasteland
+1 [A] Plains
+4 [LRW] Thoughtseize
+4 [] Orcish Bowmasters
+4 [] Guide of Souls
+4 [] Ocelot Pride
+4 [A] Swords to Plowshares
+4 [] Voice of Victory
+4 [ZEN] Marsh Flats
+4 [ZEN] Arid Mesa
+4 [] Amped Raptor
+2 [A] Plateau
+2 [A] Scrubland
+1 [A] Swamp
+1 [A] Badlands
+1 [] Elegant Parlor
+2 [TE] Goblin Bombardment
+SB:  4 [GP] Leyline of the Void
+SB:  1 [A] Red Elemental Blast
+SB:  2 [IA] Pyroblast
+SB:  4 [] Deafening Silence
+SB:  2 [] Wrath of the Skies
+SB:  2 [FUT] Magus of the Moon

@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+4 [JU] Burning Wish
+2 [ZEN] Verdant Catacombs
+4 [] Urza's Saga
+1 [A] Underground Sea
+1 [ZEN] Scalding Tarn
+1 [ON] Bloodstained Mire
+4 [A] Dark Ritual
+1 [] Song of Creation
+1 [C16] Runehorn Hellkite
+2 [] Veil of Summer
+1 [A] Badlands
+4 [] Hexing Squelcher
+1 [] Raucous Theater
+1 [MR] Pyrite Spellbomb
+1 [A] Taiga
+4 [SOM] Mox Opal
+4 [TE] Lotus Petal
+3 [] Beseech the Mirror
+4 [MI] Lion's Eye Diamond
+3 [] Echo of Eons
+1 [] Gaea's Will
+3 [] Giant's Boulder
+4 [MR] Chrome Mox
+4 [US] Gamble
+1 [SC] Tendrils of Agony
+SB:  2 [] Veil of Summer
+SB:  1 [] Beseech the Mirror
+SB:  1 [] Echo of Eons
+SB:  1 [SC] Tendrils of Agony
+SB:  4 [] Boomerang Basics
+SB:  1 [TSP] Empty the Warrens
+SB:  1 [] Haywire Mite
+SB:  1 [] Peer into the Abyss
+SB:  2 [] Boseiju, Who Endures
+SB:  1 [LRW] Thoughtseize

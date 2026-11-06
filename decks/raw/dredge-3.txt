@@ -1,0 +1,32 @@
+// Deck file created with mtgtop8.com
+2 [TO] Breakthrough
+4 [JU] Cabal Therapy
+4 [OD] Cephalid Coliseum
+4 [MI] Lion's Eye Diamond
+4 [DKA] Faithless Looting
+4 [RAV] Golgari Grave-Troll
+4 [RAV] Golgari Thug
+4 [FUT] Bridge from Below
+4 [FUT] Narcomoeba
+1 [WL] Gemstone Mine
+2 [] Poxwalkers
+4 [RAV] Stinkweed Imp
+4 [JOU] Mana Confluence
+4 [AN] City of Brass
+1 [TE] Lotus Petal
+1 [TSP] Dread Return
+2 [] Ox of Agonas
+1 [] Otherworldly Gaze
+3 [OD] Careful Study
+2 [TO] Ichorid
+1 [TO] Putrid Imp
+SB:  1 [TO] Breakthrough
+SB:  1 [TSP] Dread Return
+SB:  2 [] Static Prison
+SB:  1 [] Into the Flood Maw
+SB:  1 [TSP] Lightning Axe
+SB:  2 [WWK] Nature's Claim
+SB:  1 [] Hogaak, Arisen Necropolis
+SB:  4 [MM] Unmask
+SB:  1 [THS] Ashen Rider
+SB:  1 [] Molten Gatekeeper

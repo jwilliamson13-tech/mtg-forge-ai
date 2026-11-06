@@ -1,0 +1,41 @@
+// Deck file created with mtgtop8.com
+1 [] Legolas's Quick Reflexes
+3 [SH] Mox Diamond
+4 [UL] Crop Rotation
+4 [A] Swords to Plowshares
+4 [MBS] Green Sun's Zenith
+1 [] Icetill Explorer
+1 [] Endurance
+1 [JU] Sylvan Safekeeper
+3 [CFX] Knight of the Reliquary
+4 [] Carnivorous Cultivator
+4 [] Elvish Reclaimer
+1 [LG] Karakas
+1 [FUT] Horizon Canopy
+1 [A] Forest
+1 [] Echoing Deeps
+1 [FUT] Dryad Arbor
+1 [] Boseiju, Who Endures
+1 [] Lush Portico
+1 [A] Plains
+1 [WWK] Bojuka Bog
+1 [WWK] Sejiri Steppe
+1 [ON] Wooded Foothills
+1 [] Talon Gates of Madara
+2 [] Yavimaya, Cradle of Growth
+2 [CS] Dark Depths
+2 [TSP] Flagstones of Trokair
+2 [GTC] Thespian's Stage
+3 [TE] Wasteland
+3 [A] Savannah
+4 [ON] Windswept Heath
+SB:  1 [LG] The Tabernacle at Pendrell Vale
+SB:  1 [] Collector Ouphe
+SB:  2 [] Disruptor Flute
+SB:  2 [] Force of Vigor
+SB:  1 [LRW] Gaddock Teeg
+SB:  1 [] Keen-Eyed Curator
+SB:  1 [] Outland Liberator
+SB:  1 [] Prismatic Ending
+SB:  3 [EX] Sphere of Resistance
+SB:  2 [] Endurance

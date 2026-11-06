@@ -1,0 +1,34 @@
+// Deck file created with mtgtop8.com
+3 [ZEN] Verdant Catacombs
+4 [ZEN] Scalding Tarn
+1 [A] Taiga
+1 [A] Underground Sea
+1 [A] Badlands
+4 [JU] Burning Wish
+1 [] Raucous Theater
+4 [US] Gamble
+3 [] Beseech the Mirror
+4 [TE] Lotus Petal
+4 [MI] Lion's Eye Diamond
+4 [MR] Chrome Mox
+4 [SOM] Mox Opal
+4 [A] Dark Ritual
+3 [] Veil of Summer
+4 [] Hexing Squelcher
+3 [] Echo of Eons
+1 [SC] Tendrils of Agony
+1 [] Song of Creation
+1 [] Gaea's Will
+1 [C16] Runehorn Hellkite
+4 [FUT] Street Wraith
+SB:  1 [] Beseech the Mirror
+SB:  1 [] Veil of Summer
+SB:  1 [] Echo of Eons
+SB:  1 [SC] Tendrils of Agony
+SB:  1 [] Peer into the Abyss
+SB:  1 [LRW] Thoughtseize
+SB:  1 [AKH] Approach of the Second Sun
+SB:  1 [TSP] Empty the Warrens
+SB:  4 [] Boomerang Basics
+SB:  2 [] Boseiju, Who Endures
+SB:  1 [RTR] Abrupt Decay

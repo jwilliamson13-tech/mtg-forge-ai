@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+1 [] Endurance
+3 [] Allosaurus Shepherd
+1 [] Alpha Deathclaw
+1 [] Atraxa, Grand Unifier
+4 [] Badgermole Cub
+2 [A] Bayou
+2 [] Boseiju, Who Endures
+1 [] Collector Ouphe
+1 [AVR] Craterhoof Behemoth
+2 [FUT] Dryad Arbor
+1 [] Eladamri, Korvecdal
+1 [M14] Elvish Mystic
+1 [ALA] Elvish Visionary
+2 [A] Forest
+3 [] Formidable Speaker
+3 [IA] Fyndhorn Elves
+4 [US] Gaea's Cradle
+4 [MBS] Green Sun's Zenith
+1 [A] Llanowar Elves
+2 [ZEN] Misty Rainforest
+4 [VI] Natural Order
+3 [] Once Upon a Time
+3 [VI] Quirion Ranger
+1 [FRF] Temur Sabertooth
+3 [ZEN] Verdant Catacombs
+1 [] Vibrance
+2 [ON] Windswept Heath
+4 [SC] Wirewood Symbiote
+SB:  2 [ZEN] Mindbreak Trap
+SB:  2 [RTR] Abrupt Decay
+SB:  3 [] Force of Vigor
+SB:  1 [] Hogaak, Arisen Necropolis
+SB:  4 [GP] Leyline of the Void
+SB:  3 [LRW] Thoughtseize

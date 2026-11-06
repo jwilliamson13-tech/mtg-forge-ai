@@ -1,0 +1,38 @@
+// Deck file created with mtgtop8.com
+1 [] Agatha's Soul Cauldron
+2 [] Arena of Glory
+1 [ZEN] Arid Mesa
+4 [B] Volcanic Island
+1 [TSP] Chromatic Star
+1 [A] Island
+4 [] Emry, Lurker of the Loch
+4 [] Goblin Engineer
+4 [UL] Goblin Welder
+1 [] Legion Extruder
+4 [CS] Mishra's Bauble
+4 [TE] Lotus Petal
+1 [A] Mountain
+2 [MR] Seat of the Synod
+1 [] Phyrexian Dragon Engine
+3 [IA] Urza's Bauble
+1 [ZEN] Scalding Tarn
+1 [ON] Bloodstained Mire
+4 [] Sewer-veillance Cam
+1 [] Skateboard
+4 [] Urza's Saga
+1 [ON] Wooded Foothills
+4 [] Pinnacle Emissary
+4 [SOM] Mox Opal
+2 [FD] Grinding Station
+SB:  1 [HOU] Abrade
+SB:  1 [IA] Hydroblast
+SB:  1 [] Damping Sphere
+SB:  2 [CMD] Flusterstorm
+SB:  1 [] Haywire Mite
+SB:  2 [] Kappa Cannoneer
+SB:  1 [SOK] Pithing Needle
+SB:  1 [IA] Pyroblast
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [NPH] Torpor Orb
+SB:  1 [] Disruptor Flute
+SB:  2 [] Consign to Memory

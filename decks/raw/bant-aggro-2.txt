@@ -1,0 +1,40 @@
+// Deck file created with mtgtop8.com
+2 [] Prismatic Ending
+4 [A] Swords to Plowshares
+4 [NE] Daze
+4 [MBS] Green Sun's Zenith
+4 [] Once Upon a Time
+1 [] Carnivorous Cultivator
+1 [LRW] Gaddock Teeg
+1 [] Collector Ouphe
+1 [] Icetill Explorer
+1 [CFX] Knight of the Reliquary
+1 [] Lagrella, the Magpie
+1 [A] Birds of Paradise
+1 [] Endurance
+1 [JU] Sylvan Safekeeper
+1 [] Keen-Eyed Curator
+1 [] Uro, Titan of Nature's Wrath
+4 [CFX] Noble Hierarch
+4 [] Avatar of Burgeoning Echoes
+1 [A] Savannah
+1 [DIS] Ghost Quarter
+1 [LG] Karakas
+1 [IA] Snow-Covered Forest
+1 [A] Tundra
+1 [] Meticulous Archive
+1 [FUT] Dryad Arbor
+1 [] Hedge Maze
+1 [ON] Flooded Strand
+2 [A] Tropical Island
+4 [ON] Windswept Heath
+4 [TE] Wasteland
+4 [ZEN] Misty Rainforest
+SB:  4 [AL] Force of Will
+SB:  1 [] Force of Vigor
+SB:  2 [US] Carpet of Flowers
+SB:  2 [] Doorkeeper Thrull
+SB:  2 [] Consign to Memory
+SB:  1 [] Outland Liberator
+SB:  2 [] Lavinia, Azorius Renegade
+SB:  1 [] Endurance

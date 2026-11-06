@@ -1,0 +1,37 @@
+// Deck file created with mtgtop8.com
+1 [] Sheoldred's Edict
+1 [] Force of Negation
+2 [] Kaito, Bane of Nightmares
+2 [NE] Daze
+2 [] Witherbloom Command
+3 [LRW] Thoughtseize
+3 [] Flow State
+4 [IA] Brainstorm
+4 [LRW] Ponder
+4 [AER] Fatal Push
+4 [AL] Force of Will
+1 [] Barrowgoyf
+1 [] Brazen Borrower
+2 [] Murktide Regent
+2 [] Tamiyo, Inquisitive Student
+2 [] Orcish Bowmasters
+3 [] Nethergoyf
+1 [A] Bayou
+1 [] Undercity Sewers
+1 [A] Island
+1 [A] Swamp
+2 [TE] Wasteland
+2 [A] Tropical Island
+3 [A] Underground Sea
+4 [ON] Polluted Delta
+4 [ZEN] Misty Rainforest
+SB:  1 [NE] Massacre
+SB:  1 [AP] Pernicious Deed
+SB:  2 [] Damping Sphere
+SB:  2 [] Narset, Parter of Veils
+SB:  1 [IA] Hydroblast
+SB:  2 [] Dauthi Voidwalker
+SB:  1 [C13] Toxic Deluge
+SB:  2 [US] Carpet of Flowers
+SB:  2 [] Consign to Memory
+SB:  1 [] Force of Negation

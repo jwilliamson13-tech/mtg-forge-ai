@@ -26,6 +26,15 @@ python -m cardscript sweep path/to/cardsfolder path/to/tokenscripts --out cards.
 python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
 ```
 
+## Deck pool
+
+`deckpool` holds the real Legacy lists in `decks/` and splits them into training and held-out decks. `docs/deck-pool.md` has the commands and the near-copy rule. `simrunner` takes a deck id from `decks/manifest.json` in place of a file.
+
+```
+python -m deckpool check
+python -m simrunner batch hogaak-1 elves-1 --games 50 --seed 1
+```
+
 ## Game records
 
 `docs/game-record.md` is the contract between Forge and Python: one gzip'd JSONL file per game. `gamerecord.load_game` reads a file and validates it against that contract. This command converts a folder of them to Parquet, keeps the wins, and reports what it kept and dropped by end reason:

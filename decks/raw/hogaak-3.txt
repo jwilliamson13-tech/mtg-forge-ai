@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+4 [] Stitcher's Supplier
+3 [NE] Daze
+4 [IA] Brainstorm
+4 [TE] Wasteland
+3 [LRW] Ponder
+4 [A] Underground Sea
+1 [FUT] Dryad Arbor
+4 [ZEN] Verdant Catacombs
+4 [AL] Force of Will
+2 [] Kaito, Bane of Nightmares
+3 [] Orcish Bowmasters
+4 [] Dark Matter Manipulator
+1 [] Undercity Sewers
+4 [] Moonshadow
+2 [LRW] Thoughtseize
+4 [] Hogaak, Arisen Necropolis
+1 [A] Swamp
+4 [ZEN] Misty Rainforest
+1 [] Brazen Borrower
+3 [] Mockingbird
+SB:  1 [] Brazen Borrower
+SB:  4 [AER] Fatal Push
+SB:  2 [] Dauthi Voidwalker
+SB:  2 [LG] Karakas
+SB:  2 [] Force of Negation
+SB:  2 [] Consign to Memory
+SB:  2 [NE] Massacre

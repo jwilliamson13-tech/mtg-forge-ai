@@ -34,6 +34,20 @@ def _clock_time(text: str):
         raise argparse.ArgumentTypeError(str(e))
 
 
+def _deck_path(arg: str, manifest_path: Path | None, parser: argparse.ArgumentParser) -> Path:
+    """A deck argument is a file if one exists at that path, otherwise an id in the deck manifest."""
+    if Path(arg).is_file():
+        return Path(arg)
+    from deckpool import manifest as mf
+    path = Path(manifest_path) if manifest_path else mf.DEFAULT_PATH
+    if not path.is_file():
+        parser.error(f"not a file: {arg} (and no deck manifest at {path} to look it up in)")
+    try:
+        return mf.deck_path(mf.load(path), arg, mf.root_of(path))
+    except mf.ManifestError as e:
+        parser.error(f"not a file: {arg}, and {e}")
+
+
 def _batch(args: argparse.Namespace) -> int:
     return _run(args, args.workers)
 
@@ -59,7 +73,8 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
     elif args.turn_cap is not None or args.no_honest:
         args.parser.error("--turn-cap and --no-honest need records")
     config = BatchConfig(
-        seats=(Seat(Path(args.deck1), profiles[0], modes[0]), Seat(Path(args.deck2), profiles[1], modes[1])),
+        seats=(Seat(_deck_path(args.deck1, args.manifest, args.parser), profiles[0], modes[0]),
+               Seat(_deck_path(args.deck2, args.manifest, args.parser), profiles[1], modes[1])),
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
@@ -86,8 +101,9 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
 
 
 def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
-    batch.add_argument("deck1", help="path to the .dck file for seat 1")
-    batch.add_argument("deck2", help="path to the .dck file for seat 2")
+    batch.add_argument("deck1", help="path to the .dck file for seat 1, or a deck id from the manifest")
+    batch.add_argument("deck2", help="path to the .dck file for seat 2, or a deck id from the manifest")
+    batch.add_argument("--manifest", help="deck manifest for looking up deck ids (default: decks/manifest.json)")
     batch.add_argument("--games", type=int, required=True, help="total games in the batch")
     batch.add_argument("--seed", type=int, required=True, help="batch seed; worker seeds derive from it")
     batch.add_argument("--ai", nargs=2, metavar=("SEAT1", "SEAT2"),

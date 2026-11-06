@@ -1,0 +1,34 @@
+// Deck file created with mtgtop8.com
+4 [WWK] Stoneforge Mystic
+3 [ISD] Snapcaster Mage
+1 [NPH] Batterskull
+1 [] Cryptic Coat
+1 [] Kaldra Compleat
+4 [IA] Brainstorm
+4 [AL] Force of Will
+4 [A] Swords to Plowshares
+1 [ZEN] Spell Pierce
+4 [LRW] Ponder
+3 [] Prismatic Ending
+2 [US] Back to Basics
+1 [CS] Counterbalance
+1 [] Dress Down
+3 [WWK] Jace, the Mind Sculptor
+2 [] Teferi, Time Raveler
+1 [] Narset, Parter of Veils
+6 [A] Island
+4 [ON] Flooded Strand
+4 [] Prismatic Vista
+2 [A] Plains
+1 [A] Mountain
+1 [ZEN] Scalding Tarn
+1 [A] Tundra
+1 [B] Volcanic Island
+SB:  4 [] Consign to Memory
+SB:  2 [] Fire Magic
+SB:  2 [] Lavinia, Azorius Renegade
+SB:  2 [US] Meltdown
+SB:  2 [IA] Pyroblast
+SB:  1 [IA] Hydroblast
+SB:  1 [A] Red Elemental Blast
+SB:  1 [NPH] Surgical Extraction

@@ -1,0 +1,29 @@
+// Deck file created with mtgtop8.com
+4 [TE] Ancient Tomb
+4 [EX] City of Traitors
+3 [GP] Stomping Ground
+2 [AVR] Cavern of Souls
+1 [A] Mountain
+1 [A] Forest
+1 [A] Plains
+4 [PLC] Simian Spirit Guide
+4 [AL] Elvish Spirit Guide
+4 [] Caves of Chaos Adventurer
+4 [] Undermountain Adventurer
+4 [] Seasoned Dungeoneer
+4 [] Broadside Bombardiers
+4 [MR] Chalice of the Void
+4 [TE] Lotus Petal
+4 [] Once Upon a Time
+4 [MR] Chrome Mox
+2 [] Minsc & Boo, Timeless Heroes
+2 [] Gruul Spellbreaker
+SB:  4 [] Fury
+SB:  2 [] Disruptor Flute
+SB:  2 [IA] Pyroblast
+SB:  2 [] Hexing Squelcher
+SB:  1 [] Veil of Summer
+SB:  1 [EX] Price of Progress
+SB:  1 [ROE] Emrakul, the Aeons Torn
+SB:  1 [] Summon: Bahamut
+SB:  1 [AL] Pyrokinesis

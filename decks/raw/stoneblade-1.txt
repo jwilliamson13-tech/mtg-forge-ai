@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+4 [WWK] Stoneforge Mystic
+4 [A] Tundra
+1 [] Pre-War Formalwear
+4 [A] Swords to Plowshares
+4 [LRW] Ponder
+4 [IA] Brainstorm
+1 [] Meteor Sword
+1 [] Cryptic Coat
+1 [] Assimilation Aegis
+4 [AL] Force of Will
+2 [LG] Karakas
+4 [] Tamiyo, Inquisitive Student
+2 [ISD] Snapcaster Mage
+2 [] Stock Up
+1 [] Prismatic Ending
+1 [] Wrath of the Skies
+1 [] Erode
+4 [ON] Flooded Strand
+1 [] Meticulous Archive
+3 [ZEN] Marsh Flats
+3 [ON] Polluted Delta
+1 [IA] Snow-Covered Island
+2 [A] Plains
+1 [] Mystic Sanctuary
+4 [] Phelia, Exuberant Shepherd
+SB:  2 [] Wrath of the Skies
+SB:  3 [] Consign to Memory
+SB:  3 [] Force of Negation
+SB:  2 [] Containment Priest
+SB:  2 [IA] Hydroblast
+SB:  1 [] Triumph of Saint Katherine
+SB:  2 [PS] Meddling Mage

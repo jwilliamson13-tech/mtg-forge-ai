@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+4 [GTC] Balustrade Spy
+4 [] Boggart Trawler
+4 [AL] Elvish Spirit Guide
+4 [PLC] Simian Spirit Guide
+4 [] Witch Enchanter
+2 [FUT] Narcomoeba
+1 [] Disciple of Freyalise
+1 [] Poxwalkers
+1 [] Thassa's Oracle
+4 [TE] Lotus Petal
+1 [] Jack-o'-Lantern
+4 [TO] Cabal Ritual
+4 [A] Dark Ritual
+4 [FUT] Pact of Negation
+3 [] Fell the Profane
+1 [ISD] Memory's Journey
+4 [RTR] Destroy the Evidence
+4 [LRW] Thoughtseize
+2 [] Agadeem's Awakening
+2 [JU] Cabal Therapy
+1 [TSP] Dread Return
+1 [TE] Reanimate
+1 [FUT] Bridge from Below
+SB:  4 [KLD] Fragmentize
+SB:  4 [M11] Leyline of Sanctity
+SB:  4 [] Static Prison
+SB:  3 [WL] Serenity

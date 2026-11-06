@@ -1,0 +1,1148 @@
+{
+  "source": "https://mtgtop8.com",
+  "format": "Legacy",
+  "metagame_period": "Last 2 Weeks",
+  "shares_are_rounded_by_the_site": true,
+  "archetypes_on_page": 58,
+  "archetypes": [
+    {
+      "name": "Hogaak",
+      "share": 9.0
+    },
+    {
+      "name": "UWx Control",
+      "share": 8.0
+    },
+    {
+      "name": "Boros Aggro",
+      "share": 6.0
+    },
+    {
+      "name": "Dimir Tempo",
+      "share": 6.0
+    },
+    {
+      "name": "Lands",
+      "share": 5.0
+    },
+    {
+      "name": "Doomsday",
+      "share": 5.0
+    },
+    {
+      "name": "Show and Tell",
+      "share": 5.0
+    },
+    {
+      "name": "UR Tempo",
+      "share": 4.0
+    },
+    {
+      "name": "Death & Taxes",
+      "share": 4.0
+    },
+    {
+      "name": "Eldrazi Aggro",
+      "share": 4.0
+    },
+    {
+      "name": "Cloudpost / Tron Ramp",
+      "share": 4.0
+    },
+    {
+      "name": "Bant Control",
+      "share": 4.0
+    },
+    {
+      "name": "Welder Cam",
+      "share": 4.0
+    },
+    {
+      "name": "Aluren",
+      "share": 4.0
+    },
+    {
+      "name": "Mystic Forge",
+      "share": 3.0
+    },
+    {
+      "name": "Reanimator",
+      "share": 3.0
+    },
+    {
+      "name": "Storm",
+      "share": 2.0
+    },
+    {
+      "name": "Elves",
+      "share": 2.0
+    },
+    {
+      "name": "Dragon Stompy",
+      "share": 1.0
+    },
+    {
+      "name": "Initiative Stompy",
+      "share": 1.0
+    },
+    {
+      "name": "Painter",
+      "share": 0.9
+    },
+    {
+      "name": "Goblins",
+      "share": 0.8
+    },
+    {
+      "name": "Artifacts Blue",
+      "share": 0.8
+    },
+    {
+      "name": "Mardu Aggro",
+      "share": 0.8
+    },
+    {
+      "name": "Artifacts Prison",
+      "share": 0.8
+    },
+    {
+      "name": "4/5c Control",
+      "share": 0.8
+    },
+    {
+      "name": "Cradle Control",
+      "share": 0.8
+    },
+    {
+      "name": "Dredge",
+      "share": 0.8
+    },
+    {
+      "name": "Oops, All Spells!",
+      "share": 0.8
+    },
+    {
+      "name": "Mono Black Aggro",
+      "share": 0.6
+    },
+    {
+      "name": "Maverick",
+      "share": 0.6
+    },
+    {
+      "name": "Mississippi River",
+      "share": 0.6
+    },
+    {
+      "name": "Ruby Storm",
+      "share": 0.6
+    },
+    {
+      "name": "Pox",
+      "share": 0.5
+    },
+    {
+      "name": "Stoneblade",
+      "share": 0.5
+    },
+    {
+      "name": "Dark Depths",
+      "share": 0.5
+    },
+    {
+      "name": "Merfolk",
+      "share": 0.3
+    },
+    {
+      "name": "Ninja",
+      "share": 0.3
+    },
+    {
+      "name": "Bant Aggro",
+      "share": 0.3
+    },
+    {
+      "name": "BUG Midrange",
+      "share": 0.3
+    }
+  ],
+  "decks": [
+    {
+      "id": "hogaak-1",
+      "archetype": "Hogaak",
+      "label": "Ub Hogaak",
+      "source": "https://mtgtop8.com/event?e=93264&d=908705&f=LE",
+      "player": "Romain Corgnolo",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "hogaak-2",
+      "archetype": "Hogaak",
+      "label": "Ub Hogaak",
+      "source": "https://mtgtop8.com/event?e=93215&d=908400&f=LE",
+      "player": "Aug",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "hogaak-3",
+      "archetype": "Hogaak",
+      "label": "Hogaak",
+      "source": "https://mtgtop8.com/event?e=93217&d=908413&f=LE",
+      "player": "Xyranl",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "uwx-control-1",
+      "archetype": "UWx Control",
+      "label": "Uw Control",
+      "source": "https://mtgtop8.com/event?e=93264&d=908706&f=LE",
+      "player": "Thomas Drescher",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "uwx-control-2",
+      "archetype": "UWx Control",
+      "label": "Jeskai Wizard",
+      "source": "https://mtgtop8.com/event?e=93215&d=908398&f=LE",
+      "player": "Giobby",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "uwx-control-3",
+      "archetype": "UWx Control",
+      "label": "UWx Control",
+      "source": "https://mtgtop8.com/event?e=93298&d=908917&f=LE",
+      "player": "Axl Di Cicco",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "boros-aggro-1",
+      "archetype": "Boros Aggro",
+      "label": "Boros Aggro",
+      "source": "https://mtgtop8.com/event?e=93260&d=908677&f=LE",
+      "player": "Mangaflorence",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "boros-aggro-2",
+      "archetype": "Boros Aggro",
+      "label": "Boros Aggro",
+      "source": "https://mtgtop8.com/event?e=93298&d=908914&f=LE",
+      "player": "Ido Levy",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "boros-aggro-3",
+      "archetype": "Boros Aggro",
+      "label": "Boros Aggro",
+      "source": "https://mtgtop8.com/event?e=93164&d=907985&f=LE",
+      "player": "ARAPAKO",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "dimir-tempo-1",
+      "archetype": "Dimir Tempo",
+      "label": "Dimir Bilbo",
+      "source": "https://mtgtop8.com/event?e=93260&d=908678&f=LE",
+      "player": "Samu_27",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "dimir-tempo-2",
+      "archetype": "Dimir Tempo",
+      "label": "Dimir Tempo",
+      "source": "https://mtgtop8.com/event?e=93264&d=908708&f=LE",
+      "player": "Thomas Clabaut",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "dimir-tempo-3",
+      "archetype": "Dimir Tempo",
+      "label": "Dimir Tempo",
+      "source": "https://mtgtop8.com/event?e=93217&d=908415&f=LE",
+      "player": "Baku_91",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "lands-1",
+      "archetype": "Lands",
+      "label": "Lands",
+      "source": "https://mtgtop8.com/event?e=93260&d=908681&f=LE",
+      "player": "shekgi",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "lands-2",
+      "archetype": "Lands",
+      "label": "Lands",
+      "source": "https://mtgtop8.com/event?e=93260&d=908682&f=LE",
+      "player": "Baby",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "lands-3",
+      "archetype": "Lands",
+      "label": "Lands",
+      "source": "https://mtgtop8.com/event?e=93298&d=908915&f=LE",
+      "player": "Jelle Zwaan",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "doomsday-1",
+      "archetype": "Doomsday",
+      "label": "Doomsday",
+      "source": "https://mtgtop8.com/event?e=93215&d=908401&f=LE",
+      "player": "Microsoft Excel",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "doomsday-2",
+      "archetype": "Doomsday",
+      "label": "Doomsday",
+      "source": "https://mtgtop8.com/event?e=93217&d=908410&f=LE",
+      "player": "Jaytron",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "doomsday-3",
+      "archetype": "Doomsday",
+      "label": "Doomsday",
+      "source": "https://mtgtop8.com/event?e=93217&d=908411&f=LE",
+      "player": "clan",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "show-and-tell-1",
+      "archetype": "Show and Tell",
+      "label": "Show and Tell",
+      "source": "https://mtgtop8.com/event?e=93262&d=908696&f=LE",
+      "player": "TomJubarte",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "show-and-tell-2",
+      "archetype": "Show and Tell",
+      "label": "Show and Tell",
+      "source": "https://mtgtop8.com/event?e=93164&d=907996&f=LE",
+      "player": "TomJubarte",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "show-and-tell-3",
+      "archetype": "Show and Tell",
+      "label": "Sneak Show",
+      "source": "https://mtgtop8.com/event?e=93196&d=908234&f=LE",
+      "player": "Kawakami Kazuya",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "ur-tempo-1",
+      "archetype": "UR Tempo",
+      "label": "UR Delver",
+      "source": "https://mtgtop8.com/event?e=93151&d=907897&f=LE",
+      "player": "Ryan09",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "ur-tempo-2",
+      "archetype": "UR Tempo",
+      "label": "Izzet Delver",
+      "source": "https://mtgtop8.com/event?e=93135&d=907740&f=LE",
+      "player": "Štěpán Herynek",
+      "date": "2026-11-02"
+    },
+    {
+      "id": "ur-tempo-3",
+      "archetype": "UR Tempo",
+      "label": "UR Tempo",
+      "source": "https://mtgtop8.com/event?e=93137&d=907764&f=LE",
+      "player": "Avperwat",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "death-and-taxes-1",
+      "archetype": "Death & Taxes",
+      "label": "BW Death & Taxes",
+      "source": "https://mtgtop8.com/event?e=93260&d=908684&f=LE",
+      "player": "Kunce",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "death-and-taxes-2",
+      "archetype": "Death & Taxes",
+      "label": "Death & Taxes Selesnya",
+      "source": "https://mtgtop8.com/event?e=93215&d=908397&f=LE",
+      "player": "Ezio",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "death-and-taxes-3",
+      "archetype": "Death & Taxes",
+      "label": "Death & Taxes Orzhov",
+      "source": "https://mtgtop8.com/event?e=93215&d=908399&f=LE",
+      "player": "Phe1ia",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "eldrazi-aggro-1",
+      "archetype": "Eldrazi Aggro",
+      "label": "Eldrazi Aggro",
+      "source": "https://mtgtop8.com/event?e=93217&d=908414&f=LE",
+      "player": "MENTALMISSTEP_",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "eldrazi-aggro-2",
+      "archetype": "Eldrazi Aggro",
+      "label": "Eldrazi Aggro",
+      "source": "https://mtgtop8.com/event?e=93164&d=907997&f=LE",
+      "player": "MatthewMurdock",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "eldrazi-aggro-3",
+      "archetype": "Eldrazi Aggro",
+      "label": "Red Eldrazi",
+      "source": "https://mtgtop8.com/event?e=93117&d=907476&f=LE",
+      "player": "Victor Hugo Da Silva",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "cloudpost-tron-ramp-1",
+      "archetype": "Cloudpost / Tron Ramp",
+      "label": "Ux Tron",
+      "source": "https://mtgtop8.com/event?e=93298&d=908916&f=LE",
+      "player": "Godsol",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "cloudpost-tron-ramp-2",
+      "archetype": "Cloudpost / Tron Ramp",
+      "label": "Ux Tron",
+      "source": "https://mtgtop8.com/event?e=93298&d=908918&f=LE",
+      "player": "Stefan Gussenhoven",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "cloudpost-tron-ramp-3",
+      "archetype": "Cloudpost / Tron Ramp",
+      "label": "Ux Tron",
+      "source": "https://mtgtop8.com/event?e=93197&d=908243&f=LE",
+      "player": "Katou Kouta",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "bant-control-1",
+      "archetype": "Bant Control",
+      "label": "Bant Control",
+      "source": "https://mtgtop8.com/event?e=93262&d=908693&f=LE",
+      "player": "ShadowTitan1",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "bant-control-2",
+      "archetype": "Bant Control",
+      "label": "Bant Control",
+      "source": "https://mtgtop8.com/event?e=93163&d=907979&f=LE",
+      "player": "GrimFlayerBR",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "bant-control-3",
+      "archetype": "Bant Control",
+      "label": "Bant Control",
+      "source": "https://mtgtop8.com/event?e=93197&d=908238&f=LE",
+      "player": "Kimura Shunsuke",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "welder-cam-1",
+      "archetype": "Welder Cam",
+      "label": "Welder Cam",
+      "source": "https://mtgtop8.com/event?e=93215&d=908396&f=LE",
+      "player": "Zmjjkk",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "welder-cam-2",
+      "archetype": "Welder Cam",
+      "label": "Engineer Welder Cam",
+      "source": "https://mtgtop8.com/event?e=93262&d=908690&f=LE",
+      "player": "tabunghasisi",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "welder-cam-3",
+      "archetype": "Welder Cam",
+      "label": "Engineer Welder Cam",
+      "source": "https://mtgtop8.com/event?e=93298&d=908913&f=LE",
+      "player": "Alex Rouw",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "aluren-1",
+      "archetype": "Aluren",
+      "label": "Aluren",
+      "source": "https://mtgtop8.com/event?e=93163&d=907974&f=LE",
+      "player": "FenrirUnchained",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "aluren-2",
+      "archetype": "Aluren",
+      "label": "Aluren",
+      "source": "https://mtgtop8.com/event?e=93075&d=907058&f=LE",
+      "player": "Thomas_Serra",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "aluren-3",
+      "archetype": "Aluren",
+      "label": "Aluren",
+      "source": "https://mtgtop8.com/event?e=93137&d=907756&f=LE",
+      "player": "Otazz",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "mystic-forge-1",
+      "archetype": "Mystic Forge",
+      "label": "Mystic Forge",
+      "source": "https://mtgtop8.com/event?e=93260&d=908680&f=LE",
+      "player": "DropRegretRepeat",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "mystic-forge-2",
+      "archetype": "Mystic Forge",
+      "label": "Karn Forge",
+      "source": "https://mtgtop8.com/event?e=93197&d=908240&f=LE",
+      "player": "Ichiwaki Fumihiro",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "mystic-forge-3",
+      "archetype": "Mystic Forge",
+      "label": "Karn Forge",
+      "source": "https://mtgtop8.com/event?e=93075&d=907061&f=LE",
+      "player": "WRO",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "reanimator-1",
+      "archetype": "Reanimator",
+      "label": "Reanimator",
+      "source": "https://mtgtop8.com/event?e=93262&d=908692&f=LE",
+      "player": "Dioferreira",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "reanimator-2",
+      "archetype": "Reanimator",
+      "label": "Reanimator",
+      "source": "https://mtgtop8.com/event?e=93197&d=908237&f=LE",
+      "player": "Fujii Daichi",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "reanimator-3",
+      "archetype": "Reanimator",
+      "label": "Turbo Reanimator",
+      "source": "https://mtgtop8.com/event?e=93135&d=907737&f=LE",
+      "player": "Milan Horák",
+      "date": "2026-11-02"
+    },
+    {
+      "id": "storm-1",
+      "archetype": "Storm",
+      "label": "Beseech the Storm",
+      "source": "https://mtgtop8.com/event?e=93260&d=908679&f=LE",
+      "player": "CardGameAddict",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "storm-2",
+      "archetype": "Storm",
+      "label": "Beseech the Storm",
+      "source": "https://mtgtop8.com/event?e=93163&d=907981&f=LE",
+      "player": "BurnsMana",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "storm-3",
+      "archetype": "Storm",
+      "label": "Storm",
+      "source": "https://mtgtop8.com/event?e=93164&d=907982&f=LE",
+      "player": "Wario",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "elves-1",
+      "archetype": "Elves",
+      "label": "Elves",
+      "source": "https://mtgtop8.com/event?e=93260&d=908683&f=LE",
+      "player": "vegecookies",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "elves-2",
+      "archetype": "Elves",
+      "label": "Elves",
+      "source": "https://mtgtop8.com/event?e=93216&d=908406&f=LE",
+      "player": "Tozuka Kouta",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "elves-3",
+      "archetype": "Elves",
+      "label": "Elves (Green Sun Elves)",
+      "source": "https://mtgtop8.com/event?e=93178&d=908104&f=LE",
+      "player": "Vladimirarneuve#bedxv5",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "dragon-stompy-1",
+      "archetype": "Dragon Stompy",
+      "label": "Dragon Stompy",
+      "source": "https://mtgtop8.com/event?e=93215&d=908395&f=LE",
+      "player": "Elhomerjas",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "dragon-stompy-2",
+      "archetype": "Dragon Stompy",
+      "label": "Dragon Stompy",
+      "source": "https://mtgtop8.com/event?e=93146&d=907837&f=LE",
+      "player": "Bill Li",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "dragon-stompy-3",
+      "archetype": "Dragon Stompy",
+      "label": "Dragon Stompy",
+      "source": "https://mtgtop8.com/event?e=93146&d=907846&f=LE",
+      "player": "Michael Hemman",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "initiative-stompy-1",
+      "archetype": "Initiative Stompy",
+      "label": "Initiative Stompy",
+      "source": "https://mtgtop8.com/event?e=93067&d=907000&f=LE",
+      "player": "kozz27",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "initiative-stompy-2",
+      "archetype": "Initiative Stompy",
+      "label": "Naya Initiative",
+      "source": "https://mtgtop8.com/event?e=93080&d=907117&f=LE",
+      "player": "Mark Ostmann",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "initiative-stompy-3",
+      "archetype": "Initiative Stompy",
+      "label": "Rw Initiative",
+      "source": "https://mtgtop8.com/event?e=93136&d=907748&f=LE",
+      "player": "Tommaso De Michele",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "painter-1",
+      "archetype": "Painter",
+      "label": "Painter",
+      "source": "https://mtgtop8.com/event?e=93262&d=908691&f=LE",
+      "player": "XanaZero",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "painter-2",
+      "archetype": "Painter",
+      "label": "Painter Undoing",
+      "source": "https://mtgtop8.com/event?e=93055&d=906923&f=LE",
+      "player": "Rodrigo Sousa Marajá",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "painter-3",
+      "archetype": "Painter",
+      "label": "Painter Cam",
+      "source": "https://mtgtop8.com/event?e=93134&d=907736&f=LE",
+      "player": "Lucas",
+      "date": "2026-10-29"
+    },
+    {
+      "id": "goblins-1",
+      "archetype": "Goblins",
+      "label": "Goblins",
+      "source": "https://mtgtop8.com/event?e=93218&d=908424&f=LE",
+      "player": "Haraguchi Takashi",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "goblins-2",
+      "archetype": "Goblins",
+      "label": "Goblin",
+      "source": "https://mtgtop8.com/event?e=92918&d=905899&f=LE",
+      "player": "Bandido",
+      "date": "2026-10-26"
+    },
+    {
+      "id": "goblins-3",
+      "archetype": "Goblins",
+      "label": "Goblin",
+      "source": "https://mtgtop8.com/event?e=92918&d=905901&f=LE",
+      "player": "Hincadescenza",
+      "date": "2026-10-26"
+    },
+    {
+      "id": "artifacts-blue-1",
+      "archetype": "Artifacts Blue",
+      "label": "Blue Artifacts",
+      "source": "https://mtgtop8.com/event?e=93264&d=908707&f=LE",
+      "player": "Vincent Choukroun",
+      "date": "2026-11-05"
+    },
+    {
+      "id": "artifacts-blue-2",
+      "archetype": "Artifacts Blue",
+      "label": "8-cast",
+      "source": "https://mtgtop8.com/event?e=93215&d=908394&f=LE",
+      "player": "Terra",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "artifacts-blue-3",
+      "archetype": "Artifacts Blue",
+      "label": "Affinity",
+      "source": "https://mtgtop8.com/event?e=92994&d=906463&f=LE",
+      "player": "Ari Faggin",
+      "date": "2026-10-28"
+    },
+    {
+      "id": "mardu-aggro-1",
+      "archetype": "Mardu Aggro",
+      "label": "Mardu Aggro",
+      "source": "https://mtgtop8.com/event?e=93164&d=907988&f=LE",
+      "player": "Mav40121",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "mardu-aggro-2",
+      "archetype": "Mardu Aggro",
+      "label": "Mardu Aggro",
+      "source": "https://mtgtop8.com/event?e=93067&d=907003&f=LE",
+      "player": "Selfeisek",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "mardu-aggro-3",
+      "archetype": "Mardu Aggro",
+      "label": "Mardu Aggro",
+      "source": "https://mtgtop8.com/event?e=93031&d=906727&f=LE",
+      "player": "Alfredo Obregón",
+      "date": "2026-10-30"
+    },
+    {
+      "id": "artifacts-prison-1",
+      "archetype": "Artifacts Prison",
+      "label": "White Stax",
+      "source": "https://mtgtop8.com/event?e=93149&d=907888&f=LE",
+      "player": "Keita Kato",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "artifacts-prison-2",
+      "archetype": "Artifacts Prison",
+      "label": "Trini Tron",
+      "source": "https://mtgtop8.com/event?e=93139&d=907781&f=LE",
+      "player": "Jeremy Danckert",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "artifacts-prison-3",
+      "archetype": "Artifacts Prison",
+      "label": "Tron",
+      "source": "https://mtgtop8.com/event?e=92847&d=905315&f=LE",
+      "player": "Tamas Kukucska",
+      "date": "2026-10-25"
+    },
+    {
+      "id": "4-5c-control-1",
+      "archetype": "4/5c Control",
+      "label": "4/5c Control",
+      "source": "https://mtgtop8.com/event?e=93146&d=907829&f=LE",
+      "player": "Tom Hertfelder",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "4-5c-control-2",
+      "archetype": "4/5c Control",
+      "label": "4/5c Control",
+      "source": "https://mtgtop8.com/event?e=93146&d=907858&f=LE",
+      "player": "Wszwartz",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "4-5c-control-3",
+      "archetype": "4/5c Control",
+      "label": "Beans Control",
+      "source": "https://mtgtop8.com/event?e=92955&d=906183&f=LE",
+      "player": "Stefano Mainini",
+      "date": "2026-10-25"
+    },
+    {
+      "id": "cradle-control-1",
+      "archetype": "Cradle Control",
+      "label": "Cradle Control",
+      "source": "https://mtgtop8.com/event?e=93164&d=907995&f=LE",
+      "player": "waves1",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "cradle-control-2",
+      "archetype": "Cradle Control",
+      "label": "Cradle Control",
+      "source": "https://mtgtop8.com/event?e=93010&d=906565&f=LE",
+      "player": "Thomas Clabaut",
+      "date": "2026-10-29"
+    },
+    {
+      "id": "cradle-control-3",
+      "archetype": "Cradle Control",
+      "label": "Cradle Control",
+      "source": "https://mtgtop8.com/event?e=92993&d=906461&f=LE",
+      "player": "Olivier Kapteyn",
+      "date": "2026-10-28"
+    },
+    {
+      "id": "dredge-1",
+      "archetype": "Dredge",
+      "label": "Dredge",
+      "source": "https://mtgtop8.com/event?e=93048&d=906863&f=LE",
+      "player": "Andy_Over",
+      "date": "2026-10-30"
+    },
+    {
+      "id": "dredge-2",
+      "archetype": "Dredge",
+      "label": "Dredge",
+      "source": "https://mtgtop8.com/event?e=93134&d=907734&f=LE",
+      "player": "Gunnar",
+      "date": "2026-10-29"
+    },
+    {
+      "id": "dredge-3",
+      "archetype": "Dredge",
+      "label": "Dredge",
+      "source": "https://mtgtop8.com/event?e=92886&d=905689&f=LE",
+      "player": "Janosh12345",
+      "date": "2026-10-25"
+    },
+    {
+      "id": "oops-all-spells-1",
+      "archetype": "Oops, All Spells!",
+      "label": "Oops, All Spells!",
+      "source": "https://mtgtop8.com/event?e=93151&d=907898&f=LE",
+      "player": "Adk7",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "oops-all-spells-2",
+      "archetype": "Oops, All Spells!",
+      "label": "Oops, All Spells!",
+      "source": "https://mtgtop8.com/event?e=93137&d=907759&f=LE",
+      "player": "Cachorrowo",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "oops-all-spells-3",
+      "archetype": "Oops, All Spells!",
+      "label": "Oops, All Spells!",
+      "source": "https://mtgtop8.com/event?e=93218&d=908423&f=LE",
+      "player": "Shirakami Nobumasa",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "mono-black-aggro-1",
+      "archetype": "Mono Black Aggro",
+      "label": "Mono Black Aggro",
+      "source": "https://mtgtop8.com/event?e=93217&d=908417&f=LE",
+      "player": "Matiuzzzo",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "mono-black-aggro-2",
+      "archetype": "Mono Black Aggro",
+      "label": "Mono Black Aggro",
+      "source": "https://mtgtop8.com/event?e=93054&d=906915&f=LE",
+      "player": "Tiago Di Bella",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "mono-black-aggro-3",
+      "archetype": "Mono Black Aggro",
+      "label": "Mono Black Aggro",
+      "source": "https://mtgtop8.com/event?e=92918&d=905900&f=LE",
+      "player": "Max660",
+      "date": "2026-10-26"
+    },
+    {
+      "id": "maverick-1",
+      "archetype": "Maverick",
+      "label": "Maverick",
+      "source": "https://mtgtop8.com/event?e=93163&d=907978&f=LE",
+      "player": "DawsonCreep",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "maverick-2",
+      "archetype": "Maverick",
+      "label": "Maverick",
+      "source": "https://mtgtop8.com/event?e=92955&d=906176&f=LE",
+      "player": "Simone Orizio",
+      "date": "2026-10-25"
+    },
+    {
+      "id": "maverick-3",
+      "archetype": "Maverick",
+      "label": "Maverick",
+      "source": "https://mtgtop8.com/event?e=93029&d=906714&f=LE",
+      "player": "An Bang",
+      "date": "2026-10-25"
+    },
+    {
+      "id": "mississippi-river-1",
+      "archetype": "Mississippi River",
+      "label": "Mississippi River",
+      "source": "https://mtgtop8.com/event?e=93151&d=907895&f=LE",
+      "player": "Kilian Cooley",
+      "date": "2026-11-03"
+    },
+    {
+      "id": "mississippi-river-2",
+      "archetype": "Mississippi River",
+      "label": "Mississippi River",
+      "source": "https://mtgtop8.com/event?e=93049&d=906876&f=LE",
+      "player": "AndrewWa",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "ruby-storm-1",
+      "archetype": "Ruby Storm",
+      "label": "Ruby Storm",
+      "source": "https://mtgtop8.com/event?e=93135&d=907738&f=LE",
+      "player": "Jakub Zavadil",
+      "date": "2026-11-02"
+    },
+    {
+      "id": "ruby-storm-2",
+      "archetype": "Ruby Storm",
+      "label": "Ruby Storm",
+      "source": "https://mtgtop8.com/event?e=93136&d=907744&f=LE",
+      "player": "Giuseppe Sorrenti",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "ruby-storm-3",
+      "archetype": "Ruby Storm",
+      "label": "Red Storm",
+      "source": "https://mtgtop8.com/event?e=93055&d=906919&f=LE",
+      "player": "Théo Mortinho",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "pox-1",
+      "archetype": "Pox",
+      "label": "Pox",
+      "source": "https://mtgtop8.com/event?e=92756&d=904517&f=LE",
+      "player": "Carter Stenberg",
+      "date": "2026-10-24"
+    },
+    {
+      "id": "pox-2",
+      "archetype": "Pox",
+      "label": "Pox",
+      "source": "https://mtgtop8.com/event?e=92848&d=905321&f=LE",
+      "player": "Dante Forssberg",
+      "date": "2026-10-24"
+    },
+    {
+      "id": "stoneblade-1",
+      "archetype": "Stoneblade",
+      "label": "Stoneblade",
+      "source": "https://mtgtop8.com/event?e=93262&d=908695&f=LE",
+      "player": "harmonywoods",
+      "date": "2026-11-04"
+    },
+    {
+      "id": "stoneblade-2",
+      "archetype": "Stoneblade",
+      "label": "Stoneblade",
+      "source": "https://mtgtop8.com/event?e=93146&d=907841&f=LE",
+      "player": "Faultedform",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "stoneblade-3",
+      "archetype": "Stoneblade",
+      "label": "Stoneblade",
+      "source": "https://mtgtop8.com/event?e=93134&d=907733&f=LE",
+      "player": "Hanlin",
+      "date": "2026-10-29"
+    },
+    {
+      "id": "dark-depths-1",
+      "archetype": "Dark Depths",
+      "label": "Selesnya Depths",
+      "source": "https://mtgtop8.com/event?e=93117&d=907477&f=LE",
+      "player": "Bruno Lorenzato",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "dark-depths-2",
+      "archetype": "Dark Depths",
+      "label": "Gw Depths",
+      "source": "https://mtgtop8.com/event?e=93136&d=907745&f=LE",
+      "player": "Alex Butler",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "dark-depths-3",
+      "archetype": "Dark Depths",
+      "label": "Dark Depths",
+      "source": "https://mtgtop8.com/event?e=92851&d=905343&f=LE",
+      "player": "WestvalePreacher",
+      "date": "2026-10-25"
+    },
+    {
+      "id": "merfolk-1",
+      "archetype": "Merfolk",
+      "label": "Merfolk",
+      "source": "https://mtgtop8.com/event?e=93031&d=906729&f=LE",
+      "player": "Felipe Gonçalves",
+      "date": "2026-10-30"
+    },
+    {
+      "id": "ninja-1",
+      "archetype": "Ninja",
+      "label": "Ninja",
+      "source": "https://mtgtop8.com/event?e=93030&d=906721&f=LE",
+      "player": "Ezio",
+      "date": "2026-10-28"
+    },
+    {
+      "id": "bant-aggro-1",
+      "archetype": "Bant Aggro",
+      "label": "Bant Aggro",
+      "source": "https://mtgtop8.com/event?e=93146&d=907868&f=LE",
+      "player": "Karl Schulz",
+      "date": "2026-10-31"
+    },
+    {
+      "id": "bant-aggro-2",
+      "archetype": "Bant Aggro",
+      "label": "Bant Aggro",
+      "source": "https://mtgtop8.com/event?e=92923&d=905935&f=LE",
+      "player": "Reeplcheep",
+      "date": "2026-10-27"
+    },
+    {
+      "id": "bug-midrange-1",
+      "archetype": "BUG Midrange",
+      "label": "Bug Tempo",
+      "source": "https://mtgtop8.com/event?e=93136&d=907747&f=LE",
+      "player": "Enrico Donisi",
+      "date": "2026-11-01"
+    },
+    {
+      "id": "bug-midrange-2",
+      "archetype": "BUG Midrange",
+      "label": "BUG Midrange",
+      "source": "https://mtgtop8.com/event?e=93146&d=907819&f=LE",
+      "player": "Yineng Xu",
+      "date": "2026-10-31"
+    }
+  ],
+  "archetypes_short_of_three": [
+    {
+      "archetype": "Mississippi River",
+      "lists": 2
+    },
+    {
+      "archetype": "Pox",
+      "lists": 2
+    },
+    {
+      "archetype": "Merfolk",
+      "lists": 1
+    },
+    {
+      "archetype": "Ninja",
+      "lists": 1
+    },
+    {
+      "archetype": "Bant Aggro",
+      "lists": 2
+    },
+    {
+      "archetype": "BUG Midrange",
+      "lists": 2
+    }
+  ],
+  "dropped": [
+    {
+      "archetype": "Eldrazi Aggro",
+      "url": "https://mtgtop8.com/event?e=93163&d=907980&f=LE",
+      "label": "Eldrazi Aggro",
+      "reason": "same main deck as eldrazi-aggro-1"
+    },
+    {
+      "archetype": "Mardu Aggro",
+      "url": "https://mtgtop8.com/event?e=93137&d=907754&f=LE",
+      "label": "Mardu Aggro",
+      "reason": "same main deck as mardu-aggro-2"
+    },
+    {
+      "archetype": "Dredge",
+      "url": "https://mtgtop8.com/event?e=92865&d=905469&f=LE",
+      "label": "Dredge",
+      "reason": "same main deck as dredge-1"
+    },
+    {
+      "archetype": "Mississippi River",
+      "url": "https://mtgtop8.com/event?e=92886&d=905682&f=LE",
+      "label": "Mississippi River",
+      "reason": "same main deck as mississippi-river-2"
+    },
+    {
+      "archetype": "Mississippi River",
+      "url": "https://mtgtop8.com/event?e=92757&d=904530&f=LE",
+      "label": "Mississippi River",
+      "reason": "same main deck as mississippi-river-2"
+    },
+    {
+      "archetype": "Pox",
+      "url": "https://mtgtop8.com/event?e=93179&d=908113&f=LE",
+      "label": "Bg Hogaak",
+      "reason": "label names another archetype"
+    },
+    {
+      "archetype": "Merfolk",
+      "url": "https://mtgtop8.com/event?e=92708&d=904158&f=LE",
+      "label": "Merfolk",
+      "reason": "same main deck as merfolk-1"
+    },
+    {
+      "archetype": "Ninja",
+      "url": "https://mtgtop8.com/event?e=92918&d=905896&f=LE",
+      "label": "Ub Ninja",
+      "reason": "same main deck as ninja-1"
+    }
+  ],
+  "pulled_on": "2026-11-06",
+  "requests": 194,
+  "first_request": "2026-11-06T11:22:13",
+  "last_request": "2026-11-06T12:26:51",
+  "span_minutes": 64.6
+}

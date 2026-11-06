@@ -1,0 +1,30 @@
+// Deck file created with mtgtop8.com
+4 [OD] Cephalid Coliseum
+1 [ON] Flooded Strand
+1 [A] Island
+1 [A] Mountain
+4 [ZEN] Scalding Tarn
+1 [A] Underground Sea
+2 [B] Volcanic Island
+1 [JU] Anger
+1 [THS] Ashen Rider
+3 [TO] Breakthrough
+3 [FUT] Bridge from Below
+4 [JU] Cabal Therapy
+2 [TSP] Dread Return
+4 [DKA] Faithless Looting
+4 [RAV] Golgari Grave-Troll
+3 [RAV] Golgari Thug
+1 [] Hogaak, Arisen Necropolis
+4 [MI] Lion's Eye Diamond
+4 [FUT] Narcomoeba
+4 [] Otherworldly Gaze
+1 [] Ox of Agonas
+3 [] Poxwalkers
+4 [RAV] Stinkweed Imp
+SB:  2 [ON] Chain of Vapor
+SB:  1 [JOU] Kiora's Dismissal
+SB:  4 [M11] Leyline of Sanctity
+SB:  2 [] Shenanigans
+SB:  2 [] Stern Dismissal
+SB:  4 [MM] Unmask

@@ -1,0 +1,24 @@
+// Deck file created with mtgtop8.com
+8 [A] Island
+1 [] Otawara, Soaring City
+4 [] Urza's Saga
+4 [TE] Ancient Tomb
+4 [VI] Impulse
+2 [ZEN] Spell Pierce
+1 [] Skateboard
+2 [TE] Grindstone
+3 [] Flow State
+4 [SHM] Painter's Servant
+4 [] Sink into Stupor
+3 [ORI] Day's Undoing
+2 [] Force of Negation
+4 [] Hullbreacher
+4 [] Stock Up
+4 [AL] Force of Will
+4 [] Lórien Revealed
+2 [MM] Misdirection
+SB:  3 [] Consign to Memory
+SB:  3 [] Disruptor Flute
+SB:  3 [NPH] Torpor Orb
+SB:  3 [DS] Echoing Truth
+SB:  3 [] Harbinger of the Seas

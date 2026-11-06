@@ -1,0 +1,39 @@
+// Deck file created with mtgtop8.com
+4 [TE] Wasteland
+4 [A] Underground Sea
+2 [ZEN] Scalding Tarn
+2 [] Undercity Sewers
+2 [ON] Flooded Strand
+1 [RAV] Watery Grave
+1 [ZEN] Verdant Catacombs
+1 [ON] Bloodstained Mire
+1 [ZEN] Marsh Flats
+1 [ZEN] Misty Rainforest
+1 [ON] Polluted Delta
+4 [] Nethergoyf
+4 [] Moonshadow
+2 [] Bilbo, Thief in the Night
+2 [] Orcish Bowmasters
+1 [] Tamiyo, Inquisitive Student
+4 [CS] Mishra's Bauble
+4 [AL] Force of Will
+4 [IA] Brainstorm
+3 [AER] Fatal Push
+3 [NE] Daze
+3 [LRW] Ponder
+2 [LRW] Thoughtseize
+2 [] Kaito, Bane of Nightmares
+1 [IA] Urza's Bauble
+1 [MM] Snuff Out
+SB:  1 [AER] Fatal Push
+SB:  1 [LRW] Thoughtseize
+SB:  1 [SOM] Nihil Spellbomb
+SB:  1 [NE] Massacre
+SB:  1 [LG] Karakas
+SB:  2 [IA] Hydroblast
+SB:  2 [] Force of Negation
+SB:  1 [] Dauthi Voidwalker
+SB:  2 [] Consign to Memory
+SB:  1 [] Brazen Borrower
+SB:  1 [] Barrowgoyf
+SB:  1 [WL] Null Rod

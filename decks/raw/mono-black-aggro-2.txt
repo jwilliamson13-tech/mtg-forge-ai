@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+1 [ROE] Inquisition of Kozilek
+2 [] Bitter Triumph
+4 [A] Dark Ritual
+4 [AER] Fatal Push
+4 [CS] Mishra's Bauble
+4 [LRW] Thoughtseize
+1 [] Sheoldred, the Apocalypse
+2 [] Super Shredder
+3 [] Barrowgoyf
+4 [] Dauthi Voidwalker
+4 [] Moonshadow
+4 [] Nethergoyf
+4 [] Orcish Bowmasters
+1 [] Raucous Theater
+1 [A] Badlands
+2 [ON] Polluted Delta
+3 [ON] Bloodstained Mire
+4 [TE] Wasteland
+4 [ZEN] Verdant Catacombs
+4 [A] Swamp
+SB:  2 [C13] Toxic Deluge
+SB:  1 [] Damping Sphere
+SB:  3 [] Disruptor Flute
+SB:  4 [GP] Leyline of the Void
+SB:  1 [US] Meltdown
+SB:  2 [EX] Price of Progress
+SB:  2 [NPH] Torpor Orb

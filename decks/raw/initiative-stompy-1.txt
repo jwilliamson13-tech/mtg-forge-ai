@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+1 [A] Forest
+4 [AVR] Cavern of Souls
+4 [TE] Ancient Tomb
+4 [] Seasoned Dungeoneer
+4 [] Caves of Chaos Adventurer
+4 [] Undermountain Adventurer
+4 [TE] Lotus Petal
+4 [EX] City of Traitors
+4 [PLC] Simian Spirit Guide
+1 [A] Mountain
+1 [A] Plains
+4 [AL] Elvish Spirit Guide
+2 [] Once Upon a Time
+1 [LG] Karakas
+4 [NPH] Chancellor of the Annex
+4 [DS] Trinisphere
+2 [] Eldrazi Confluence
+4 [MR] Chalice of the Void
+1 [MR] Chrome Mox
+2 [] Forth Eorlingas!
+1 [] Broadside Bombardiers
+SB:  2 [] Eldrazi Confluence
+SB:  2 [] Forth Eorlingas!
+SB:  3 [] Broadside Bombardiers
+SB:  4 [] Fury
+SB:  3 [AL] Pyrokinesis
+SB:  1 [] Minsc & Boo, Timeless Heroes

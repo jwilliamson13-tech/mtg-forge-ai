@@ -1,0 +1,28 @@
+// Deck file created with mtgtop8.com
+1 [] Flashback
+2 [NPH] Surgical Extraction
+2 [] Hex Magic
+2 [] Storm of Memories
+3 [] Jeska's Will
+3 [CHK] Desperate Ritual
+3 [CS] Rite of Flame
+4 [] Wrenn's Resolve
+4 [] Reckless Impulse
+4 [SHM] Manamorphose
+4 [TE] Ruby Medallion
+4 [MR] Seething Song
+4 [] Wish
+4 [] Ral, Monsoon Mage
+4 [TE] Ancient Tomb
+13 [A] Mountain
+SB:  1 [ISD] Past in Flames
+SB:  2 [] Blast Zone
+SB:  3 [] Hexing Squelcher
+SB:  1 [TSP] Grapeshot
+SB:  1 [] Bonus Round
+SB:  1 [] Galvanic Relay
+SB:  2 [C15] Fiery Confluence
+SB:  1 [TSP] Empty the Warrens
+SB:  1 [] Storm of Memories
+SB:  1 [] Jeska's Will
+SB:  1 [CS] Rite of Flame

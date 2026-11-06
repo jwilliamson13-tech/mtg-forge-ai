@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+3 [PC2] Baleful Strix
+2 [] Ingenious Infiltrator
+4 [] Orcish Bowmasters
+4 [AQ] Ornithopter
+2 [] Tamiyo, Inquisitive Student
+2 [] Yuriko, the Tiger's Shadow
+2 [] Retrofitter Foundry
+4 [IA] Brainstorm
+2 [AER] Fatal Push
+1 [] Force of Negation
+4 [AL] Force of Will
+1 [KTK] Murderous Cut
+2 [MM] Snuff Out
+4 [LRW] Ponder
+1 [] Archnemesis
+1 [US] Back to Basics
+3 [] Kaito, Bane of Nightmares
+1 [ON] Bloodstained Mire
+4 [A] Island
+4 [ON] Polluted Delta
+4 [] Prismatic Vista
+3 [A] Swamp
+2 [A] Underground Sea
+SB:  1 [] Force of Negation
+SB:  1 [US] Back to Basics
+SB:  1 [A] Blue Elemental Blast
+SB:  2 [] Disruptor Flute
+SB:  2 [] Sheoldred's Edict
+SB:  2 [LRW] Thoughtseize
+SB:  1 [C13] Toxic Deluge
+SB:  1 [WL] Null Rod
+SB:  4 [GP] Leyline of the Void

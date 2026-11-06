@@ -1,0 +1,34 @@
+// Deck file created with mtgtop8.com
+1 [] Mistrise Village
+1 [] Thundering Falls
+1 [ON] Polluted Delta
+2 [ZEN] Misty Rainforest
+4 [ZEN] Scalding Tarn
+2 [B] Volcanic Island
+1 [A] Mountain
+2 [A] Island
+2 [EX] City of Traitors
+3 [TE] Ancient Tomb
+1 [ZEN] Spell Pierce
+1 [] Sink into Stupor
+2 [CMD] Flusterstorm
+4 [AL] Force of Will
+4 [] Stock Up
+4 [LRW] Ponder
+4 [IA] Brainstorm
+2 [M13] Omniscience
+4 [US] Sneak Attack
+4 [US] Show and Tell
+3 [ROE] Emrakul, the Aeons Torn
+4 [] Atraxa, Grand Unifier
+4 [TE] Lotus Petal
+SB:  1 [NPH] Surgical Extraction
+SB:  1 [IA] Pyroclasm
+SB:  2 [IA] Pyroblast
+SB:  2 [] Hexing Squelcher
+SB:  2 [SHM] Faerie Macabre
+SB:  1 [DKA] Grafdigger's Cage
+SB:  2 [UL] Defense Grid
+SB:  2 [] Consign to Memory
+SB:  1 [HOU] Abrade
+SB:  1 [] Brotherhood's End

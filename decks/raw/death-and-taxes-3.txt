@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+4 [DS] Aether Vial
+4 [ZEN] Arid Mesa
+1 [] Cloak and Dagger, Entwined
+2 [EVE] Flickerwisp
+4 [LG] Karakas
+1 [] Lion Sash
+4 [ZEN] Marsh Flats
+1 [] Meteor Sword
+4 [] Overlord of the Balemurk
+4 [] Phelia, Exuberant Shepherd
+5 [A] Plains
+1 [] Pre-War Formalwear
+4 [] Prismatic Vista
+4 [CN2] Recruiter of the Guard
+2 [A] Scrubland
+2 [] Shadowy Backstreet
+2 [] Skyclave Apparition
+4 [] Solitude
+4 [WWK] Stoneforge Mystic
+1 [A] Swamp
+4 [A] Swords to Plowshares
+4 [LRW] Thoughtseize
+4 [TE] Wasteland
+4 [] White Orchid Phantom
+1 [ON] Windswept Heath
+2 [] Witch Enchanter
+1 [] Lich's Relic
+1 [] Emperor of Bones
+1 [] Loran of the Third Path
+SB:  3 [] Disruptor Flute
+SB:  2 [] Erode
+SB:  3 [] Wrath of the Skies
+SB:  1 [] Yorion, Sky Nomad
+SB:  4 [GP] Leyline of the Void
+SB:  2 [US] Duress

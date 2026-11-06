@@ -1,0 +1,29 @@
+// Deck file created with mtgtop8.com
+4 [TE] Ancient Tomb
+4 [MR] Chalice of the Void
+3 [] Clown Car
+4 [] Emry, Lurker of the Loch
+4 [AL] Force of Will
+1 [A] Island
+2 [] Kappa Cannoneer
+4 [TE] Lotus Petal
+4 [CS] Mishra's Bauble
+4 [SOM] Mox Opal
+1 [] Otawara, Soaring City
+4 [] Pinnacle Emissary
+4 [MR] Seat of the Synod
+1 [] Shadowspear
+2 [] Sink into Stupor
+1 [] Skateboard
+4 [] Thought Monitor
+4 [MR] Thoughtcast
+4 [] Urza's Saga
+1 [SOK] Pithing Needle
+SB:  1 [MR] Aether Spellbomb
+SB:  3 [] Consign to Memory
+SB:  2 [NPH] Dismember
+SB:  3 [] Disruptor Flute
+SB:  1 [DKA] Grafdigger's Cage
+SB:  1 [] Haywire Mite
+SB:  2 [AER] Metallic Rebuke
+SB:  2 [DK] Tormod's Crypt

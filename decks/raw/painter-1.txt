@@ -1,0 +1,36 @@
+// Deck file created with mtgtop8.com
+1 [TE] Grindstone
+1 [] Portable Hole
+1 [SOK] Pithing Needle
+1 [SOM] Mox Opal
+1 [US] Voltaic Key
+1 [] Soul-Guide Lantern
+2 [] Mishra's Research Desk
+2 [] Disruptor Flute
+3 [] Manifold Key
+4 [] Tezzeret, Cruel Captain
+4 [TE] Lotus Petal
+4 [] Kozilek's Command
+4 [UL] Grim Monolith
+4 [] Karn, the Great Creator
+4 [] The One Ring
+3 [SHM] Painter's Servant
+4 [] Planar Nexus
+4 [TE] Ancient Tomb
+4 [] Urza's Workshop
+4 [AQ] Urza's Tower
+4 [] Urza's Saga
+SB:  1 [] Perilous Snare
+SB:  1 [SH] Ensnaring Bridge
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [NPH] Dismember
+SB:  1 [OGW] Warping Wail
+SB:  1 [AER] Paradox Engine
+SB:  1 [DS] Trinisphere
+SB:  1 [MI] Cursed Totem
+SB:  1 [NPH] Torpor Orb
+SB:  1 [] Eldrazi Confluence
+SB:  1 [TE] Grindstone
+SB:  2 [] Disruptor Flute
+SB:  1 [SHM] Painter's Servant

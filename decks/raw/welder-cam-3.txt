@@ -1,0 +1,38 @@
+// Deck file created with mtgtop8.com
+1 [MR] Aether Spellbomb
+1 [] Agatha's Soul Cauldron
+1 [] Arena of Glory
+1 [TSP] Chromatic Star
+2 [] Cori-Steel Cutter
+4 [] Emry, Lurker of the Loch
+4 [] Goblin Engineer
+4 [UL] Goblin Welder
+1 [MR] Great Furnace
+1 [A] Island
+1 [] Legion Extruder
+1 [MI] Lion's Eye Diamond
+2 [] Loki, God of Mischief
+4 [TE] Lotus Petal
+4 [CS] Mishra's Bauble
+1 [A] Mountain
+4 [SOM] Mox Opal
+1 [] Phyrexian Dragon Engine
+1 [A] Plateau
+4 [ZEN] Scalding Tarn
+1 [MR] Seat of the Synod
+4 [] Sewer-veillance Cam
+1 [] Skateboard
+3 [IA] Urza's Bauble
+4 [] Urza's Saga
+4 [B] Volcanic Island
+SB:  2 [DK] Blood Moon
+SB:  1 [GTC] Boros Charm
+SB:  2 [] Consign to Memory
+SB:  2 [CMD] Flusterstorm
+SB:  1 [] Haywire Mite
+SB:  1 [SOK] Pithing Needle
+SB:  1 [] Portable Hole
+SB:  2 [] Rip Apart
+SB:  1 [ZEN] Spell Pierce
+SB:  1 [DK] Tormod's Crypt
+SB:  1 [] Twinshot Sniper

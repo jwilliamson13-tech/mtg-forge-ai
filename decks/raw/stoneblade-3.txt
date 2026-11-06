@@ -1,0 +1,33 @@
+// Deck file created with mtgtop8.com
+1 [ZEN] Arid Mesa
+1 [NPH] Batterskull
+4 [IA] Brainstorm
+1 [] Cryptic Coat
+3 [NE] Daze
+4 [ON] Flooded Strand
+4 [AL] Force of Will
+1 [LG] Karakas
+1 [] Meteor Sword
+1 [] Meticulous Archive
+4 [] Phelia, Exuberant Shepherd
+3 [LRW] Ponder
+2 [] Prismatic Ending
+3 [] Quantum Riddler
+3 [ZEN] Scalding Tarn
+3 [IA] Snow-Covered Island
+1 [IA] Snow-Covered Plains
+2 [SC] Stifle
+4 [WWK] Stoneforge Mystic
+4 [A] Swords to Plowshares
+4 [] Tamiyo, Inquisitive Student
+2 [A] Tundra
+4 [TE] Wasteland
+SB:  2 [] Consign to Memory
+SB:  2 [] Containment Priest
+SB:  1 [] Erode
+SB:  2 [] Force of Negation
+SB:  1 [IA] Hydroblast
+SB:  1 [] Lavinia, Azorius Renegade
+SB:  2 [RTR] Rest in Peace
+SB:  1 [] White Orchid Phantom
+SB:  3 [] Wrath of the Skies

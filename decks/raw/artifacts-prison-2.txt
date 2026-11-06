@@ -1,0 +1,31 @@
+// Deck file created with mtgtop8.com
+1 [] Giant's Boulder
+1 [ZEN] Expedition Map
+1 [SOK] Pithing Needle
+1 [US] Voltaic Key
+2 [] Eldrazi Confluence
+2 [] Disruptor Flute
+3 [] Manifold Key
+4 [UL] Grim Monolith
+4 [] Karn, the Great Creator
+4 [] Kozilek's Command
+4 [] The One Ring
+4 [DS] Trinisphere
+4 [] Ugin, Eye of the Storms
+1 [] Cityscape Leveler
+2 [] Petrified Hamlet
+2 [EX] City of Traitors
+4 [] Planar Nexus
+4 [AQ] Urza's Tower
+4 [] Urza's Saga
+4 [] Urza's Workshop
+4 [TE] Ancient Tomb
+SB:  1 [AER] Walking Ballista
+SB:  1 [] Extinguisher Battleship
+SB:  1 [SH] Ensnaring Bridge
+SB:  4 [GP] Leyline of the Void
+SB:  3 [ZEN] Mindbreak Trap
+SB:  1 [DS] Mycosynth Lattice
+SB:  1 [DK] Tormod's Crypt
+SB:  2 [NPH] Dismember
+SB:  1 [SOM] Liquimetal Coating

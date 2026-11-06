@@ -1,0 +1,30 @@
+// Deck file created with mtgtop8.com
+4 [IA] Brainstorm
+4 [] Dark Matter Manipulator
+4 [NE] Daze
+1 [FUT] Dryad Arbor
+2 [AER] Fatal Push
+4 [AL] Force of Will
+4 [] Hogaak, Arisen Necropolis
+4 [ZEN] Misty Rainforest
+4 [] Moonshadow
+3 [] Orcish Bowmasters
+3 [LRW] Ponder
+4 [] Stitcher's Supplier
+1 [A] Swamp
+1 [] Undercity Sewers
+4 [A] Underground Sea
+4 [ZEN] Verdant Catacombs
+3 [TE] Wasteland
+1 [] Kaito, Bane of Nightmares
+1 [ON] Polluted Delta
+4 [] Mockingbird
+SB:  1 [AER] Fatal Push
+SB:  1 [] Orcish Bowmasters
+SB:  1 [TE] Wasteland
+SB:  2 [NE] Massacre
+SB:  2 [] Consign to Memory
+SB:  1 [] Force of Negation
+SB:  3 [] Brazen Borrower
+SB:  3 [] Dauthi Voidwalker
+SB:  1 [FD] Engineered Explosives

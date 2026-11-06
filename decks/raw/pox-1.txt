@@ -1,0 +1,35 @@
+// Deck file created with mtgtop8.com
+3 [] Ashiok, Dream Render
+3 [] Barrowgoyf
+4 [A] Dark Ritual
+2 [AER] Fatal Push
+1 [] Fell the Profane
+2 [FE] Hymn to Tourach
+1 [] Karn's Sylex
+1 [EMN] Liliana, the Last Hope
+3 [] Opposition Agent
+1 [] Ral Zarek, Guest Lecturer
+1 [] Sanctum Lurker
+1 [] Sheoldred's Edict
+2 [A] Sinkhole
+4 [TSP] Smallpox
+2 [NPH] Surgical Extraction
+4 [LRW] Thoughtseize
+2 [] Castle Locthwain
+4 [] Eumidian Hatchery
+3 [AQ] Mishra's Factory
+1 [] Petrified Hamlet
+1 [IA] Snow-Covered Swamp
+6 [A] Swamp
+1 [] Takenuma, Abandoned Mire
+3 [PLC] Urborg, Tomb of Yawgmoth
+4 [TE] Wasteland
+SB:  2 [] Karn's Sylex
+SB:  1 [THS] Ashen Rider
+SB:  1 [] Day of Black Sun
+SB:  2 [A] Gloom
+SB:  3 [GP] Leyline of the Void
+SB:  1 [SOM] Nihil Spellbomb
+SB:  1 [SOK] Pithing Needle
+SB:  2 [] Plague Engineer
+SB:  2 [] Void Mirror
