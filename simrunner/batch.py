@@ -52,10 +52,11 @@ class BatchConfig:
     window: Window | None = None  # None runs the batch now, with no hard stop
     records: RecordPlan | None = None  # None has Forge write no game records
     tripwire: bool = True  # catch forge-ai reading hidden cards
+    batch_name: str | None = None  # the batch id, when it isn't the run folder's name
 
     @property
     def batch_id(self) -> str:
-        return self.run_dir.name
+        return self.batch_name or self.run_dir.name
 
     @property
     def games_folder(self) -> Path:
@@ -344,7 +345,7 @@ def find_jar(forge_root: Path) -> Path:
     return jars[0].resolve()
 
 
-def _check(config: BatchConfig) -> None:
+def check_setup(config: BatchConfig) -> None:
     if not (config.forge_root / "forge-gui" / "res").is_dir():
         raise SetupError(f"no forge-gui/res under {config.forge_root}")
     for seat in config.seats:
@@ -365,7 +366,13 @@ def _check(config: BatchConfig) -> None:
         raise SetupError(f"the run folder already holds worker folders: {config.run_dir}")
 
 
-def _stamp(moment: datetime | None) -> str | None:
+def write_json(path: Path, fields: dict) -> None:
+    fresh = path.with_suffix(".tmp")
+    fresh.write_text(json.dumps(fields, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(fresh, path)  # a reader never sees half a file
+
+
+def stamp(moment: datetime | None) -> str | None:
     return moment.isoformat(timespec="seconds") if moment else None
 
 
@@ -379,20 +386,17 @@ def _write_status(config: BatchConfig, status: str, batch: BatchResult | None = 
         "batch": config.run_dir.name,
         "status": status,
         "stopped_at_hard_stop": batch.stopped if batch else False,
-        "window_start": _stamp(config.window.start) if config.window else None,
-        "window_stop": _stamp(config.window.stop) if config.window else None,
+        "window_start": stamp(config.window.start) if config.window else None,
+        "window_stop": stamp(config.window.stop) if config.window else None,
         "games_attempted": config.games,
         "games_finished": finished,
         "games_not_finished": config.games - finished,
     }
-    path = config.run_dir / STATUS_FILE
-    fresh = path.with_suffix(".tmp")
-    fresh.write_text(json.dumps(fields, indent=2) + "\n", encoding="utf-8", newline="\n")
-    os.replace(fresh, path)  # a reader never sees half a file
+    write_json(config.run_dir / STATUS_FILE, fields)
 
 
 def run_batch(config: BatchConfig) -> BatchResult:
-    _check(config)
+    check_setup(config)
     jar = find_jar(config.forge_root)
     forge_gui = config.forge_root.resolve() / "forge-gui"
     (config.run_dir / GAMES_FOLDER).mkdir(parents=True, exist_ok=True)

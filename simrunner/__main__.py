@@ -1,6 +1,7 @@
 """Command line: `python -m simrunner batch DECK1 DECK2 --games N --seed S`.
 
-`nightly` takes the same arguments plus `--start` and `--stop`.
+`nightly` takes the same arguments plus `--start` and `--stop`. `pool` takes those without
+the two decks, and draws its deck pairs from the manifest.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from simrunner.batch import BatchConfig, SetupError, run_batch
+from simrunner.pool import DEFAULT_CHUNK_GAMES, DEFAULT_HELD_OUT_SHARE, PoolConfig, format_pool_report, run_pool
 from simrunner.report import format_report
 from simrunner.window import Window, parse_clock, resolve_window
 from simrunner.worker import DEFAULT_SEARCH_BUDGET, SIM_MODES, RecordPlan, Seat
@@ -21,6 +23,7 @@ CORES_RESERVED = 2
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FORGE = REPO_ROOT.parent / "forge"
 DEFAULT_RUNS = REPO_ROOT / "runs"
+DEFAULT_MANIFEST = REPO_ROOT / "decks" / "manifest.json"
 
 
 def _cores_minus(reserve: int) -> int:
@@ -52,7 +55,7 @@ def _batch(args: argparse.Namespace) -> int:
     return _run(args, args.workers)
 
 
-def _nightly(args: argparse.Namespace) -> int:
+def _window_and_workers(args: argparse.Namespace) -> tuple[Window, int]:
     if args.reserve < 0:
         args.parser.error("the reserve can't be negative")
     try:
@@ -60,10 +63,15 @@ def _nightly(args: argparse.Namespace) -> int:
     except ValueError as e:
         args.parser.error(str(e))
     print(f"window {window.start} to {window.stop}", file=sys.stderr)
-    return _run(args, _cores_minus(args.reserve) if args.workers is None else args.workers, window)
+    return window, _cores_minus(args.reserve) if args.workers is None else args.workers
 
 
-def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -> int:
+def _nightly(args: argparse.Namespace) -> int:
+    window, workers = _window_and_workers(args)
+    return _run(args, workers, window)
+
+
+def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, window: Window | None) -> BatchConfig:
     profiles = args.ai or (None, None)
     modes = args.sim_mode or (None, None)
     run_dir = args.run_dir or DEFAULT_RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-seed{args.seed}"
@@ -72,23 +80,30 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
         records = RecordPlan(Path(args.records_dir) if args.records_dir else None, args.turn_cap, not args.no_honest)
     elif args.turn_cap is not None or args.no_honest:
         args.parser.error("--turn-cap and --no-honest need records")
-    config = BatchConfig(
-        seats=(Seat(_deck_path(args.deck1, args.manifest, args.parser), profiles[0], modes[0]),
-               Seat(_deck_path(args.deck2, args.manifest, args.parser), profiles[1], modes[1])),
+    return BatchConfig(
+        seats=(Seat(decks[0], profiles[0], modes[0]), Seat(decks[1], profiles[1], modes[1])),
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
         records=records, tripwire=not args.no_tripwire,
     )
+
+
+def _write_report(run_dir: Path, report: str) -> None:
+    (run_dir / "report.txt").write_text(report, encoding="utf-8", newline="\n")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
+    sys.stdout.write(report)
+
+
+def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -> int:
+    decks = (_deck_path(args.deck1, args.manifest, args.parser), _deck_path(args.deck2, args.manifest, args.parser))
+    config = _config(args, decks, workers, window)
     try:
         batch = run_batch(config)
     except SetupError as e:
         args.parser.error(str(e))
-    report = format_report(batch)
-    (config.run_dir / "report.txt").write_text(report, encoding="utf-8", newline="\n")
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(errors="backslashreplace")
-    sys.stdout.write(report)
+    _write_report(config.run_dir, format_report(batch))
     if batch.stopped and not batch.complete:
         print(f"batch incomplete: stopped at the hard stop, {batch.not_finished} of {batch.attempted} "
               f"games not finished, logs in {config.run_dir}", file=sys.stderr)
@@ -100,9 +115,45 @@ def _run(args: argparse.Namespace, workers: int, window: Window | None = None) -
     return 0
 
 
-def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
+def _pool(args: argparse.Namespace) -> int:
+    if args.chunk_games < 1:
+        args.parser.error("a chunk needs at least 1 game")
+    if not 0 <= args.held_out_share <= 1:
+        args.parser.error("the held-out share is a fraction from 0 to 1")
+    window, workers = _window_and_workers(args)
+    # A chunk fills in its own two decks.
+    config = PoolConfig(_config(args, (Path(), Path()), workers, window), Path(args.manifest or DEFAULT_MANIFEST),
+                        args.chunk_games, args.held_out_share)
+    try:
+        pool = run_pool(config)
+    except SetupError as e:
+        args.parser.error(str(e))
+    _write_report(config.batch.run_dir, format_pool_report(pool))
+    if not pool.complete:
+        why = "stopped at the hard stop" if pool.stopped else f"{len(pool.failed)} chunks failed"
+        print(f"pool batch incomplete: {why}, {pool.not_finished} of {pool.attempted} games not finished. The same "
+              f"--run-dir and --seed continue it. Logs in {config.batch.run_dir}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _add_deck_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("deck1", help="path to the .dck file for seat 1, or a deck id from the manifest")
     batch.add_argument("deck2", help="path to the .dck file for seat 2, or a deck id from the manifest")
+
+
+def _add_window_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start", type=_clock_time, required=True,
+                        help="local time to start, HH:MM or HH:MM:SS; inside the window, it starts at once")
+    parser.add_argument("--stop", type=_clock_time, required=True,
+                        help="local time by which every worker is gone; at or before --start means the next day")
+    count = parser.add_mutually_exclusive_group()
+    count.add_argument("--reserve", type=int, default=CORES_RESERVED,
+                       help="logical cores to leave free; workers are the rest (default: 2)")
+    count.add_argument("--workers", type=int, help="parallel JVMs, in place of --reserve")
+
+
+def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--manifest", help="deck manifest for looking up deck ids (default: decks/manifest.json)")
     batch.add_argument("--games", type=int, required=True, help="total games in the batch")
     batch.add_argument("--seed", type=int, required=True, help="batch seed; worker seeds derive from it")
@@ -137,22 +188,28 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     batch = commands.add_parser("batch", help="run headless forge sim games in parallel and report throughput")
+    _add_deck_arguments(batch)
     _add_batch_arguments(batch)
     batch.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
                        help="parallel JVMs (default: logical cores minus 2)")
     batch.set_defaults(handler=_batch, parser=batch)
 
     nightly = commands.add_parser("nightly", help="run a batch inside a time window, with a hard stop at its end")
+    _add_deck_arguments(nightly)
     _add_batch_arguments(nightly)
-    nightly.add_argument("--start", type=_clock_time, required=True,
-                         help="local time to start, HH:MM or HH:MM:SS; inside the window, it starts at once")
-    nightly.add_argument("--stop", type=_clock_time, required=True,
-                         help="local time by which every worker is gone; at or before --start means the next day")
-    count = nightly.add_mutually_exclusive_group()
-    count.add_argument("--reserve", type=int, default=CORES_RESERVED,
-                       help="logical cores to leave free; workers are the rest (default: 2)")
-    count.add_argument("--workers", type=int, help="parallel JVMs, in place of --reserve")
+    _add_window_arguments(nightly)
     nightly.set_defaults(handler=_nightly, parser=nightly)
+
+    pool = commands.add_parser("pool", help="spread a windowed batch over many deck pairs from the manifest, "
+                                            "in chunks that a restart can skip")
+    _add_batch_arguments(pool)
+    _add_window_arguments(pool)
+    pool.add_argument("--chunk-games", type=int, default=DEFAULT_CHUNK_GAMES,
+                      help=f"about how many games one pair plays in one JVM (default: {DEFAULT_CHUNK_GAMES})")
+    pool.add_argument("--held-out-share", type=float, default=DEFAULT_HELD_OUT_SHARE,
+                      help="share of the games played held-out deck against held-out deck "
+                           f"(default: {DEFAULT_HELD_OUT_SHARE})")
+    pool.set_defaults(handler=_pool, parser=pool, sim_mode=["heuristic", "heuristic"], records=True)
     return parser
 
 
