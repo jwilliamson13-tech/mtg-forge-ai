@@ -49,6 +49,7 @@ class BatchConfig:
     records_dir: Path | None = None  # None keeps them in the run folder's games folder
     turn_cap: int | None = None  # None takes Forge's default
     tripwire: bool = True  # with records, catch forge-ai reading hidden cards
+    honest: bool = True  # with records, keep the AI to what a person in its seat could know
 
     @property
     def batch_id(self) -> str:
@@ -266,6 +267,8 @@ def _check(config: BatchConfig) -> None:
         raise SetupError("a turn cap needs records and has to be at least 1")
     if not config.tripwire and not config.records:
         raise SetupError("the tripwire only runs with records, so there is nothing to turn off")
+    if not config.honest and not config.records:
+        raise SetupError("honest play only goes on with records, so there is nothing to turn off")
     if config.records and not BATCH_ID.fullmatch(config.batch_id):
         raise SetupError(f"the run folder's name is the batch id, which takes letters, digits, _ and -: {config.batch_id}")
     if config.forge_root.resolve() in config.run_dir.resolve().parents:
@@ -324,7 +327,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
     started = []
     pool = None
     # Each worker runs in its own folder, so Forge needs the full path.
-    records = (RecordPlan(config.games_folder.resolve(), config.batch_id, config.turn_cap, config.tripwire)
+    records = (RecordPlan(config.games_folder.resolve(), config.batch_id, config.turn_cap, config.tripwire, config.honest)
                if config.records else None)
     try:
         for plan in plan_workers(config.games, config.batch_seed, config.workers):

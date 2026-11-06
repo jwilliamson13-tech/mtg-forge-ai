@@ -20,7 +20,7 @@ from simrunner.output import AiLimits, DrawCause, GameResult
 from simrunner.report import format_report, format_summary, format_workers
 from simrunner.seeds import derive_seed
 from simrunner.window import Window
-from simrunner.worker import DEFAULT_SEARCH_BUDGET, Seat, WorkerPlan, WorkerResult
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, Seat, WorkerPlan, WorkerResult, sim_args
 
 STUB = Path(__file__).parent / "stub_java.py"
 REPO = Path(__file__).parents[1]
@@ -971,6 +971,25 @@ def test_no_tripwire_passes_off_through_to_forge(config, records):
 def test_turning_off_a_tripwire_that_never_ran_is_refused(config):
     with pytest.raises(SetupError, match="tripwire"):
         run_batch(config(tripwire=False))
+
+
+def test_records_turn_honest_play_on(config, records):
+    run_batch(config(records=True))
+    assert all(run["argv"][run["argv"].index("-honest") + 1] == "on" for run in records().values())
+
+
+def test_no_honest_leaves_the_flag_out_so_forge_keeps_its_default(config, records):
+    run_batch(config(games=2, records=True, honest=False))
+    assert all("-honest" not in run["argv"] for run in records().values())
+
+
+def test_a_batch_without_records_says_nothing_about_honest_play(config, tmp_path):
+    assert "-honest" not in sim_args(config().seats, tmp_path, 1, 1, 60)
+
+
+def test_turning_off_honest_play_that_never_ran_is_refused(config):
+    with pytest.raises(SetupError, match="honest"):
+        run_batch(config(honest=False))
 
 
 def test_the_report_gives_max_and_mean_hits_per_game(config, monkeypatch):

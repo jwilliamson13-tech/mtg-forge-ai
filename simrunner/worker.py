@@ -60,6 +60,7 @@ class RecordPlan:
     batch_id: str
     turn_cap: int | None = None
     tripwire: bool = True
+    honest: bool = True
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,8 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
             args += ["-turncap", str(records.turn_cap)]
         if not records.tripwire:
             args += ["-tripwire", "off"]
+        if records.honest:
+            args += ["-honest", "on"]
     return args
 
 

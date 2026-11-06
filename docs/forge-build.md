@@ -109,6 +109,7 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-batch ID` is the batch id for those records: letters, digits, `_` and `-`.
 - `-turncap N` stops a recorded game as a draw once turn N is over, default 50. A capped game prints `Stopping game at the turn cap as draw` before its result lines.
 - `-tripwire on|off` goes with `-record`, and on is the default. It needs `-record`, because a game record is where it reports. See "Tripwire" below. Without `-record` there is no tripwire at all, so a plain `forge sim` stays what it was.
+- `-honest on|off` keeps the AI to what a person in its seat could know, and off is the default, so a plain `forge sim` is the stock AI with its peeks. It works without `-record`, but only `-record` keeps a reveal log, so the AI then goes by public cards alone. It can't go with `-t`. See `docs/peek-fixes.md`.
 - `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
@@ -144,7 +145,7 @@ python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_2
 
 Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` doesn't get those modes back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, or if a batch with records is missing a file for a game that should have one. Those last three mean a stale jar, and the worker table says so.
 
-`--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, and needs records. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
+`--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, and needs records. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
 
 ### What the report counts
 
@@ -369,7 +370,7 @@ What this doesn't cover:
 
 The turn cap sits on `GameEventTurnBegan` and marks both players drawn before it ends the game, as a draw effect does. A plain `setGameOver(Draw)` gets the false winner that a clock stop gets. A capped game is a true draw in Forge's own eyes, so after one, seat 1 goes first in the next game.
 
-The hook only reads. It adds no draw from `MyRandom`, and the reveal log is written to and never read by the AI until #21. So a game plays the same with records on or off, unless the cap ends it.
+The hook only reads. It adds no draw from `MyRandom`, and only `-honest` lets the AI read the reveal log. So with `-honest` off a game plays the same with records on or off, unless the cap ends it.
 
 Checked on 2026-11-05 with 2 workers, on a jar built from the fork's `t18-snapshot-hook`. "Before" is the jar from before the hook. Burn vs Merfolk, 20 games, seed 1, `--clock 120` unless the table says otherwise.
 
@@ -404,7 +405,7 @@ What this doesn't cover:
 
 ### Tripwire
 
-The tripwire (#20) catches forge-ai reading a hand or library that isn't the deciding player's. #21 fixes what it finds, and a batch of training games counts as honest only when it reports zero, so it leans toward a false hit over a miss.
+The tripwire (#20) catches forge-ai reading a hand or library that isn't the deciding player's, or the real side of a face-down card that player may not see. #21 fixes what it finds, and `docs/peek-fixes.md` lists those fixes. A batch of training games counts as honest only when it reports zero, so it leans toward a false hit over a miss.
 
 The spec says size-only reads bypass the check because they go through a different call. They don't. `forge-ai` has 116 `getCardsIn(Hand|Library).size()` and `.isEmpty()` sites on the same call as a real read. Nothing marked a decision made during resolution either, and that's where naming, Clash and fetch-type run. So the check became two parts.
 
@@ -412,7 +413,7 @@ The spec says size-only reads bypass the check because they go through a differe
 
 Who asked is settled when the zone hands the cards over, from the first stack frame that isn't plumbing. Plumbing is a named list of `getCardsIn`-style methods, plus `java`, `jdk` and `forge.util`. What they did is settled later, by the view. Both can't happen at the point of use: in `CardLists.filter(opp.getCardsIn(Hand), ...)` the frame that iterates is a forge-game helper, and it would pass for the rules engine.
 
-**The decider.** forge-game can't see forge-ai, so every AI decision reaches the AI through a controller call. `ScopedPlayerControllerAi` overrides each of them to bracket it with `enter` and `exit`, on a stack held by the watch. That covers resolve-time choices, and it works across the heuristic AI's eval thread, because the stack isn't per thread. `AITimeoutTracker` sessions don't do this job. They skip resolution, and they open under the wrong player when one AI predicts another's attack. `HiddenReadWatchTest.everyControllerDecisionIsBracketed` fails if an upstream merge adds a decision without an override, which is how it found `payCostDuringRoll`, a method with no `@Override` on it. A forge-ai read with no decider open counts as a hit, marked `no decider: `, so a way into the AI that no bracket covers can't hide behind a zero.
+**The decider.** forge-game can't see forge-ai, so every AI decision reaches the AI through a controller call. `ScopedPlayerControllerAi` overrides each of them to bracket it with `enter` and `exit`, on `Game.AI_DECIDERS`, a stack each game has. Honest play reads it too, so it doesn't depend on the watch. That covers resolve-time choices, and it works across the heuristic AI's eval thread, because the stack isn't per thread. `AITimeoutTracker` sessions don't do this job. They skip resolution, and they open under the wrong player when one AI predicts another's attack. `HiddenReadWatchTest.everyControllerDecisionIsBracketed` fails if an upstream merge adds a decision without an override, which is how it found `payCostDuringRoll`, a method with no `@Override` on it. A forge-ai read with no decider open counts as a hit, marked `no decider: `, so a way into the AI that no bracket covers can't hide behind a zero.
 
 **What doesn't count:**
 
@@ -423,8 +424,8 @@ Who asked is settled when the zone hands the cards over, from the first stack fr
 
 **What it can't see:**
 
-- Face-down identity. The spec lists face-down cards as hidden. A battlefield read isn't a hidden-zone read, and `Card.getState(Original)` isn't a zone read at all (`PermanentAi:130`, `PlayerControllerAi:656`).
-- Deck lists: `getRegisteredPlayer().getDeck()` at `ComputerUtil:2368` and `SpecialCardAi:403`.
+- Deck lists: `getRegisteredPlayer().getDeck()`. `ComputerUtil:2368`, `ChangeZoneAi:1513`, `SpecialCardAi:403` and `PlayerControllerAi:140` read an opponent's, and `-honest` closes all four by hand. Nothing would catch a fifth.
+- A face-down card's real side reached some other way than `Card.getState`, `getOriginalState`, `getPaperCard` and `getRules`, such as `getStates()` or a `CardState` object kept from before it turned over.
 - Rules questions the AI asks about an opponent, when forge-game does the reading. `sa.canPlay()` on an opponent's spell stays silent, and the AI learns the answer anyway. `ComputerUtilCost.canPayCost` for an opponent does hit, because it runs through `ComputerUtilMana`, which is forge-ai.
 - Where a card it already holds has gone: `Zone.contains(card)`, `Card.getZone()`, `Game.getZoneOf`. #21's fix for `NamedDiscard` needs `Zone.contains(card)` to stay uncounted.
 - The order of the AI's own library, which story 10 exempts (`ComputerUtilAbility:58`).
