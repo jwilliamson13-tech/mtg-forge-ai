@@ -6,8 +6,9 @@ and `<ref>` at indices 0, 1, 2 whatever the corpus. Numeric keys get their
 own table with `<unk>` at index 0. docs/vocabulary.md describes the token
 names and the lookup rules.
 
-`face_tokens` and `face_numbers` are the one place that turns a parsed face
-into what the encoder looks up, so the builder and the encoder can't drift.
+`face_rows` is the one place that turns a parsed face into what the encoder
+looks up, so the builder and the encoder can't drift. `face_tokens` and
+`face_numbers` are the same rows, flattened.
 """
 
 from __future__ import annotations
@@ -40,29 +41,29 @@ def _printed_stats(face: Face) -> list[tuple[str, int | str | None]]:
     return [(stat, getattr(face, stat)) for stat in PRINTED_STATS]
 
 
-def face_tokens(face: Face) -> list[str]:
-    """Every categorical token on a face: identity fields, then each ability and sub-ability."""
+def face_rows(face: Face) -> list[tuple[list[str], list[KeyedNumber]]]:
+    """(tokens, numbers) per encoder row: the identity fields, then each ability and sub-ability."""
     tokens = [f"type={t}" for t in face.types]
     tokens += [f"color={c}" for c in face.colors]
     tokens += [f"pip={p}" for p in face.mana_cost.special]
+    numbers = [KeyedNumber("generic", face.mana_cost.generic)]
+    numbers += [KeyedNumber(f"pip.{p}", n) for p, n in face.mana_cost.pips.items()]
     for field, value in _printed_stats(face):
         if isinstance(value, str):
             tokens.append(f"{field}={value}")
-    for ability in _walk(face.abilities):
-        tokens += ability_tokens(ability)
-    return tokens
+        elif isinstance(value, int):
+            numbers.append(KeyedNumber(field, value))
+    return [(tokens, numbers), *((ability_tokens(a), list(a.numbers)) for a in _walk(face.abilities))]
+
+
+def face_tokens(face: Face) -> list[str]:
+    """Every categorical token on a face: identity fields, then each ability and sub-ability."""
+    return [token for tokens, _ in face_rows(face) for token in tokens]
 
 
 def face_numbers(face: Face) -> list[KeyedNumber]:
     """Every keyed number on a face: mana cost, printed P/T, loyalty and defense, then each ability and sub-ability."""
-    numbers = [KeyedNumber("generic", face.mana_cost.generic)]
-    numbers += [KeyedNumber(f"pip.{p}", n) for p, n in face.mana_cost.pips.items()]
-    for field, value in _printed_stats(face):
-        if isinstance(value, int):
-            numbers.append(KeyedNumber(field, value))
-    for ability in _walk(face.abilities):
-        numbers += ability.numbers
-    return numbers
+    return [number for _, numbers in face_rows(face) for number in numbers]
 
 
 @dataclass

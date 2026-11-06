@@ -34,13 +34,22 @@ python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
 python -m gamerecord convert path/to/games path/to/parquet
 ```
 
-## Tests
+## Training
 
-`cardscript`, `simrunner` and the `gamerecord` loader need nothing outside the standard library. The Parquet converter needs `pyarrow`. `requirements-dev.txt` holds that and the test runner:
+`setmodel` joins game records to parsed cards, trains the two-level set model, runs the ablations and pair test, and exports the bundle Forge loads. `docs/training.md` has the commands and the PyTorch pin for the 1080 Ti, and `docs/tensor-contract.md` is the contract with Forge.
 
 ```
-pip install -r requirements-dev.txt
-python -m pytest
+python -m setmodel train path/to/parquet data/cards.jsonl decks/manifest.json --out runs/gen0 --generation 0
+```
+
+## Tests
+
+`cardscript`, `simrunner` and the `gamerecord` loader need nothing outside the standard library. The Parquet converter needs `pyarrow`, and `setmodel` needs PyTorch and the ONNX packages. `requirements-dev.txt` holds those and the test runner, with the pinned CUDA 12.6 PyTorch. The test suite needs all of them, so install the file in a venv and run the tests with that venv's Python. A Python without `onnx` stops at collection on `tests/test_setmodel_export.py` and runs nothing.
+
+```
+python -m venv venv
+venv\Scripts\python -m pip install -r requirements-dev.txt
+venv\Scripts\python -m pytest
 ```
 
 The tests feed real Forge scripts from `tests/fixtures/` to `parse_card` and check what comes back. Those `.txt` fixtures are byte-for-byte copies of Forge's files at commit `64569999b8b99dd7176ab9d3e1e6008f3ab68590`; `.gitattributes` keeps git from rewriting their line endings. `tests/fixtures/games/` holds hand-written game records as plain JSONL, and the tests gzip them.

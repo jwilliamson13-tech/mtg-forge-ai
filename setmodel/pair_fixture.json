@@ -1,0 +1,7 @@
+{
+ "cards": [
+  {"name": "Platinum Angel", "live": {"power": 4, "toughness": 4, "is_creature": 1}},
+  {"name": "Lightning Greaves", "live": {"attached": 1}}
+ ],
+ "scoreboard": {"me_life": 3, "opp_life": 20}
+}

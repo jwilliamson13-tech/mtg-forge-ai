@@ -34,7 +34,7 @@ generic=0 pip.R=1 power=1 toughness=1 Cost.ExileFromGrave=2 NumDmg=2
 
 ## What counts
 
-`face_tokens(face)` and `face_numbers(face)` produce the two lists. The builder calls them, and the encoder should call them too, so the two can't disagree about token names.
+`face_rows(face)` gives one (tokens, numbers) pair per encoder row: the identity fields, then each ability and sub-ability. `face_tokens(face)` and `face_numbers(face)` flatten it into the two lists the builder counts. The encoder (`setmodel`) reads the rows, so the two can't disagree about token names.
 
 Ability tokens are the `tokens` lists from the parsed structure, unchanged, for every ability and every inlined sub-ability. Each ability also gets one `kind=<kind>` token. The face's identity fields become tokens and numbers under lowercase keys:
 
