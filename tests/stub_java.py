@@ -7,8 +7,13 @@ folder, and refuses a deck file that won't load.
 
 STUB_SCENARIO picks what the games do. STUB_RECORD_DIR, when set, receives one JSON
 file per run with the arguments and surroundings the stub saw.
+
+With `-record` it writes one game file per game, named as Forge names them, except for
+what Forge would skip: a game that threw, and a game the clock stopped before its first
+priority pass. The `stale_jar` scenario ignores the flag, as a jar from before it would.
 """
 
+import gzip
 import json
 import os
 import random
@@ -19,6 +24,7 @@ from pathlib import Path
 
 DRAW_RESULT = "\nGame Result: Game {n} ended in a Draw! Took 2100 ms.\n"
 WON = "has won because all opponents have lost"
+GAME_FIXTURE = Path(__file__).parent / "fixtures" / "games" / "win.jsonl"
 
 
 def profile_values() -> dict:
@@ -93,6 +99,21 @@ def play_rules_draw(n: int, players: list[str]) -> None:
     print(DRAW_RESULT.format(n=n))
 
 
+def play_turn_cap(n: int, players: list[str]) -> None:
+    print("Stopping game at the turn cap as draw")
+    outcome_lines(51, f"{players[0]} has drawn", f"{players[1]} has drawn")
+    print(DRAW_RESULT.format(n=n))
+
+
+def write_game_file(argv: list[str], n: int, scenario: str) -> None:
+    if "-record" not in argv or scenario in ("stale_jar", "clock", "exception", "no_game_files"):
+        return
+    folder = Path(option(argv, "-record")[0])
+    name = f"{option(argv, '-batch')[0]}_{option(argv, '-s')[0]}_{n}_seat1_vs_seat2.jsonl.gz"
+    with gzip.open(folder / name, "wb") as game:
+        game.write(GAME_FIXTURE.read_bytes())
+
+
 def main() -> int:
     argv = sys.argv[1:]
     scenario = os.environ.get("STUB_SCENARIO", "wins")
@@ -162,8 +183,11 @@ def main() -> int:
             play_forced_end(n, players)
         elif scenario == "rules_draw":
             play_rules_draw(n, players)
+        elif scenario == "turn_cap":
+            play_turn_cap(n, players)
         else:
             play_win(n, players, rng)
+        write_game_file(argv, n, scenario)
         sys.stdout.flush()
     return 0
 

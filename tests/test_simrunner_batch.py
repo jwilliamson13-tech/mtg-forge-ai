@@ -598,6 +598,7 @@ def test_the_report_table():
         "draws                             2\n"
         "  by rules                        1\n"
         "  by clock                        1\n"
+        "  by turn_cap                     0\n"
         "  by exception                    0\n"
         "wall time                         60.0 s\n"
         "games per hour                    300\n"
@@ -826,3 +827,129 @@ def test_the_module_runs_as_a_script(decks, forge, tmp_path):
                             capture_output=True, text=True, encoding="utf-8", cwd=REPO, env=env)
     assert result.returncode == 0
     assert "games attempted" in result.stdout
+
+
+def game_files(folder):
+    return sorted(path.name for path in folder.glob("*.jsonl.gz"))
+
+
+def test_a_batch_without_records_passes_no_record_flags(config, records):
+    run_batch(config())
+    for run in records().values():
+        assert not {"-record", "-batch", "-turncap"} & set(run["argv"])
+
+
+def test_records_go_to_the_games_folder_under_the_batch_id(config, records, tmp_path):
+    run_batch(config(records=True))
+    for run in records().values():
+        argv = run["argv"]
+        assert Path(argv[argv.index("-record") + 1]) == (tmp_path / "run" / "games").resolve()
+        assert argv[argv.index("-batch") + 1] == "run"
+        assert "-turncap" not in argv
+
+
+def test_each_game_leaves_a_file_and_the_report_counts_them(config, records, tmp_path):
+    batch = run_batch(config(games=5, workers=2, records=True))
+    assert len(game_files(tmp_path / "run" / "games")) == 5
+    assert batch.records_written == 5
+    assert batch.clean
+    assert "5 of 5 games" in format_summary(batch)
+
+
+def test_the_report_says_nothing_about_records_when_they_are_off(config, records):
+    assert "game records" not in format_summary(run_batch(config()))
+
+
+def test_records_can_go_to_another_folder(config, records, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    batch = run_batch(config(games=2, records=True, records_dir=elsewhere))
+    assert len(game_files(elsewhere)) == 2
+    assert game_files(tmp_path / "run" / "games") == []
+    assert batch.records_written == 2
+
+
+def test_records_from_another_batch_in_the_folder_do_not_count(config, records, tmp_path):
+    folder = tmp_path / "shared"
+    folder.mkdir()
+    (folder / "other_1_1_a_vs_b.jsonl.gz").write_bytes(b"")
+    batch = run_batch(config(games=2, records=True, records_dir=folder))
+    assert batch.records_written == 2
+
+
+def test_the_turn_cap_passes_through(config, records):
+    run_batch(config(records=True, turn_cap=30))
+    for run in records().values():
+        argv = run["argv"]
+        assert argv[argv.index("-turncap") + 1] == "30"
+
+
+def test_a_capped_game_counts_as_a_draw_by_turn_cap(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "turn_cap")
+    batch = run_batch(config(games=2, records=True))
+    assert batch.draws(DrawCause.TURN_CAP) == 2
+    assert batch.usable == 0
+    assert "by turn_cap" in format_summary(batch)
+    assert batch.clean
+
+
+def test_a_stale_jar_that_writes_no_records_is_not_clean(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "stale_jar")
+    batch = run_batch(config(games=2, records=True))
+    assert batch.complete
+    assert not batch.clean
+    assert "no game record" in format_workers(batch)
+
+
+def test_a_game_with_no_file_is_not_clean_even_when_others_have_one(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_game_files")
+    assert not run_batch(config(games=2, records=True)).clean
+
+
+def test_a_clock_draw_needs_no_file_because_it_may_have_no_snapshots(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "clock")
+    assert run_batch(config(games=2, records=True)).clean
+
+
+def test_an_exception_game_needs_no_file(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "exception")
+    assert run_batch(config(games=2, records=True)).clean
+
+
+def test_a_batch_id_the_schema_refuses_stops_before_launch(config, records, tmp_path):
+    with pytest.raises(SetupError, match="batch id"):
+        run_batch(config(records=True, run_dir=tmp_path / "night.1"))
+    assert records() == {}
+
+
+def test_a_folder_name_that_is_no_batch_id_is_fine_without_records(config, records, tmp_path):
+    run_batch(config(run_dir=tmp_path / "night.1"))
+
+
+def test_a_turn_cap_needs_records(config, records):
+    with pytest.raises(SetupError, match="turn cap"):
+        run_batch(config(turn_cap=30))
+
+
+def test_a_turn_cap_must_be_above_zero(config, records):
+    with pytest.raises(SetupError, match="turn cap"):
+        run_batch(config(records=True, turn_cap=0))
+
+
+def test_the_command_line_turns_records_on(forge, decks, records, tmp_path, capsys):
+    run_dir = tmp_path / "cli"
+    code = main(["batch", str(decks[0]), str(decks[1]), "--games", "2", "--seed", "7", "--workers", "1",
+                 "--forge", str(forge), "--run-dir", str(run_dir), "--java", sys.executable, str(STUB),
+                 "--records", "--turn-cap", "40"])
+    assert code == 0
+    assert len(game_files(run_dir / "games")) == 2
+    (run,) = records().values()
+    assert run["argv"][run["argv"].index("-turncap") + 1] == "40"
+
+
+def test_a_records_folder_on_the_command_line_turns_records_on(forge, decks, records, tmp_path, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    code = main(["batch", str(decks[0]), str(decks[1]), "--games", "1", "--seed", "7", "--workers", "1",
+                 "--forge", str(forge), "--run-dir", str(tmp_path / "cli"), "--java", sys.executable, str(STUB),
+                 "--records-dir", str(elsewhere)])
+    assert code == 0
+    assert len(game_files(elsewhere)) == 1

@@ -53,6 +53,15 @@ class Seat:
 
 
 @dataclass(frozen=True)
+class RecordPlan:
+    """Where a worker's Forge writes game records. A cap of None takes Forge's default."""
+
+    folder: Path
+    batch_id: str
+    turn_cap: int | None = None
+
+
+@dataclass(frozen=True)
 class WorkerPlan:
     index: int
     seed: int
@@ -74,6 +83,7 @@ class WorkerResult:
     stderr_traces: int = 0
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
+    records_written: int = 0  # game files with this worker's seed
 
 
 def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
@@ -93,7 +103,7 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
-             search_budget: int = 0) -> list[str]:
+             search_budget: int = 0, records: RecordPlan | None = None) -> list[str]:
     """Return the `forge sim` arguments for one worker."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -104,6 +114,10 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-sim", *modes]
     if search_budget:
         args += ["-budget", str(search_budget)]
+    if records:
+        args += ["-record", str(records.folder), "-batch", records.batch_id]
+        if records.turn_cap is not None:
+            args += ["-turncap", str(records.turn_cap)]
     return args
 
 
