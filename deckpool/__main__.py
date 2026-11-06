@@ -2,7 +2,8 @@
 
 `add-deck` converts a plain-text list, checks its names, writes the original text and the Forge file into
 `decks/`, and adds the deck to the manifest. `pull` is the one-off MTGTop8 Legacy pull; it refuses a second
-run without `--again`. `build-manifest` turns the pull record into the manifest.
+run without `--again`. `build-manifest` turns the pull record into the manifest. `check` validates a manifest
+and fails if a list has a near-copy across the split.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 from deckpool import manifest as mf
 from deckpool.convert import MIN_MAIN_CARDS, DeckError, parse_decklist, to_forge
 from deckpool.names import DEFAULT_CARDSFOLDER, load_name_set
+from deckpool.overlap import main_cards
 
 DEFAULT_CARDS = mf.DEFAULT_ROOT / "data" / "cards.jsonl"
 
@@ -29,10 +31,24 @@ def add_deck(list_path: Path, deck_id: str, archetype: str, split: str, source: 
         raise DeckError(f"main deck has {parsed.main_cards} cards; it needs at least {MIN_MAIN_CARDS}")
     forge_text = to_forge(parsed, names, deck_id)
     deck = mf.Deck(deck_id, mf.deck_file(deck_id), source, archetype, split)
+    mains = mf.deck_mains(manifest, root)
     manifest.add_deck(deck)
+    mf.check_near_copies(manifest, {**mains, deck_id: main_cards(forge_text)})
     mf.write_deck_files(root, deck_id, text, forge_text)
     mf.save(manifest, manifest_path)
     return deck
+
+
+def _print_pool(manifest: mf.Manifest, root: Path) -> None:
+    """The linked groups and how close the split comes to a near-copy."""
+    mains = mf.deck_mains(manifest, root)
+    for group in mf.link_groups(manifest, mains):
+        if len(group) > 1:
+            print(f"linked: {'; '.join(group)}")
+    pairs = mf.cross_split_pairs(manifest, mains)
+    if pairs:
+        score, a, b = pairs[0]
+        print(f"highest overlap across the split: {score:.3f} ({a}, {b})")
 
 
 def _names(args: argparse.Namespace):
@@ -72,6 +88,20 @@ def _build_manifest(args: argparse.Namespace) -> int:
         return 1
     held = sorted({d.archetype for d in manifest.decks if d.split == mf.HELD_OUT})
     print(f"{len(manifest.decks)} decks; held out: {'; '.join(held)}")
+    _print_pool(manifest, mf.DEFAULT_ROOT)
+    return 0
+
+
+def _check(args: argparse.Namespace) -> int:
+    root = mf.root_of(args.manifest)
+    try:
+        manifest = mf.load(args.manifest)
+        mf.check_near_copies(manifest, mf.deck_mains(manifest, root))
+    except mf.ManifestError as e:
+        print(f"check failed: {e}", file=sys.stderr)
+        return 1
+    print(f"{len(manifest.decks)} decks pass")
+    _print_pool(manifest, root)
     return 0
 
 
@@ -83,7 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
     card_names.add_argument("--cardsfolder", default=str(DEFAULT_CARDSFOLDER),
                             help="Forge cardsfolder, to tell split cards from double-faced ones")
 
-    add = commands.add_parser("add-deck", parents=[card_names], help="validate a plain-text list and add it to the pool")
+    add = commands.add_parser("add-deck", parents=[card_names],
+                              help="validate a plain-text list and add it to the pool")
     add.add_argument("list", help="plain-text decklist, count and name per line")
     add.add_argument("--id", required=True)
     add.add_argument("--archetype", required=True)
@@ -101,6 +132,11 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--seed", type=int, required=True, help="seed for choosing the held-out archetypes")
     build.add_argument("--leave-out", nargs="*", default=[], help="deck ids that can't play, kept out of the manifest")
     build.set_defaults(handler=_build_manifest, parser=build)
+
+    check = commands.add_parser("check", help="validate a manifest and fail on a near-copy across the split")
+    check.add_argument("--manifest", default=str(mf.DEFAULT_PATH),
+                       help="manifest to check (default: decks/manifest.json)")
+    check.set_defaults(handler=_check, parser=check)
     return parser
 
 

@@ -1,10 +1,12 @@
 import argparse
 import json
+from collections import Counter
 
 import pytest
 
 from deckpool import manifest as mf
-from deckpool.__main__ import add_deck
+from deckpool import overlap
+from deckpool.__main__ import add_deck, main
 from deckpool.convert import DeckError, NameSet, UnresolvedNames
 from simrunner.__main__ import _deck_path
 
@@ -65,13 +67,36 @@ def test_tracked_slots_default_empty_and_take_only_held_out_pairs(tmp_path):
     assert mf.load(tmp_path / "m.json").tracked_matchups == [["a-1", "b-1"], None, None, None]
 
 
-def test_held_out_choice_repeats_and_holds_out_whole_archetypes():
-    names = [f"Arch {i}" for i in range(40)] * 3
-    a, b = mf.choose_held_out(names, 7), mf.choose_held_out(reversed(names), 7)
+def test_held_out_choice_repeats_and_keeps_groups_whole():
+    groups = [[f"Arch {i}"] for i in range(30)] + [["Big 1", "Big 2", "Big 3"], ["Huge " + str(i) for i in range(11)]]
+    a, b = mf.choose_held_out(groups, 7), mf.choose_held_out(list(reversed(groups)), 7)
     assert a == b and len(a) == 10 == len(set(a))
-    assert a != mf.choose_held_out(names, 8)
+    assert a != mf.choose_held_out(groups, 8)
+    assert not any(name.startswith("Huge") for name in a)  # it would overshoot, so it's skipped
+    for seed in range(20):
+        assert len({n for n in mf.choose_held_out(groups, seed) if n.startswith("Big")}) in (0, 3)
     with pytest.raises(mf.ManifestError):
-        mf.choose_held_out(["A", "B"], 1)
+        mf.choose_held_out([["A"], ["B"]], 1)
+    with pytest.raises(mf.ManifestError, match="only hold out"):
+        mf.choose_held_out([["A", "B", "C"]] * 2 + [[str(i) for i in range(30)]], 1)
+
+
+def test_overlap_counts_copies_over_the_larger_main():
+    a = Counter({"Force of Will": 4, "Island": 56})
+    b = Counter({"Force of Will": 2, "Island": 40, "Plains": 38})
+    assert overlap.overlap(a, b) == 42 / 80
+    assert overlap.overlap(a, a) == 1
+
+
+def test_near_copies_chain_archetypes_into_one_group_and_the_threshold_is_inclusive():
+    shared = {f"Card {i}": 1 for i in range(42)}
+    near = {name: Counter({**shared, **{f"{name} {i}": 1 for i in range(18)}}) for name in ("a", "b")}
+    mains = {**near, "c": near["b"] - Counter({f"Card {i}": 1 for i in range(10)})
+             + Counter({f"c {i}": 1 for i in range(10)}), "d": Counter({"Island": 60})}
+    archetypes = {"a": "A", "b": "B", "c": "C", "d": "D"}
+    assert overlap.overlap(mains["a"], mains["b"]) == overlap.NEAR_COPY_THRESHOLD
+    assert overlap.overlap(mains["a"], mains["c"]) < overlap.NEAR_COPY_THRESHOLD
+    assert overlap.link_groups(archetypes, mains) == [["A", "B", "C"], ["D"]]
 
 
 def test_add_deck_round_trips(tmp_path):
@@ -98,6 +123,31 @@ def test_add_deck_with_a_bad_name_or_split_writes_nothing(tmp_path):
     assert not (tmp_path / "decks" / "forge" / "x-2.dck").exists()
 
 
+def test_add_deck_refuses_a_near_copy_across_the_split(tmp_path):
+    src = tmp_path / "in.txt"
+    src.write_text(LIST, encoding="utf-8")
+    add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
+    with pytest.raises(mf.ManifestError, match="near-copy"):
+        add_deck(src, "y-1", "Y", "held_out", "user", NAMES, root=tmp_path)
+    assert not (tmp_path / "decks" / "forge" / "y-1.dck").exists()
+    add_deck(src, "y-1", "Y", "train", "user", NAMES, root=tmp_path)
+
+
+def test_check_fails_a_manifest_with_a_near_copy_across_the_split(tmp_path, capsys):
+    src = tmp_path / "in.txt"
+    src.write_text(LIST, encoding="utf-8")
+    add_deck(src, "x-1", "X", "train", "user", NAMES, root=tmp_path)
+    add_deck(src, "y-1", "Y", "train", "user", NAMES, root=tmp_path)
+    path = tmp_path / "decks" / "manifest.json"
+    assert main(["check", "--manifest", str(path)]) == 0
+    assert "linked: X; Y" in capsys.readouterr().out
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["decks"][1]["split"] = "held_out"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert main(["check", "--manifest", str(path)]) == 1
+    assert "x-1 and y-1 (1.00)" in capsys.readouterr().err
+
+
 def test_add_deck_refuses_a_main_under_sixty(tmp_path):
     src = tmp_path / "in.txt"
     src.write_text("4 Lightning Bolt\n55 Mountain\n", encoding="utf-8")
@@ -120,12 +170,15 @@ def test_the_sim_runner_takes_a_deck_id_or_a_path(tmp_path, monkeypatch):
 
 
 def test_a_pull_becomes_a_manifest_that_holds_out_ten_whole_archetypes():
-    record = {"decks": [{"id": f"a{n}-{i}", "archetype": f"A{n}", "source": f"https://x/{n}{i}"}
-                        for n in range(14) for i in range(1, 4)]}
-    manifest = mf.build_from_pull(record, seed=3, left_out=["a0-2"])
+    ids = [(f"a{n}-{i}", f"A{n}") for n in range(14) for i in range(1, 4)]
+    record = {"decks": [{"id": i, "archetype": a, "source": f"https://x/{i}"} for i, a in ids]}
+    mains = {i: Counter({i: 60}) for i, _ in ids}
+    mains["a1-1"] = mains["a2-2"] = Counter({"Island": 60})  # a near-copy ties A1 to A2
+    manifest = mf.build_from_pull(record, mains, seed=3, left_out=["a0-2"])
     assert len(manifest.decks) == 41 and manifest.tracked_matchups == [None] * 4
-    held = {d.archetype for d in manifest.decks if d.split == "held_out"}
-    assert len(held) == 10 and held == set(mf.choose_held_out({f"A{n}" for n in range(14)}, 3))
-    assert all(d.split == "held_out" for d in manifest.decks if d.archetype in held)
+    split_of = {d.archetype: d.split for d in manifest.decks}
+    assert sum(s == "held_out" for s in split_of.values()) == 10 and split_of["A1"] == split_of["A2"]
+    assert all(d.split == split_of[d.archetype] for d in manifest.decks)
+    mf.check_near_copies(manifest, mains)
     with pytest.raises(mf.ManifestError, match="a9-9"):
-        mf.build_from_pull(record, seed=3, left_out=["a9-9"])
+        mf.build_from_pull(record, mains, seed=3, left_out=["a9-9"])

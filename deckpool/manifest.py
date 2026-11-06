@@ -3,6 +3,9 @@
 The file is `decks/manifest.json`, version 1. Spec 5 reads the same format.
 Every list of an archetype shares one split, and `add_deck` refuses to break that. Archetypes compare
 by `normalize`, so `Death & Taxes` and `death and taxes` are one archetype.
+
+`validate` reads only the manifest. The near-copy rule needs the deck files, so `check_near_copies` is
+separate: no held-out list may have a near-copy in training (see `overlap.py`).
 """
 
 from __future__ import annotations
@@ -10,9 +13,11 @@ from __future__ import annotations
 import json
 import random
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from deckpool import overlap
 from deckpool.convert import normalize
 
 VERSION = 1
@@ -108,12 +113,20 @@ def save(manifest: Manifest, path: Path = DEFAULT_PATH) -> None:
                           encoding="utf-8", newline="\n")
 
 
-def choose_held_out(archetypes, seed: int, count: int = HELD_OUT_ARCHETYPES) -> list[str]:
-    """Pick `count` whole archetypes uniformly at random, repeatably: the same seed and names give the same pick."""
-    ordered = sorted({normalize(a): a for a in archetypes}.values())
-    if len(ordered) <= count:
-        raise ManifestError(f"{len(ordered)} archetypes can't hold out {count} and leave any to train")
-    return sorted(random.Random(seed).sample(ordered, count))
+def choose_held_out(groups, seed: int, count: int = HELD_OUT_ARCHETYPES) -> list[str]:
+    """Hold out whole groups in a seeded order until `count` archetypes are out, skipping any group that overshoots."""
+    ordered = sorted(sorted(group) for group in groups)
+    total = sum(len(group) for group in ordered)
+    if total <= count:
+        raise ManifestError(f"{total} archetypes can't hold out {count} and leave any to train")
+    random.Random(seed).shuffle(ordered)
+    held: list[str] = []
+    for group in ordered:
+        if len(held) + len(group) <= count:
+            held += group
+    if len(held) < count:
+        raise ManifestError(f"the linked groups can only hold out {len(held)} archetypes, not {count}")
+    return sorted(held)
 
 
 def deck_file(deck_id: str) -> str:
@@ -142,17 +155,49 @@ def deck_path(manifest: Manifest, deck_id: str, root: Path = DEFAULT_ROOT) -> Pa
     return path
 
 
-def build_from_pull(record: dict, seed: int, left_out=()) -> Manifest:
+def read_main(root: Path, deck_id: str) -> Counter:
+    path = Path(root) / deck_file(deck_id)
+    if not path.is_file():
+        raise ManifestError(f"deck {deck_id!r} has no file at {path}")
+    return overlap.main_cards(path.read_text(encoding="utf-8"))
+
+
+def deck_mains(manifest: Manifest, root: Path) -> dict[str, Counter]:
+    return {d.id: read_main(root, d.id) for d in manifest.decks}
+
+
+def link_groups(manifest: Manifest, mains: dict[str, Counter]) -> list[list[str]]:
+    return overlap.link_groups({d.id: d.archetype for d in manifest.decks}, mains)
+
+
+def cross_split_pairs(manifest: Manifest, mains: dict[str, Counter],
+                      threshold: float = 0.0) -> list[tuple[float, str, str]]:
+    """Pairs of lists on opposite sides of the split with at least `threshold` overlap, closest first."""
+    split_of = {d.id: d.split for d in manifest.decks}
+    pairs = overlap.near_copies({d.id: d.archetype for d in manifest.decks}, mains, threshold)
+    return [pair for pair in pairs if split_of[pair[1]] != split_of[pair[2]]]
+
+
+def check_near_copies(manifest: Manifest, mains: dict[str, Counter]) -> None:
+    pairs = cross_split_pairs(manifest, mains, overlap.NEAR_COPY_THRESHOLD)
+    if pairs:
+        listed = "; ".join(f"{a} and {b} ({score:.2f})" for score, a, b in pairs)
+        raise ManifestError(f"near-copy across the split: {listed}")
+
+
+def build_from_pull(record: dict, mains: dict[str, Counter], seed: int, left_out=()) -> Manifest:
     """The manifest for a pulled pool: ten archetypes chosen by `seed` are held out, every other one trains.
 
-    `left_out` names deck ids that can't play in Forge. They stay on disk but out of the manifest.
+    Archetypes linked by a near-copy go together, so `mains` holds each deck's main. `left_out` names deck
+    ids that can't play in Forge. They stay on disk but out of the manifest.
     """
     skipped = set(left_out)
     unknown = sorted(skipped - {d["id"] for d in record["decks"]})
     if unknown:
         raise ManifestError(f"can't leave out unknown deck ids: {', '.join(unknown)}")
     decks = [d for d in record["decks"] if d["id"] not in skipped]
-    held = {normalize(a) for a in choose_held_out({d["archetype"] for d in decks}, seed)}
+    groups = overlap.link_groups({d["id"]: d["archetype"] for d in decks}, mains)
+    held = {normalize(a) for a in choose_held_out(groups, seed)}
     manifest = Manifest()
     for d in decks:
         manifest.add_deck(Deck(d["id"], deck_file(d["id"]), d["source"], d["archetype"],
@@ -166,6 +211,7 @@ def build_file(seed: int, left_out=(), root: Path = DEFAULT_ROOT) -> Manifest:
     if path.is_file():
         raise ManifestError(f"{path} exists; the split is assigned once, so edit it by hand to change it")
     record = json.loads((Path(root) / "decks" / "pull.json").read_text(encoding="utf-8"))
-    manifest = build_from_pull(record, seed, left_out)
+    mains = {d["id"]: read_main(root, d["id"]) for d in record["decks"]}
+    manifest = build_from_pull(record, mains, seed, left_out)
     save(manifest, path)
     return manifest
