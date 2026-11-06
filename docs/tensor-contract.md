@@ -1,6 +1,6 @@
 # Tensor contract
 
-This is the interface between the trained model and Forge's ONNX evaluator (Spec 3). The Java side builds its inputs from this page and `tensor-contract-v1.json`, and doesn't need to read the Python. Spec 5 owns both.
+This is the interface between the trained model and Forge's ONNX evaluator, which is Spec 3. The Java side builds its inputs from this page and `tensor-contract-v1.json`, and doesn't need to read the Python. Spec 5 owns both.
 
 The current version is 1. `tensor-contract-v1.json` is the machine-readable copy, and `setmodel.export.build_contract` is its source. A test fails if the two differ. Any change to a name, a dtype, a shape, a field's meaning or a field's order makes a new version. Each bundle carries its own `contract.json` with the same fields, plus a `bundle` section that says which generation it is.
 
@@ -13,7 +13,7 @@ The current version is 1. `tensor-contract-v1.json` is the machine-readable copy
 | `model.onnx` | The model, weights inside. Its scaling constants are inside it too, so inputs go in raw. |
 | `card_features.jsonl.gz` | Every card's precomputed tokens and numbers. See "Card table". |
 | `vocab.json` | The vocabulary, in the format of `vocabulary.md`. Forge doesn't need it to run the model. It says what the ids mean. |
-| `scales.json` | The scaling constants, for reading only: per numeric key, per scoreboard field, per live field. |
+| `scales.json` | The scaling constants, for reading only, per numeric key, per scoreboard field and per live field. |
 | `contract.json` | This contract, with the sizes of this bundle and its `bundle` section. |
 
 `bundle` holds the `generation`, the `batch_ids` it trained on, `card_entries`, the ONNX `opset`, the `onnxruntime` and `torch` versions used, and `truncation_rates`.
@@ -22,7 +22,7 @@ The current version is 1. `tensor-contract-v1.json` is the machine-readable copy
 
 | Letter | Size | Meaning |
 |---|---|---|
-| N | dynamic, 0 or more | Cards in the state. The one dynamic axis. No card is padded in or cut out. |
+| N | dynamic, 0 or more | Cards in the state. The one dynamic axis. Nothing pads the card list or cuts it. |
 | A | 16 | Rows per card. Row 0 is the identity row, then one row per ability and sub-ability. |
 | T | 24 | Tokens per row. |
 | K | 239 | Numeric keys, the vocabulary's `numeric_keys`. |
@@ -45,11 +45,11 @@ One call scores one state from one side's view.
 | `live` | float32 | [N, L] | Raw live state, in the order below. |
 | `zone` | int64 | [N] | The card's zone, as an index into the zone list. |
 
-The output is `win_probability`, float32, shape [1]: the chance that this side wins.
+The output is `win_probability`, float32, shape [1], the chance that this side wins.
 
 ### Scoreboard fields, in order
 
-`me_life`, `opp_life`, `me_poison`, `opp_poison`, `me_library`, `opp_library`, `opp_hand`, `turn`, `me_active`, `me_on_play`. These mean what they mean in `game-record.md`.
+`me_life`, `opp_life`, `me_poison`, `opp_poison`, `me_library`, `opp_library`, `opp_hand`, `turn`, `me_active`, `me_on_play`. `game-record.md` defines each one.
 
 ### Zones, in order
 
@@ -80,9 +80,9 @@ Each is a raw number from the side's own view of the card. Null fields become 0.
 | 16 | `counters_other` | Sum of every other counter type. |
 | 17 | `stack_ability` | 1 for a stack item that is an ability, 0 for a spell and for any card. |
 
-An `opp_revealed` card carries what was written down, so it has `power` and `toughness` from the moment it was revealed and zeros in every other field. A stack item sets only `mine`, `face_down`, `hidden` and `stack_ability`.
+An `opp_revealed` card carries what the record wrote down, so it has `power` and `toughness` from the moment of the reveal and zeros in every other field. A stack item sets only `mine`, `face_down`, `hidden` and `stack_ability`.
 
-Forge must build these from what the side can see, exactly as `game-record.md` builds a snapshot. The model was trained on nothing else. Hidden cards take the rule below, and the opponent's hand and either library never appear as cards.
+Forge must build these from what the side can see, exactly as `game-record.md` builds a snapshot. The model trained on nothing else. Hidden cards take the rule below, and the opponent's hand and either library never appear as cards.
 
 ## Card table
 
@@ -99,24 +99,24 @@ One JSON object per line, in `card_features.jsonl.gz`:
 To find a card's line:
 
 1. A hidden card has no name, so it has no lookup. All its masks are 0, and `hidden` is 1 in `live`.
-2. Map the record's face to a slot: `Original` is `front`, `EmptyRoom` is `empty_room`, and any other face is `back`.
+2. Map the record's face to a slot. `Original` is `front`, `EmptyRoom` is `empty_room`, and any other face is `back`.
 3. Take the entry for (name, slot), or else the name's entry under any slot.
 4. If the table has no such name, all masks are 0. Training dropped such snapshots, so the model has never seen this case with `hidden` 0, and a real run should log it.
 
-A whole split card, `Fire // Ice`, has its own entry. So does an empty Room, which holds only the two identity rows, in the `empty_room` slot.
+A whole split name, `Fire // Ice`, has its own entries, one per slot. `front` and `back` hold the rows of both halves. `empty_room` is the empty Room, and it holds only the two identity rows.
 
 A token name on several scripts has one entry, holding only what those scripts share. `training.md` says why. The live power and toughness still come from the game.
 
 ## Truncation
 
-The rules are in the file's `truncation` section. They are fixed for version 1 and already applied in the card table, so Forge doesn't apply them.
+The file's `truncation` section holds the rules. Version 1 fixes them, and the card table already applies them, so Forge doesn't.
 
-- Abilities: row 0 stays. Past A rows, the oldest other rows are dropped.
-- Tokens: past T tokens in a row, the oldest are dropped.
-- Numbers: two numbers under one key in a row are added, because `numbers` holds one value per key. A key below the vocabulary cutoff adds into the `<unk>` key at index 0.
+- Abilities: row 0 stays. Past A rows, the oldest other rows go.
+- Tokens: past T tokens in a row, the oldest go.
+- Numbers: two numbers under one key in a row add up, because `numbers` holds one value per key. A key below the vocabulary cutoff adds into the `<unk>` key at index 0.
 
 A and T are about padding a card's inside, not the board. `truncation_rates` in the bundle reports how often each cap bit in the training corpus. Over the whole dump, 0.03% of faces pass A and 0.004% of ability rows pass T.
 
 ## Runtime
 
-The bundle is checked under the Python `onnxruntime` named in `bundle.onnxruntime`. Pin ONNX Runtime Java to that version, or check again under the Java version before trusting it. The Java runtime itself has not been tried yet. That belongs to Spec 3.
+`export` checks the bundle under the Python `onnxruntime` named in `bundle.onnxruntime`. Pin ONNX Runtime Java to that version, or repeat the check under the Java version before trusting it. Nobody has tried the Java runtime yet. That belongs to Spec 3.
