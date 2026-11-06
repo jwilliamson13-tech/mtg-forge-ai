@@ -11,6 +11,10 @@ file per run with the arguments and surroundings the stub saw.
 With `-record` it writes one game file per game, named as Forge names them, except for
 what Forge would skip: a game that threw, and a game the clock stopped before its first
 priority pass. The `stale_jar` scenario ignores the flag, as a jar from before it would.
+
+With `-record` it also prints a game's tripwire lines, unless `-tripwire off` says not to.
+The `no_tripwire_jar` scenario is a jar from before them, and `tripwire_hits` gives every
+game hits, more of them in odd games.
 """
 
 import gzip
@@ -45,6 +49,10 @@ def option(args: list[str], flag: str, count: int = 1) -> list[str]:
     return args[at + 1:at + 1 + count]
 
 
+def option_is(args: list[str], flag: str, value: str) -> bool:
+    return flag in args and option(args, flag) == [value]
+
+
 def record(argv: list[str]) -> None:
     folder = os.environ.get("STUB_RECORD_DIR")
     if folder:
@@ -77,6 +85,17 @@ def print_ai_limits(argv: list[str], scenario: str, seed: int, n: int) -> None:
             if scenario == "stops":
                 line += ", 3 stops played, 1 stops passed, 2 stops with a land, 1 land drops missed"
             print(line)
+
+
+def print_tripwire(argv: list[str], scenario: str, n: int) -> None:
+    if "-record" not in argv or option_is(argv, "-tripwire", "off") or scenario in ("stale_jar", "no_tripwire_jar"):
+        return
+    if scenario == "tripwire_hits":
+        print(f"Tripwire: {2 + n % 2 * 3} hits")
+        print(f"Tripwire hit: {1 + n % 2 * 3} forge.ai.ComputerUtil.hasAFogEffect:1582")
+        print("Tripwire hit: 1 forge.ai.ability.ClashAi.chooseSinglePlayer:75")
+    else:
+        print("Tripwire: 0 hits")
 
 
 def play_win(n: int, players: list[str], rng: random.Random) -> None:
@@ -154,6 +173,7 @@ def main() -> int:
     rng = random.Random(seed)
     for n in range(1, games + 1):
         print_ai_limits(argv, scenario, seed, n)
+        print_tripwire(argv, scenario, n)
         if scenario == "hang":
             time.sleep(600)
         elif scenario == "hang_in_child":

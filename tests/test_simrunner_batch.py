@@ -953,3 +953,82 @@ def test_a_records_folder_on_the_command_line_turns_records_on(forge, decks, rec
                  "--records-dir", str(elsewhere)])
     assert code == 0
     assert len(game_files(elsewhere)) == 1
+
+
+def test_records_turn_the_tripwire_on_by_leaving_the_flag_out(config, records):
+    run_batch(config(records=True))
+    assert all("-tripwire" not in run["argv"] for run in records().values())
+
+
+def test_no_tripwire_passes_off_through_to_forge(config, records):
+    batch = run_batch(config(games=2, records=True, tripwire=False))
+    assert all(run["argv"][run["argv"].index("-tripwire") + 1] == "off" for run in records().values())
+    assert batch.clean
+    assert not batch.tripwire_clean
+    assert "tripwire                          off\n" in format_summary(batch)
+
+
+def test_turning_off_a_tripwire_that_never_ran_is_refused(config):
+    with pytest.raises(SetupError, match="tripwire"):
+        run_batch(config(tripwire=False))
+
+
+def test_the_report_gives_max_and_mean_hits_per_game(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "tripwire_hits")
+    batch = run_batch(config(games=4, workers=1, records=True))
+    assert batch.tripwire_hits == [5, 2, 5, 2]
+    summary = format_summary(batch)
+    assert "tripwire hits per game            max 5, mean 3.50\n" in summary
+    assert "tripwire clean                    no, 4 of 4 games had hits\n" in summary
+
+
+def test_the_report_ranks_signatures_by_hits_across_the_batch(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "tripwire_hits")
+    batch = run_batch(config(games=4, workers=2, records=True))
+    assert batch.tripwire_signatures() == [
+        ("forge.ai.ComputerUtil.hasAFogEffect:1582", 10, 4),
+        ("forge.ai.ability.ClashAi.chooseSinglePlayer:75", 4, 4),
+    ]
+    report = format_report(batch)
+    assert "hits  games  signature\n" in report
+    assert "10    4      forge.ai.ComputerUtil.hasAFogEffect:1582\n" in report
+
+
+def test_a_long_signature_list_is_cut_and_says_so():
+    games = [GameResult(1, 3000, 7, winner_seat=1, tripwire_hits=25,
+                        tripwire_signatures=tuple((f"forge.ai.Site.m:{line}", 1) for line in range(25)))]
+    config = BatchConfig(seats=(Seat(Path("a.dck")), Seat(Path("b.dck"))), games=1, batch_seed=1, workers=1,
+                         forge_root=Path("forge"), run_dir=Path("run"), records=True)
+    report = format_report(BatchResult(config, [WorkerResult(WorkerPlan(0, 1, 1), games=games)], wall_s=1.0))
+    assert "and 5 more\n" in report
+
+
+def test_zero_hits_in_every_game_is_clean(config):
+    batch = run_batch(config(games=2, records=True))
+    assert batch.tripwire_clean
+    assert "tripwire hits per game            max 0, mean 0.00\n" in format_summary(batch)
+    assert "tripwire clean                    yes\n" in format_summary(batch)
+    assert batch.tripwire_signatures() == []
+
+
+def test_a_jar_without_the_tripwire_is_not_a_clean_zero(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_tripwire_jar")
+    batch = run_batch(config(games=2, records=True))
+    assert not batch.tripwire_clean
+    assert not batch.clean
+    assert "no game reported" in format_summary(batch)
+    assert "no tripwire count" in format_workers(batch)
+
+
+def test_one_silent_game_keeps_a_batch_from_being_tripwire_clean():
+    config = BatchConfig(seats=(Seat(Path("a.dck")), Seat(Path("b.dck"))), games=2, batch_seed=1, workers=1,
+                         forge_root=Path("forge"), run_dir=Path("run"), records=True)
+    games = [GameResult(1, 3000, 7, winner_seat=1, tripwire_hits=0), GameResult(2, 3000, 7, winner_seat=1)]
+    batch = BatchResult(config, [WorkerResult(WorkerPlan(0, 1, 2), games=games)], wall_s=1.0)
+    assert not batch.tripwire_clean
+    assert "1 reported nothing" in format_summary(batch)
+
+
+def test_without_records_the_tripwire_stays_out_of_the_report(config):
+    summary = format_summary(run_batch(config(games=2)))
+    assert "tripwire" not in summary

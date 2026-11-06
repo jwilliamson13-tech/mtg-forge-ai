@@ -7,6 +7,7 @@ import json
 import os
 import re
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -47,6 +48,7 @@ class BatchConfig:
     records: bool = False  # have Forge write a game record per game
     records_dir: Path | None = None  # None keeps them in the run folder's games folder
     turn_cap: int | None = None  # None takes Forge's default
+    tripwire: bool = True  # with records, catch forge-ai reading hidden cards
 
     @property
     def batch_id(self) -> str:
@@ -189,6 +191,36 @@ class BatchResult:
         expected = sum(game.draw_cause not in (DrawCause.CLOCK, DrawCause.EXCEPTION) for game in worker.games)
         return not self.config.records or worker.records_written >= expected
 
+    @property
+    def tripwire_on(self) -> bool:
+        return self.config.records and self.config.tripwire
+
+    def reported_tripwire(self, worker: WorkerResult) -> bool:
+        """Forge skips flags it doesn't know, so a jar without the tripwire would play on and report nothing."""
+        return not self.tripwire_on or all(game.tripwire_hits is not None for game in worker.games)
+
+    @property
+    def tripwire_hits(self) -> list[int]:
+        """Hits per game, for the games that reported any count at all."""
+        return [game.tripwire_hits for game in self.games if game.tripwire_hits is not None]
+
+    @property
+    def tripwire_clean(self) -> bool:
+        """True when every finished game ran the tripwire and it caught nothing. A game that said nothing proves nothing."""
+        return (self.tripwire_on and self.finished > 0 and len(self.tripwire_hits) == self.finished
+                and not any(self.tripwire_hits))
+
+    def tripwire_signatures(self) -> list[tuple[str, int, int]]:
+        """Each signature with its hits and the games it showed up in, most hits first."""
+        hits = Counter()
+        games = Counter()
+        for game in self.games:
+            for signature, count in game.tripwire_signatures:
+                hits[signature] += count
+                games[signature] += 1
+        return sorted(((signature, count, games[signature]) for signature, count in hits.items()),
+                      key=lambda row: (-row[1], row[0]))
+
     def played_requested_modes(self, worker: WorkerResult) -> bool:
         """Forge skips flags it doesn't know, so only its own header proves the modes took effect."""
         return worker.sim_modes == requested_sim_modes(self.config.seats)
@@ -203,7 +235,8 @@ class BatchResult:
         return self.complete and all(worker.profile_used and not worker.left_behind
                                      and self.played_requested_modes(worker)
                                      and self.applied_search_budget(worker)
-                                     and self.wrote_records(worker) for worker in self.workers)
+                                     and self.wrote_records(worker)
+                                     and self.reported_tripwire(worker) for worker in self.workers)
 
 
 def plan_workers(games: int, batch_seed: int, workers: int) -> list[WorkerPlan]:
@@ -231,6 +264,8 @@ def _check(config: BatchConfig) -> None:
         raise SetupError("the search budget can't be negative")
     if config.turn_cap is not None and (not config.records or config.turn_cap < 1):
         raise SetupError("a turn cap needs records and has to be at least 1")
+    if not config.tripwire and not config.records:
+        raise SetupError("the tripwire only runs with records, so there is nothing to turn off")
     if config.records and not BATCH_ID.fullmatch(config.batch_id):
         raise SetupError(f"the run folder's name is the batch id, which takes letters, digits, _ and -: {config.batch_id}")
     if config.forge_root.resolve() in config.run_dir.resolve().parents:
@@ -289,7 +324,8 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
     started = []
     pool = None
     # Each worker runs in its own folder, so Forge needs the full path.
-    records = RecordPlan(config.games_folder.resolve(), config.batch_id, config.turn_cap) if config.records else None
+    records = (RecordPlan(config.games_folder.resolve(), config.batch_id, config.turn_cap, config.tripwire)
+               if config.records else None)
     try:
         for plan in plan_workers(config.games, config.batch_seed, config.workers):
             folder = config.run_dir / f"worker-{plan.index:02d}"

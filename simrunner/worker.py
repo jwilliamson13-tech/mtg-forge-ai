@@ -59,6 +59,7 @@ class RecordPlan:
     folder: Path
     batch_id: str
     turn_cap: int | None = None
+    tripwire: bool = True
 
 
 @dataclass(frozen=True)
@@ -118,6 +119,8 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-record", str(records.folder), "-batch", records.batch_id]
         if records.turn_cap is not None:
             args += ["-turncap", str(records.turn_cap)]
+        if not records.tripwire:
+            args += ["-tripwire", "off"]
     return args
 
 
