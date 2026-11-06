@@ -1,0 +1,816 @@
+{
+  "version": 1,
+  "decks": [
+    {
+      "id": "hogaak-1",
+      "file": "decks/forge/hogaak-1.dck",
+      "source": "https://mtgtop8.com/event?e=93264&d=908705&f=LE",
+      "archetype": "Hogaak",
+      "split": "train"
+    },
+    {
+      "id": "hogaak-2",
+      "file": "decks/forge/hogaak-2.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908400&f=LE",
+      "archetype": "Hogaak",
+      "split": "train"
+    },
+    {
+      "id": "hogaak-3",
+      "file": "decks/forge/hogaak-3.dck",
+      "source": "https://mtgtop8.com/event?e=93217&d=908413&f=LE",
+      "archetype": "Hogaak",
+      "split": "train"
+    },
+    {
+      "id": "uwx-control-1",
+      "file": "decks/forge/uwx-control-1.dck",
+      "source": "https://mtgtop8.com/event?e=93264&d=908706&f=LE",
+      "archetype": "UWx Control",
+      "split": "train"
+    },
+    {
+      "id": "uwx-control-2",
+      "file": "decks/forge/uwx-control-2.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908398&f=LE",
+      "archetype": "UWx Control",
+      "split": "train"
+    },
+    {
+      "id": "uwx-control-3",
+      "file": "decks/forge/uwx-control-3.dck",
+      "source": "https://mtgtop8.com/event?e=93298&d=908917&f=LE",
+      "archetype": "UWx Control",
+      "split": "train"
+    },
+    {
+      "id": "boros-aggro-1",
+      "file": "decks/forge/boros-aggro-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908677&f=LE",
+      "archetype": "Boros Aggro",
+      "split": "train"
+    },
+    {
+      "id": "boros-aggro-2",
+      "file": "decks/forge/boros-aggro-2.dck",
+      "source": "https://mtgtop8.com/event?e=93298&d=908914&f=LE",
+      "archetype": "Boros Aggro",
+      "split": "train"
+    },
+    {
+      "id": "boros-aggro-3",
+      "file": "decks/forge/boros-aggro-3.dck",
+      "source": "https://mtgtop8.com/event?e=93164&d=907985&f=LE",
+      "archetype": "Boros Aggro",
+      "split": "train"
+    },
+    {
+      "id": "dimir-tempo-1",
+      "file": "decks/forge/dimir-tempo-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908678&f=LE",
+      "archetype": "Dimir Tempo",
+      "split": "train"
+    },
+    {
+      "id": "dimir-tempo-2",
+      "file": "decks/forge/dimir-tempo-2.dck",
+      "source": "https://mtgtop8.com/event?e=93264&d=908708&f=LE",
+      "archetype": "Dimir Tempo",
+      "split": "train"
+    },
+    {
+      "id": "dimir-tempo-3",
+      "file": "decks/forge/dimir-tempo-3.dck",
+      "source": "https://mtgtop8.com/event?e=93217&d=908415&f=LE",
+      "archetype": "Dimir Tempo",
+      "split": "train"
+    },
+    {
+      "id": "lands-1",
+      "file": "decks/forge/lands-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908681&f=LE",
+      "archetype": "Lands",
+      "split": "train"
+    },
+    {
+      "id": "lands-2",
+      "file": "decks/forge/lands-2.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908682&f=LE",
+      "archetype": "Lands",
+      "split": "train"
+    },
+    {
+      "id": "lands-3",
+      "file": "decks/forge/lands-3.dck",
+      "source": "https://mtgtop8.com/event?e=93298&d=908915&f=LE",
+      "archetype": "Lands",
+      "split": "train"
+    },
+    {
+      "id": "doomsday-1",
+      "file": "decks/forge/doomsday-1.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908401&f=LE",
+      "archetype": "Doomsday",
+      "split": "train"
+    },
+    {
+      "id": "doomsday-2",
+      "file": "decks/forge/doomsday-2.dck",
+      "source": "https://mtgtop8.com/event?e=93217&d=908410&f=LE",
+      "archetype": "Doomsday",
+      "split": "train"
+    },
+    {
+      "id": "doomsday-3",
+      "file": "decks/forge/doomsday-3.dck",
+      "source": "https://mtgtop8.com/event?e=93217&d=908411&f=LE",
+      "archetype": "Doomsday",
+      "split": "train"
+    },
+    {
+      "id": "show-and-tell-1",
+      "file": "decks/forge/show-and-tell-1.dck",
+      "source": "https://mtgtop8.com/event?e=93262&d=908696&f=LE",
+      "archetype": "Show and Tell",
+      "split": "held_out"
+    },
+    {
+      "id": "show-and-tell-2",
+      "file": "decks/forge/show-and-tell-2.dck",
+      "source": "https://mtgtop8.com/event?e=93164&d=907996&f=LE",
+      "archetype": "Show and Tell",
+      "split": "held_out"
+    },
+    {
+      "id": "show-and-tell-3",
+      "file": "decks/forge/show-and-tell-3.dck",
+      "source": "https://mtgtop8.com/event?e=93196&d=908234&f=LE",
+      "archetype": "Show and Tell",
+      "split": "held_out"
+    },
+    {
+      "id": "ur-tempo-1",
+      "file": "decks/forge/ur-tempo-1.dck",
+      "source": "https://mtgtop8.com/event?e=93151&d=907897&f=LE",
+      "archetype": "UR Tempo",
+      "split": "train"
+    },
+    {
+      "id": "ur-tempo-2",
+      "file": "decks/forge/ur-tempo-2.dck",
+      "source": "https://mtgtop8.com/event?e=93135&d=907740&f=LE",
+      "archetype": "UR Tempo",
+      "split": "train"
+    },
+    {
+      "id": "ur-tempo-3",
+      "file": "decks/forge/ur-tempo-3.dck",
+      "source": "https://mtgtop8.com/event?e=93137&d=907764&f=LE",
+      "archetype": "UR Tempo",
+      "split": "train"
+    },
+    {
+      "id": "death-and-taxes-1",
+      "file": "decks/forge/death-and-taxes-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908684&f=LE",
+      "archetype": "Death & Taxes",
+      "split": "train"
+    },
+    {
+      "id": "death-and-taxes-2",
+      "file": "decks/forge/death-and-taxes-2.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908397&f=LE",
+      "archetype": "Death & Taxes",
+      "split": "train"
+    },
+    {
+      "id": "death-and-taxes-3",
+      "file": "decks/forge/death-and-taxes-3.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908399&f=LE",
+      "archetype": "Death & Taxes",
+      "split": "train"
+    },
+    {
+      "id": "eldrazi-aggro-1",
+      "file": "decks/forge/eldrazi-aggro-1.dck",
+      "source": "https://mtgtop8.com/event?e=93217&d=908414&f=LE",
+      "archetype": "Eldrazi Aggro",
+      "split": "train"
+    },
+    {
+      "id": "eldrazi-aggro-2",
+      "file": "decks/forge/eldrazi-aggro-2.dck",
+      "source": "https://mtgtop8.com/event?e=93163&d=907980&f=LE",
+      "archetype": "Eldrazi Aggro",
+      "split": "train"
+    },
+    {
+      "id": "eldrazi-aggro-3",
+      "file": "decks/forge/eldrazi-aggro-3.dck",
+      "source": "https://mtgtop8.com/event?e=93164&d=907997&f=LE",
+      "archetype": "Eldrazi Aggro",
+      "split": "train"
+    },
+    {
+      "id": "cloudpost-tron-ramp-1",
+      "file": "decks/forge/cloudpost-tron-ramp-1.dck",
+      "source": "https://mtgtop8.com/event?e=93298&d=908916&f=LE",
+      "archetype": "Cloudpost / Tron Ramp",
+      "split": "held_out"
+    },
+    {
+      "id": "cloudpost-tron-ramp-2",
+      "file": "decks/forge/cloudpost-tron-ramp-2.dck",
+      "source": "https://mtgtop8.com/event?e=93298&d=908918&f=LE",
+      "archetype": "Cloudpost / Tron Ramp",
+      "split": "held_out"
+    },
+    {
+      "id": "cloudpost-tron-ramp-3",
+      "file": "decks/forge/cloudpost-tron-ramp-3.dck",
+      "source": "https://mtgtop8.com/event?e=93197&d=908243&f=LE",
+      "archetype": "Cloudpost / Tron Ramp",
+      "split": "held_out"
+    },
+    {
+      "id": "bant-control-1",
+      "file": "decks/forge/bant-control-1.dck",
+      "source": "https://mtgtop8.com/event?e=93262&d=908693&f=LE",
+      "archetype": "Bant Control",
+      "split": "train"
+    },
+    {
+      "id": "bant-control-2",
+      "file": "decks/forge/bant-control-2.dck",
+      "source": "https://mtgtop8.com/event?e=93163&d=907979&f=LE",
+      "archetype": "Bant Control",
+      "split": "train"
+    },
+    {
+      "id": "bant-control-3",
+      "file": "decks/forge/bant-control-3.dck",
+      "source": "https://mtgtop8.com/event?e=93197&d=908238&f=LE",
+      "archetype": "Bant Control",
+      "split": "train"
+    },
+    {
+      "id": "welder-cam-1",
+      "file": "decks/forge/welder-cam-1.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908396&f=LE",
+      "archetype": "Welder Cam",
+      "split": "train"
+    },
+    {
+      "id": "welder-cam-2",
+      "file": "decks/forge/welder-cam-2.dck",
+      "source": "https://mtgtop8.com/event?e=93262&d=908690&f=LE",
+      "archetype": "Welder Cam",
+      "split": "train"
+    },
+    {
+      "id": "welder-cam-3",
+      "file": "decks/forge/welder-cam-3.dck",
+      "source": "https://mtgtop8.com/event?e=93298&d=908913&f=LE",
+      "archetype": "Welder Cam",
+      "split": "train"
+    },
+    {
+      "id": "aluren-1",
+      "file": "decks/forge/aluren-1.dck",
+      "source": "https://mtgtop8.com/event?e=93163&d=907974&f=LE",
+      "archetype": "Aluren",
+      "split": "train"
+    },
+    {
+      "id": "aluren-2",
+      "file": "decks/forge/aluren-2.dck",
+      "source": "https://mtgtop8.com/event?e=93075&d=907058&f=LE",
+      "archetype": "Aluren",
+      "split": "train"
+    },
+    {
+      "id": "aluren-3",
+      "file": "decks/forge/aluren-3.dck",
+      "source": "https://mtgtop8.com/event?e=93137&d=907756&f=LE",
+      "archetype": "Aluren",
+      "split": "train"
+    },
+    {
+      "id": "mystic-forge-1",
+      "file": "decks/forge/mystic-forge-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908680&f=LE",
+      "archetype": "Mystic Forge",
+      "split": "train"
+    },
+    {
+      "id": "mystic-forge-2",
+      "file": "decks/forge/mystic-forge-2.dck",
+      "source": "https://mtgtop8.com/event?e=93197&d=908240&f=LE",
+      "archetype": "Mystic Forge",
+      "split": "train"
+    },
+    {
+      "id": "mystic-forge-3",
+      "file": "decks/forge/mystic-forge-3.dck",
+      "source": "https://mtgtop8.com/event?e=93075&d=907061&f=LE",
+      "archetype": "Mystic Forge",
+      "split": "train"
+    },
+    {
+      "id": "reanimator-1",
+      "file": "decks/forge/reanimator-1.dck",
+      "source": "https://mtgtop8.com/event?e=93262&d=908692&f=LE",
+      "archetype": "Reanimator",
+      "split": "train"
+    },
+    {
+      "id": "reanimator-2",
+      "file": "decks/forge/reanimator-2.dck",
+      "source": "https://mtgtop8.com/event?e=93197&d=908237&f=LE",
+      "archetype": "Reanimator",
+      "split": "train"
+    },
+    {
+      "id": "reanimator-3",
+      "file": "decks/forge/reanimator-3.dck",
+      "source": "https://mtgtop8.com/event?e=93135&d=907737&f=LE",
+      "archetype": "Reanimator",
+      "split": "train"
+    },
+    {
+      "id": "storm-1",
+      "file": "decks/forge/storm-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908679&f=LE",
+      "archetype": "Storm",
+      "split": "train"
+    },
+    {
+      "id": "storm-2",
+      "file": "decks/forge/storm-2.dck",
+      "source": "https://mtgtop8.com/event?e=93163&d=907981&f=LE",
+      "archetype": "Storm",
+      "split": "train"
+    },
+    {
+      "id": "storm-3",
+      "file": "decks/forge/storm-3.dck",
+      "source": "https://mtgtop8.com/event?e=93164&d=907982&f=LE",
+      "archetype": "Storm",
+      "split": "train"
+    },
+    {
+      "id": "elves-1",
+      "file": "decks/forge/elves-1.dck",
+      "source": "https://mtgtop8.com/event?e=93260&d=908683&f=LE",
+      "archetype": "Elves",
+      "split": "held_out"
+    },
+    {
+      "id": "elves-2",
+      "file": "decks/forge/elves-2.dck",
+      "source": "https://mtgtop8.com/event?e=93216&d=908406&f=LE",
+      "archetype": "Elves",
+      "split": "held_out"
+    },
+    {
+      "id": "elves-3",
+      "file": "decks/forge/elves-3.dck",
+      "source": "https://mtgtop8.com/event?e=93178&d=908104&f=LE",
+      "archetype": "Elves",
+      "split": "held_out"
+    },
+    {
+      "id": "dragon-stompy-1",
+      "file": "decks/forge/dragon-stompy-1.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908395&f=LE",
+      "archetype": "Dragon Stompy",
+      "split": "train"
+    },
+    {
+      "id": "dragon-stompy-2",
+      "file": "decks/forge/dragon-stompy-2.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907837&f=LE",
+      "archetype": "Dragon Stompy",
+      "split": "train"
+    },
+    {
+      "id": "dragon-stompy-3",
+      "file": "decks/forge/dragon-stompy-3.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907846&f=LE",
+      "archetype": "Dragon Stompy",
+      "split": "train"
+    },
+    {
+      "id": "initiative-stompy-1",
+      "file": "decks/forge/initiative-stompy-1.dck",
+      "source": "https://mtgtop8.com/event?e=93067&d=907000&f=LE",
+      "archetype": "Initiative Stompy",
+      "split": "held_out"
+    },
+    {
+      "id": "initiative-stompy-2",
+      "file": "decks/forge/initiative-stompy-2.dck",
+      "source": "https://mtgtop8.com/event?e=93080&d=907117&f=LE",
+      "archetype": "Initiative Stompy",
+      "split": "held_out"
+    },
+    {
+      "id": "initiative-stompy-3",
+      "file": "decks/forge/initiative-stompy-3.dck",
+      "source": "https://mtgtop8.com/event?e=93136&d=907748&f=LE",
+      "archetype": "Initiative Stompy",
+      "split": "held_out"
+    },
+    {
+      "id": "painter-1",
+      "file": "decks/forge/painter-1.dck",
+      "source": "https://mtgtop8.com/event?e=93262&d=908691&f=LE",
+      "archetype": "Painter",
+      "split": "train"
+    },
+    {
+      "id": "painter-2",
+      "file": "decks/forge/painter-2.dck",
+      "source": "https://mtgtop8.com/event?e=93055&d=906923&f=LE",
+      "archetype": "Painter",
+      "split": "train"
+    },
+    {
+      "id": "painter-3",
+      "file": "decks/forge/painter-3.dck",
+      "source": "https://mtgtop8.com/event?e=93134&d=907736&f=LE",
+      "archetype": "Painter",
+      "split": "train"
+    },
+    {
+      "id": "goblins-1",
+      "file": "decks/forge/goblins-1.dck",
+      "source": "https://mtgtop8.com/event?e=93218&d=908424&f=LE",
+      "archetype": "Goblins",
+      "split": "train"
+    },
+    {
+      "id": "goblins-2",
+      "file": "decks/forge/goblins-2.dck",
+      "source": "https://mtgtop8.com/event?e=92918&d=905899&f=LE",
+      "archetype": "Goblins",
+      "split": "train"
+    },
+    {
+      "id": "goblins-3",
+      "file": "decks/forge/goblins-3.dck",
+      "source": "https://mtgtop8.com/event?e=92918&d=905901&f=LE",
+      "archetype": "Goblins",
+      "split": "train"
+    },
+    {
+      "id": "artifacts-blue-1",
+      "file": "decks/forge/artifacts-blue-1.dck",
+      "source": "https://mtgtop8.com/event?e=93264&d=908707&f=LE",
+      "archetype": "Artifacts Blue",
+      "split": "train"
+    },
+    {
+      "id": "artifacts-blue-2",
+      "file": "decks/forge/artifacts-blue-2.dck",
+      "source": "https://mtgtop8.com/event?e=93215&d=908394&f=LE",
+      "archetype": "Artifacts Blue",
+      "split": "train"
+    },
+    {
+      "id": "artifacts-blue-3",
+      "file": "decks/forge/artifacts-blue-3.dck",
+      "source": "https://mtgtop8.com/event?e=92994&d=906463&f=LE",
+      "archetype": "Artifacts Blue",
+      "split": "train"
+    },
+    {
+      "id": "mardu-aggro-1",
+      "file": "decks/forge/mardu-aggro-1.dck",
+      "source": "https://mtgtop8.com/event?e=93164&d=907988&f=LE",
+      "archetype": "Mardu Aggro",
+      "split": "train"
+    },
+    {
+      "id": "mardu-aggro-2",
+      "file": "decks/forge/mardu-aggro-2.dck",
+      "source": "https://mtgtop8.com/event?e=93067&d=907003&f=LE",
+      "archetype": "Mardu Aggro",
+      "split": "train"
+    },
+    {
+      "id": "mardu-aggro-3",
+      "file": "decks/forge/mardu-aggro-3.dck",
+      "source": "https://mtgtop8.com/event?e=93137&d=907754&f=LE",
+      "archetype": "Mardu Aggro",
+      "split": "train"
+    },
+    {
+      "id": "artifacts-prison-1",
+      "file": "decks/forge/artifacts-prison-1.dck",
+      "source": "https://mtgtop8.com/event?e=93149&d=907888&f=LE",
+      "archetype": "Artifacts Prison",
+      "split": "held_out"
+    },
+    {
+      "id": "artifacts-prison-2",
+      "file": "decks/forge/artifacts-prison-2.dck",
+      "source": "https://mtgtop8.com/event?e=93139&d=907781&f=LE",
+      "archetype": "Artifacts Prison",
+      "split": "held_out"
+    },
+    {
+      "id": "artifacts-prison-3",
+      "file": "decks/forge/artifacts-prison-3.dck",
+      "source": "https://mtgtop8.com/event?e=92847&d=905315&f=LE",
+      "archetype": "Artifacts Prison",
+      "split": "held_out"
+    },
+    {
+      "id": "4-5c-control-1",
+      "file": "decks/forge/4-5c-control-1.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907829&f=LE",
+      "archetype": "4/5c Control",
+      "split": "held_out"
+    },
+    {
+      "id": "4-5c-control-2",
+      "file": "decks/forge/4-5c-control-2.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907858&f=LE",
+      "archetype": "4/5c Control",
+      "split": "held_out"
+    },
+    {
+      "id": "4-5c-control-3",
+      "file": "decks/forge/4-5c-control-3.dck",
+      "source": "https://mtgtop8.com/event?e=92955&d=906183&f=LE",
+      "archetype": "4/5c Control",
+      "split": "held_out"
+    },
+    {
+      "id": "cradle-control-1",
+      "file": "decks/forge/cradle-control-1.dck",
+      "source": "https://mtgtop8.com/event?e=93164&d=907995&f=LE",
+      "archetype": "Cradle Control",
+      "split": "train"
+    },
+    {
+      "id": "cradle-control-2",
+      "file": "decks/forge/cradle-control-2.dck",
+      "source": "https://mtgtop8.com/event?e=93010&d=906565&f=LE",
+      "archetype": "Cradle Control",
+      "split": "train"
+    },
+    {
+      "id": "cradle-control-3",
+      "file": "decks/forge/cradle-control-3.dck",
+      "source": "https://mtgtop8.com/event?e=92993&d=906461&f=LE",
+      "archetype": "Cradle Control",
+      "split": "train"
+    },
+    {
+      "id": "dredge-1",
+      "file": "decks/forge/dredge-1.dck",
+      "source": "https://mtgtop8.com/event?e=93048&d=906863&f=LE",
+      "archetype": "Dredge",
+      "split": "held_out"
+    },
+    {
+      "id": "dredge-2",
+      "file": "decks/forge/dredge-2.dck",
+      "source": "https://mtgtop8.com/event?e=93134&d=907734&f=LE",
+      "archetype": "Dredge",
+      "split": "held_out"
+    },
+    {
+      "id": "dredge-3",
+      "file": "decks/forge/dredge-3.dck",
+      "source": "https://mtgtop8.com/event?e=92865&d=905469&f=LE",
+      "archetype": "Dredge",
+      "split": "held_out"
+    },
+    {
+      "id": "oops-all-spells-1",
+      "file": "decks/forge/oops-all-spells-1.dck",
+      "source": "https://mtgtop8.com/event?e=93151&d=907898&f=LE",
+      "archetype": "Oops, All Spells!",
+      "split": "train"
+    },
+    {
+      "id": "oops-all-spells-2",
+      "file": "decks/forge/oops-all-spells-2.dck",
+      "source": "https://mtgtop8.com/event?e=93137&d=907759&f=LE",
+      "archetype": "Oops, All Spells!",
+      "split": "train"
+    },
+    {
+      "id": "oops-all-spells-3",
+      "file": "decks/forge/oops-all-spells-3.dck",
+      "source": "https://mtgtop8.com/event?e=93218&d=908423&f=LE",
+      "archetype": "Oops, All Spells!",
+      "split": "train"
+    },
+    {
+      "id": "mono-black-aggro-1",
+      "file": "decks/forge/mono-black-aggro-1.dck",
+      "source": "https://mtgtop8.com/event?e=93217&d=908417&f=LE",
+      "archetype": "Mono Black Aggro",
+      "split": "train"
+    },
+    {
+      "id": "mono-black-aggro-2",
+      "file": "decks/forge/mono-black-aggro-2.dck",
+      "source": "https://mtgtop8.com/event?e=93054&d=906915&f=LE",
+      "archetype": "Mono Black Aggro",
+      "split": "train"
+    },
+    {
+      "id": "mono-black-aggro-3",
+      "file": "decks/forge/mono-black-aggro-3.dck",
+      "source": "https://mtgtop8.com/event?e=92918&d=905900&f=LE",
+      "archetype": "Mono Black Aggro",
+      "split": "train"
+    },
+    {
+      "id": "maverick-1",
+      "file": "decks/forge/maverick-1.dck",
+      "source": "https://mtgtop8.com/event?e=93163&d=907978&f=LE",
+      "archetype": "Maverick",
+      "split": "train"
+    },
+    {
+      "id": "maverick-2",
+      "file": "decks/forge/maverick-2.dck",
+      "source": "https://mtgtop8.com/event?e=92955&d=906176&f=LE",
+      "archetype": "Maverick",
+      "split": "train"
+    },
+    {
+      "id": "maverick-3",
+      "file": "decks/forge/maverick-3.dck",
+      "source": "https://mtgtop8.com/event?e=93029&d=906714&f=LE",
+      "archetype": "Maverick",
+      "split": "train"
+    },
+    {
+      "id": "mississippi-river-1",
+      "file": "decks/forge/mississippi-river-1.dck",
+      "source": "https://mtgtop8.com/event?e=93151&d=907895&f=LE",
+      "archetype": "Mississippi River",
+      "split": "held_out"
+    },
+    {
+      "id": "mississippi-river-2",
+      "file": "decks/forge/mississippi-river-2.dck",
+      "source": "https://mtgtop8.com/event?e=93049&d=906876&f=LE",
+      "archetype": "Mississippi River",
+      "split": "held_out"
+    },
+    {
+      "id": "mississippi-river-3",
+      "file": "decks/forge/mississippi-river-3.dck",
+      "source": "https://mtgtop8.com/event?e=92886&d=905682&f=LE",
+      "archetype": "Mississippi River",
+      "split": "held_out"
+    },
+    {
+      "id": "ruby-storm-1",
+      "file": "decks/forge/ruby-storm-1.dck",
+      "source": "https://mtgtop8.com/event?e=93135&d=907738&f=LE",
+      "archetype": "Ruby Storm",
+      "split": "train"
+    },
+    {
+      "id": "ruby-storm-2",
+      "file": "decks/forge/ruby-storm-2.dck",
+      "source": "https://mtgtop8.com/event?e=93136&d=907744&f=LE",
+      "archetype": "Ruby Storm",
+      "split": "train"
+    },
+    {
+      "id": "ruby-storm-3",
+      "file": "decks/forge/ruby-storm-3.dck",
+      "source": "https://mtgtop8.com/event?e=93055&d=906919&f=LE",
+      "archetype": "Ruby Storm",
+      "split": "train"
+    },
+    {
+      "id": "pox-1",
+      "file": "decks/forge/pox-1.dck",
+      "source": "https://mtgtop8.com/event?e=92756&d=904517&f=LE",
+      "archetype": "Pox",
+      "split": "train"
+    },
+    {
+      "id": "pox-2",
+      "file": "decks/forge/pox-2.dck",
+      "source": "https://mtgtop8.com/event?e=92848&d=905321&f=LE",
+      "archetype": "Pox",
+      "split": "train"
+    },
+    {
+      "id": "stoneblade-1",
+      "file": "decks/forge/stoneblade-1.dck",
+      "source": "https://mtgtop8.com/event?e=93262&d=908695&f=LE",
+      "archetype": "Stoneblade",
+      "split": "held_out"
+    },
+    {
+      "id": "stoneblade-2",
+      "file": "decks/forge/stoneblade-2.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907841&f=LE",
+      "archetype": "Stoneblade",
+      "split": "held_out"
+    },
+    {
+      "id": "stoneblade-3",
+      "file": "decks/forge/stoneblade-3.dck",
+      "source": "https://mtgtop8.com/event?e=93134&d=907733&f=LE",
+      "archetype": "Stoneblade",
+      "split": "held_out"
+    },
+    {
+      "id": "dark-depths-1",
+      "file": "decks/forge/dark-depths-1.dck",
+      "source": "https://mtgtop8.com/event?e=93117&d=907477&f=LE",
+      "archetype": "Dark Depths",
+      "split": "train"
+    },
+    {
+      "id": "dark-depths-2",
+      "file": "decks/forge/dark-depths-2.dck",
+      "source": "https://mtgtop8.com/event?e=93136&d=907745&f=LE",
+      "archetype": "Dark Depths",
+      "split": "train"
+    },
+    {
+      "id": "dark-depths-3",
+      "file": "decks/forge/dark-depths-3.dck",
+      "source": "https://mtgtop8.com/event?e=92851&d=905343&f=LE",
+      "archetype": "Dark Depths",
+      "split": "train"
+    },
+    {
+      "id": "merfolk-1",
+      "file": "decks/forge/merfolk-1.dck",
+      "source": "https://mtgtop8.com/event?e=93031&d=906729&f=LE",
+      "archetype": "Merfolk",
+      "split": "train"
+    },
+    {
+      "id": "merfolk-2",
+      "file": "decks/forge/merfolk-2.dck",
+      "source": "https://mtgtop8.com/event?e=92708&d=904158&f=LE",
+      "archetype": "Merfolk",
+      "split": "train"
+    },
+    {
+      "id": "ninja-1",
+      "file": "decks/forge/ninja-1.dck",
+      "source": "https://mtgtop8.com/event?e=93030&d=906721&f=LE",
+      "archetype": "Ninja",
+      "split": "train"
+    },
+    {
+      "id": "ninja-2",
+      "file": "decks/forge/ninja-2.dck",
+      "source": "https://mtgtop8.com/event?e=92918&d=905896&f=LE",
+      "archetype": "Ninja",
+      "split": "train"
+    },
+    {
+      "id": "bant-aggro-1",
+      "file": "decks/forge/bant-aggro-1.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907868&f=LE",
+      "archetype": "Bant Aggro",
+      "split": "held_out"
+    },
+    {
+      "id": "bant-aggro-2",
+      "file": "decks/forge/bant-aggro-2.dck",
+      "source": "https://mtgtop8.com/event?e=92923&d=905935&f=LE",
+      "archetype": "Bant Aggro",
+      "split": "held_out"
+    },
+    {
+      "id": "bug-midrange-1",
+      "file": "decks/forge/bug-midrange-1.dck",
+      "source": "https://mtgtop8.com/event?e=93136&d=907747&f=LE",
+      "archetype": "BUG Midrange",
+      "split": "train"
+    },
+    {
+      "id": "bug-midrange-2",
+      "file": "decks/forge/bug-midrange-2.dck",
+      "source": "https://mtgtop8.com/event?e=93146&d=907819&f=LE",
+      "archetype": "BUG Midrange",
+      "split": "train"
+    }
+  ],
+  "tracked_matchups": [
+    null,
+    null,
+    null,
+    null
+  ]
+}
