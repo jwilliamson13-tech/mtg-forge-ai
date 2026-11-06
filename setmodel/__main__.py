@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+from setmodel.config import CHECK_STATES, CHECK_THRESHOLD, TrainConfig
+
 
 def _inputs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("parquet", help="folder `gamerecord convert` wrote")
@@ -21,19 +23,18 @@ def _vocab_cutoff(parser: argparse.ArgumentParser) -> None:
 def _training(parser: argparse.ArgumentParser) -> None:
     _inputs(parser)
     _vocab_cutoff(parser)
+    defaults = TrainConfig()
     parser.add_argument("--out", required=True, help="folder for the artifact and report")
-    parser.add_argument("--generation", type=int, default=0, help="this model's generation number")
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--learning-rate", type=float, default=1e-3)
-    parser.add_argument("--width", type=int, default=64)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--device", default="auto", help="auto, cpu or cuda")
+    parser.add_argument("--generation", type=int, default=defaults.generation, help="this model's generation number")
+    parser.add_argument("--epochs", type=int, default=defaults.epochs)
+    parser.add_argument("--batch-size", type=int, default=defaults.batch_size)
+    parser.add_argument("--learning-rate", type=float, default=defaults.learning_rate)
+    parser.add_argument("--width", type=int, default=defaults.width)
+    parser.add_argument("--seed", type=int, default=defaults.seed)
+    parser.add_argument("--device", default=defaults.device, help="auto, cpu or cuda")
 
 
-def _config(args: argparse.Namespace):
-    from setmodel.train import TrainConfig
-
+def _config(args: argparse.Namespace) -> TrainConfig:
     return TrainConfig(generation=args.generation, epochs=args.epochs, batch_size=args.batch_size,
                        learning_rate=args.learning_rate, width=args.width, seed=args.seed, device=args.device)
 
@@ -118,8 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("model", help="folder `train` wrote")
     _inputs(export)
     export.add_argument("--out", required=True, help="folder for the bundle")
-    export.add_argument("--states", type=int, default=300, help="held-out states to compare")
-    export.add_argument("--threshold", type=float, default=1e-4, help="largest difference allowed")
+    export.add_argument("--states", type=int, default=CHECK_STATES, help="held-out states to compare")
+    export.add_argument("--threshold", type=float, default=CHECK_THRESHOLD, help="largest difference allowed")
     export.set_defaults(handler=_export)
 
     ablate = commands.add_parser("ablate", help="retrain with each input group removed and write the table")

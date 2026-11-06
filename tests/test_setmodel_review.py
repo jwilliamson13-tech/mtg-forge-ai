@@ -36,6 +36,7 @@ def test_kill_criterion_two_turns_on_five_points():
     fails = ablation_rows({"full": scored(0.60), "no_cards": scored(0.56)})
     assert "carries" in kill_verdict(keeps) and "does not carry" not in kill_verdict(keeps)
     assert "does not carry" in kill_verdict(fails)
+    assert "by the 5 point bar" in kill_verdict(keeps)
 
 
 def test_a_run_with_nothing_held_out_gives_no_verdict_and_no_fake_number():

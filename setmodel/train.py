@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 from cardscript.vocab import Vocabulary
+from setmodel.config import FULL, TrainConfig
 from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, Corpus
 from setmodel.features import Caps
 from setmodel.model import ModelConfig, SetModel, weighted_loss
@@ -23,25 +24,12 @@ MODEL_FILE = "model.pt"
 METRICS_FILE = "metrics.json"
 EVAL_BATCH = 1024
 
-FULL = "full"
 NO_CARDS = "no_cards"
 NO_GRAVEYARD_EXILE = "no_graveyard_exile"
 NO_LIVE_STATE = "no_live_state"
 NO_NUMBERS = "no_numbers"
 ABLATIONS = (NO_CARDS, NO_GRAVEYARD_EXILE, NO_LIVE_STATE, NO_NUMBERS)
 GRAVEYARD_EXILE = ("me_graveyard", "opp_graveyard", "me_exile", "opp_exile")
-
-
-@dataclass(frozen=True)
-class TrainConfig:
-    generation: int = 0
-    epochs: int = 10
-    batch_size: int = 256
-    learning_rate: float = 1e-3
-    width: int = 64
-    seed: int = 0
-    device: str = "auto"
-    ablation: str = FULL
 
 
 @dataclass

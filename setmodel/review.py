@@ -44,7 +44,7 @@ def kill_verdict(rows: list[dict]) -> str:
         return "No verdict: nothing was held out."
     margin = round(-gap, 6)  # 5.00 points must pass, and float noise can land it at 4.999999
     outcome = "carries" if margin >= KILL_MARGIN_POINTS else "does not carry"
-    return f"Full model beats no cards by {margin:.2f} points. The card encoding {outcome} information by the 5 point bar."
+    return f"Full model beats no cards by {margin:.2f} points. The card encoding {outcome} information by the {KILL_MARGIN_POINTS:g} point bar."
 
 
 def format_table(rows: list[dict], verdict: str) -> str:

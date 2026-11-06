@@ -19,6 +19,7 @@ import onnx
 import onnxruntime
 import torch
 
+from setmodel.config import CHECK_STATES, CHECK_THRESHOLD
 from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, LIVE_FIELDS, SCOREBOARD_FIELDS, ZONE_NAMES, Corpus
 from setmodel.features import BACK, EMPTY_CARD, EMPTY_ROOM, FRONT, CardTable, Caps, Encoded, densify, encode
 from setmodel.model import LIVE_SCALE, SCOREBOARD_SCALE, SetModel, StateModel
@@ -30,8 +31,6 @@ VOCAB = "vocab.json"
 SCALES = "scales.json"
 CONTRACT = "contract.json"
 
-CHECK_STATES = 300
-CHECK_THRESHOLD = 1e-4
 CHECK_SEED = 0  # which held-out states the check samples, the same ones each run
 TRACE_CARDS = 5  # any size above 1 will do: the card axis is exported as dynamic
 
