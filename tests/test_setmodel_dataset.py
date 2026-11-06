@@ -13,6 +13,7 @@ import pytest
 from setmodel import dataset
 from setmodel.dataset import HELD_OUT_DECKS, LIVE, TRAIN, ZONE_IDS, DatasetError, load_corpus, load_manifest
 from setmodel.features import Caps, encode, key_scales
+from setmodel.train import TrainConfig, train
 from tests.setmodel_corpus import (HELD_OUT_DECK, TRAIN_DECKS, card, card_table, game, manifest, smoke_games, snapshot,
                                    vocabulary, write_manifest, write_parquet)
 
@@ -206,7 +207,26 @@ def test_truncation_rates_count_the_training_rows(tmp_path):
     assert rates["cards"] > 0 and rates["abilities"] > 0 and rates["tokens"] > 0 and rates["live_state"] == 0
 
 
-def test_key_scales_come_from_training_cards_and_resist_an_outlier():
+def test_held_out_games_do_not_change_the_key_scales_a_model_trains_with(tmp_path):
+    bears = card("Grizzly Bears", 1, power=2, toughness=2)
+    angel = card("Platinum Angel", 2, id=2, power=4, toughness=4)
+
+    def corpus_with(held_out_card, root):
+        games = [game(1, [snapshot(1, battlefield=[bears])], decks=TRAIN_DECKS),
+                 game(2, [snapshot(1, battlefield=[held_out_card])], decks=(HELD_OUT_DECK, "Red"))]
+        return corpus_of(games, root, game_share=0.0)
+
+    def trained_scales(corpus):
+        return train(corpus, vocabulary(), TrainConfig(epochs=0, width=8, device="cpu")).model.key_scale.tolist()
+
+    plain, with_angel = corpus_with(bears, tmp_path / "a"), corpus_with(angel, tmp_path / "b")
+    assert trained_scales(plain) == trained_scales(with_angel)
+    # The held-out card would move the scale if it were counted, so the line above can fail.
+    every_card = key_scales(with_angel.numbers, with_angel.number_mask).tolist()
+    assert trained_scales(with_angel) != every_card
+
+
+def test_a_key_scale_resists_an_outlier():
     numbers = np.array([[1.0], [2.0], [2.0], [3.0], [1000.0]], dtype=np.float32).reshape(5, 1, 1)
     assert key_scales(numbers, np.ones_like(numbers)).tolist() == [1.0]
     assert key_scales(np.full((3, 1, 1), 4.0), np.ones((3, 1, 1))).tolist() == [4.0]  # no spread: its size
