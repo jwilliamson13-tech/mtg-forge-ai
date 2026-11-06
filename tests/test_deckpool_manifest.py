@@ -94,3 +94,13 @@ def test_the_sim_runner_takes_a_deck_id_or_a_path(tmp_path):
     assert _deck_path(str(src), manifest, parser) == src
     with pytest.raises(SystemExit):
         _deck_path("nope", manifest, parser)
+
+
+def test_a_pull_becomes_a_manifest_that_holds_out_ten_whole_archetypes():
+    record = {"decks": [{"id": f"a{n}-{i}", "archetype": f"A{n}", "source": f"https://x/{n}{i}"}
+                        for n in range(14) for i in range(1, 4)]}
+    manifest = mf.build_from_pull(record, seed=3, left_out=["a0-2"])
+    assert len(manifest.decks) == 41 and manifest.tracked_matchups == [None] * 4
+    held = {d.archetype for d in manifest.decks if d.split == "held_out"}
+    assert len(held) == 10 and held == set(mf.choose_held_out({f"A{n}" for n in range(14)}, 3))
+    assert all(d.split == "held_out" for d in manifest.decks if d.archetype in held)

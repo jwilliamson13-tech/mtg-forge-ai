@@ -9,6 +9,7 @@ Forge file into `decks/`, and adds the deck to the manifest.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -54,7 +55,19 @@ def main(argv: list[str] | None = None) -> int:
                       help="where fetched pages are saved, so a resume never refetches")
     pull.add_argument("--cards", default=str(DEFAULT_CARDS), help="sweep output with the known card names")
     pull.add_argument("--cardsfolder", default=str(DEFAULT_CARDSFOLDER), help="Forge cardsfolder, to tell split cards from double-faced ones")
+    build = commands.add_parser("build-manifest", help="write decks/manifest.json from decks/pull.json")
+    build.add_argument("--seed", type=int, required=True, help="seed for choosing the held-out archetypes")
+    build.add_argument("--leave-out", nargs="*", default=[], help="deck ids that can't play, kept out of the manifest")
     args = parser.parse_args(argv)
+    if args.command == "build-manifest":
+        record = json.loads((mf.DEFAULT_ROOT / "decks" / "pull.json").read_text(encoding="utf-8"))
+        if mf.DEFAULT_PATH.is_file():
+            parser.error(f"{mf.DEFAULT_PATH} exists; the split is assigned once, so edit it by hand to change it")
+        manifest = mf.build_from_pull(record, args.seed, args.leave_out)
+        mf.save(manifest, mf.DEFAULT_PATH)
+        held = sorted({d.archetype for d in manifest.decks if d.split == "held_out"})
+        print(f"{len(manifest.decks)} decks; held out: {'; '.join(held)}")
+        return 0
     if not Path(args.cards).is_file():
         parser.error(f"no card names at {args.cards}; run the sweep first")
     if args.command == "pull":

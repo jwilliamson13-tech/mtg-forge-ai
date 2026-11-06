@@ -127,3 +127,18 @@ def deck_path(manifest: Manifest, deck_id: str, root: Path = DEFAULT_ROOT) -> Pa
     if not path.is_file():
         raise ManifestError(f"deck {deck_id!r} lists {deck.file}, which doesn't exist")
     return path
+
+
+def build_from_pull(record: dict, seed: int, left_out=()) -> Manifest:
+    """The manifest for a pulled pool: ten archetypes chosen by `seed` are held out, every other one trains.
+
+    `left_out` names deck ids that can't play in Forge. They stay on disk but out of the manifest.
+    """
+    skipped = set(left_out)
+    decks = [d for d in record["decks"] if d["id"] not in skipped]
+    held = set(choose_held_out({d["archetype"] for d in decks}, seed))
+    manifest = Manifest()
+    for d in decks:
+        manifest.add_deck(Deck(d["id"], f"decks/forge/{d['id']}.dck", d["source"], d["archetype"],
+                               "held_out" if d["archetype"] in held else "train"))
+    return manifest
