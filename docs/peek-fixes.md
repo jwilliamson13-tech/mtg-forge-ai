@@ -17,6 +17,7 @@ Issue #21. The tripwire in `docs/forge-build.md` finds forge-ai reading hidden c
 - `knownCards(viewer, owner)` is the owner's public cards plus what is on the viewer's notepad, `Game.REVEAL_LOG.knownTo(viewer)`. Face-down cards the viewer can't turn over and tokens are left out.
 - `rememberedIn(viewer, owner, zone)` is the notepad's cards last seen in that zone. `RevealLog.Entry.seenIn` holds that zone, and a card shown again updates it. The log can't say where a card is now, so nothing here asks.
 - `handAsKnown(owner)` is for code that takes a player and can't say who is asking. It goes by `Game.AI_DECIDERS`: the real hand for the player deciding, and the remembered hand for anyone else. With no decision open it hands over the real hand, and the tripwire counts that as `no decider`, so a gap stays visible.
+- `opponentCards(viewer)` is what a question about all the opponents' cards goes by: `knownOpponentCards` under honest play, every card they control otherwise.
 - `seenIn`, `seenInAnySeat` and `seenInOpponents` read a zone named by a card script. A public zone comes back whole. An opponent's hidden zone comes back as what was last seen there.
 
 The stack of deciders moved from `HiddenReadWatch` to `Game.AI_DECIDERS`, because honest play needs it with the tripwire off. `-tripwire off -honest on` plays the same games as both on.
