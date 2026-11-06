@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -44,8 +45,6 @@ def _print(text: str) -> None:
 
 
 def _join(args: argparse.Namespace) -> int:
-    import json
-
     from cardscript.vocab import build_vocabulary
     from setmodel.dataset import load_corpus, load_manifest
     from setmodel.features import CardTable
@@ -95,8 +94,6 @@ def _ablate(args: argparse.Namespace) -> int:
 
 
 def _pairtest(args: argparse.Namespace) -> int:
-    import json
-
     from setmodel.features import CardTable
     from setmodel.review import pair_test
     from setmodel.train import load_model

@@ -1,6 +1,8 @@
 """The training command, end to end on the synthetic corpus: files in, artifact and report out."""
 
 import json
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -49,6 +51,12 @@ def test_the_join_command_prints_the_report_with_no_training(tmp_path, capsys):
     assert main(["join", str(parquet), str(write_dump(tmp_path / "cards.jsonl")), str(write_manifest(tmp_path / "m.json")),
                  "--min-count", "1"]) == 0
     assert "unmatched names 0" in capsys.readouterr().out
+
+
+def test_the_command_line_loads_without_torch():
+    """`join` runs without PyTorch, so nothing the parser needs may import it."""
+    code = "import sys, setmodel.__main__; sys.exit('torch' in sys.modules or 'onnx' in sys.modules)"
+    assert subprocess.run([sys.executable, "-c", code]).returncode == 0
 
 
 def test_accuracy_weighs_a_game_as_one_whatever_its_length(tmp_path):
