@@ -12,7 +12,7 @@ With `-record` it writes one game file per game, named as Forge names them, exce
 what Forge would skip: a game that threw, and a game the clock stopped before its first
 priority pass. The `stale_jar` scenario ignores the flag, as a jar from before it would.
 
-With `-record` it also prints a game's tripwire lines, unless `-tripwire off` says not to.
+It prints a game's tripwire lines, unless `-tripwire off` says not to.
 The `no_tripwire_jar` scenario is a jar from before them, and `tripwire_hits` gives every
 game hits, more of them in odd games.
 """
@@ -88,7 +88,7 @@ def print_ai_limits(argv: list[str], scenario: str, seed: int, n: int) -> None:
 
 
 def print_tripwire(argv: list[str], scenario: str, n: int) -> None:
-    if "-record" not in argv or option_is(argv, "-tripwire", "off") or scenario in ("stale_jar", "no_tripwire_jar"):
+    if option_is(argv, "-tripwire", "off") or scenario in ("stale_jar", "no_tripwire_jar"):
         return
     if scenario == "tripwire_hits":
         print(f"Tripwire: {2 + n % 2 * 3} hits")

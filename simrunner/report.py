@@ -77,8 +77,8 @@ def format_summary(batch: BatchResult) -> str:
     rows += [(f"  by {cause.value}", str(batch.draws(cause))) for cause in DrawCause]
     if config.records:
         rows.append(("game records written", f"{batch.records_written} of {batch.finished} games"))
-        rows += _tripwire_rows(batch)
         rows.append(("record digest", batch.record_digest or "no files"))
+    rows += _tripwire_rows(batch)
     rows += [
         ("wall time", f"{batch.wall_s:.1f} s"),
         ("games per hour", f"{batch.games_per_hour:.0f}"),

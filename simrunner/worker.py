@@ -59,7 +59,6 @@ class RecordPlan:
     folder: Path
     batch_id: str
     turn_cap: int | None = None
-    tripwire: bool = True
     honest: bool = True
 
 
@@ -108,7 +107,7 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
-             search_budget: int = 0, records: RecordPlan | None = None) -> list[str]:
+             search_budget: int = 0, records: RecordPlan | None = None, tripwire: bool = True) -> list[str]:
     """Return the `forge sim` arguments for one worker."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -119,12 +118,12 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-sim", *modes]
     if search_budget:
         args += ["-budget", str(search_budget)]
+    if not tripwire:
+        args += ["-tripwire", "off"]
     if records:
         args += ["-record", str(records.folder), "-batch", records.batch_id]
         if records.turn_cap is not None:
             args += ["-turncap", str(records.turn_cap)]
-        if not records.tripwire:
-            args += ["-tripwire", "off"]
         if records.honest:
             args += ["-honest", "on"]
     return args

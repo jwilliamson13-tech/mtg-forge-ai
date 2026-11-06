@@ -107,7 +107,7 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--turn-cap", type=int, help="with records, the last turn a game may play before it "
                                                     "stops as a draw (default: Forge's 50)")
     batch.add_argument("--no-tripwire", action="store_true",
-                       help="with records, leave out the check for forge-ai reading hidden cards (default: on)")
+                       help="leave out the check for forge-ai reading hidden cards (default: on)")
     batch.add_argument("--no-honest", action="store_true",
                        help="with records, let the AI keep its peeks at hidden cards (default: honest play, "
                             "because records are for training)")

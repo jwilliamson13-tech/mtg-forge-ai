@@ -569,7 +569,7 @@ def finished_batch():
     """A hand-built result, so the timing rows of the report can be pinned exactly."""
     config = BatchConfig(
         seats=(Seat(Path("burn.dck"), "Default"), Seat(Path("merfolk.dck"))),
-        games=6, batch_seed=42, workers=2, forge_root=Path("forge"), run_dir=Path("run"), clock_s=600,
+        games=6, batch_seed=42, workers=2, forge_root=Path("forge"), run_dir=Path("run"), clock_s=600, tripwire=False,
     )
     good = WorkerResult(WorkerPlan(0, 111, 3), exit_code=0, profile_used=True, ready_s=20.0, last_result_s=30.0, games=[
         GameResult(1, 3000, 7, winner_seat=1),
@@ -601,6 +601,7 @@ def test_the_report_table():
         "  by clock                        1\n"
         "  by turn_cap                     0\n"
         "  by exception                    0\n"
+        "tripwire                          off\n"
         "wall time                         60.0 s\n"
         "games per hour                    300\n"
         "usable games per hour             180\n"
@@ -1002,9 +1003,24 @@ def test_no_tripwire_passes_off_through_to_forge(config, records):
     assert "tripwire                          off\n" in format_summary(batch)
 
 
-def test_turning_off_a_tripwire_that_never_ran_is_refused(config):
-    with pytest.raises(SetupError, match="tripwire"):
-        run_batch(config(tripwire=False))
+def test_the_tripwire_runs_without_records(config, records):
+    batch = run_batch(config(games=2))
+    assert all("-tripwire" not in run["argv"] for run in records().values())
+    assert batch.tripwire_clean
+    assert batch.clean
+    assert "tripwire clean                    yes\n" in format_summary(batch)
+
+
+def test_the_tripwire_can_be_turned_off_without_records(config, records):
+    batch = run_batch(config(games=2, tripwire=False))
+    assert all(run["argv"][run["argv"].index("-tripwire") + 1] == "off" for run in records().values())
+    assert batch.clean
+    assert "tripwire                          off\n" in format_summary(batch)
+
+
+def test_a_jar_with_no_tripwire_fails_a_batch_without_records_too(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_tripwire_jar")
+    assert not run_batch(config(games=2)).clean
 
 
 def test_records_turn_honest_play_on(config, records):
@@ -1101,6 +1117,6 @@ def test_one_silent_game_keeps_a_batch_from_being_tripwire_clean():
     assert "1 reported nothing" in format_summary(batch)
 
 
-def test_without_records_the_tripwire_stays_out_of_the_report(config):
-    summary = format_summary(run_batch(config(games=2)))
-    assert "tripwire" not in summary
+def test_a_jar_with_no_tripwire_says_so_in_the_report(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_tripwire_jar")
+    assert "no game reported, so the jar may be stale" in format_summary(run_batch(config(games=2)))

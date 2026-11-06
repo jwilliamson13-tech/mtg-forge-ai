@@ -49,7 +49,7 @@ class BatchConfig:
     records: bool = False  # have Forge write a game record per game
     records_dir: Path | None = None  # None keeps them in the run folder's games folder
     turn_cap: int | None = None  # None takes Forge's default
-    tripwire: bool = True  # with records, catch forge-ai reading hidden cards
+    tripwire: bool = True  # catch forge-ai reading hidden cards
     honest: bool = True  # with records, keep the AI to what a person in its seat could know
 
     @property
@@ -208,7 +208,7 @@ class BatchResult:
 
     @property
     def tripwire_on(self) -> bool:
-        return self.config.records and self.config.tripwire
+        return self.config.tripwire
 
     def reported_tripwire(self, worker: WorkerResult) -> bool:
         """Forge skips flags it doesn't know, so a jar without the tripwire would play on and report nothing."""
@@ -295,8 +295,6 @@ def _check(config: BatchConfig) -> None:
         raise SetupError("the search budget can't be negative")
     if config.turn_cap is not None and (not config.records or config.turn_cap < 1):
         raise SetupError("a turn cap needs records and has to be at least 1")
-    if not config.tripwire and not config.records:
-        raise SetupError("the tripwire only runs with records, so there is nothing to turn off")
     if not config.honest and not config.records:
         raise SetupError("honest play only goes on with records, so there is nothing to turn off")
     if config.records and not BATCH_ID.fullmatch(config.batch_id):
@@ -357,7 +355,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
     started = []
     pool = None
     # Each worker runs in its own folder, so Forge needs the full path.
-    records = (RecordPlan(config.games_folder.resolve(), config.batch_id, config.turn_cap, config.tripwire, config.honest)
+    records = (RecordPlan(config.games_folder.resolve(), config.batch_id, config.turn_cap, config.honest)
                if config.records else None)
     try:
         for plan in plan_workers(config.games, config.batch_seed, config.workers):
@@ -366,7 +364,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
             deck_dir = prepare_folder(folder, forge_gui, config.seats)
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES, "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
-                                 resolve_search_budget(config.seats, config.search_budget), records)]
+                                 resolve_search_budget(config.seats, config.search_budget), records, config.tripwire)]
             jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started,
                          config.window.kill_at if config.window else None))
 
