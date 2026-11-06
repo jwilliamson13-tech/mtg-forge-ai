@@ -1,7 +1,8 @@
 """The deck manifest: every deck's id, file, source, archetype and split, plus the tracked matchups.
 
 The file is `decks/manifest.json`, version 1. Spec 5 reads the same format.
-Every list of an archetype shares one split, and `add_deck` refuses to break that.
+Every list of an archetype shares one split, and `add_deck` refuses to break that. Archetypes compare
+by `normalize`, so `Death & Taxes` and `death and taxes` are one archetype.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ import json
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from deckpool.convert import normalize
 
 VERSION = 1
 TRAIN, HELD_OUT = "train", "held_out"
@@ -70,7 +73,7 @@ class Manifest:
             if d.id in ids:
                 raise ManifestError(f"duplicate deck id {d.id!r}")
             ids.add(d.id)
-            if splits.setdefault(d.archetype, d.split) != d.split:
+            if splits.setdefault(normalize(d.archetype), d.split) != d.split:
                 raise ManifestError(f"archetype {d.archetype!r} has lists in both splits; "
                                     f"all its lists share one split, so {d.id!r} can't be {d.split}")
         if len(self.tracked_matchups) != TRACKED_SLOTS:
@@ -103,7 +106,7 @@ def save(manifest: Manifest, path: Path = DEFAULT_PATH) -> None:
 
 def choose_held_out(archetypes, seed: int, count: int = HELD_OUT_ARCHETYPES) -> list[str]:
     """Pick `count` whole archetypes uniformly at random, repeatably: the same seed and names give the same pick."""
-    ordered = sorted(set(archetypes))
+    ordered = sorted({normalize(a): a for a in archetypes}.values())
     if len(ordered) <= count:
         raise ManifestError(f"{len(ordered)} archetypes can't hold out {count} and leave any to train")
     return sorted(random.Random(seed).sample(ordered, count))
@@ -124,9 +127,9 @@ def build_from_pull(record: dict, seed: int, left_out=()) -> Manifest:
     """
     skipped = set(left_out)
     decks = [d for d in record["decks"] if d["id"] not in skipped]
-    held = set(choose_held_out({d["archetype"] for d in decks}, seed))
+    held = {normalize(a) for a in choose_held_out({d["archetype"] for d in decks}, seed)}
     manifest = Manifest()
     for d in decks:
         manifest.add_deck(Deck(d["id"], f"decks/forge/{d['id']}.dck", d["source"], d["archetype"],
-                               HELD_OUT if d["archetype"] in held else TRAIN))
+                               HELD_OUT if normalize(d["archetype"]) in held else TRAIN))
     return manifest

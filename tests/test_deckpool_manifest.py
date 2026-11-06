@@ -24,6 +24,13 @@ def test_every_list_of_an_archetype_shares_a_split():
     assert len(m.decks) == 2
 
 
+def test_two_spellings_of_an_archetype_are_one_archetype():
+    m = mf.Manifest([deck("dt-1", "Death & Taxes")])
+    for i, spelling in enumerate(["death & taxes", "Death and Taxes", "Death & Taxes "]):
+        with pytest.raises(mf.ManifestError, match="share one split"):
+            m.add_deck(deck(f"dt-{i + 2}", spelling, "held_out"))
+
+
 def test_a_hand_edit_that_splits_an_archetype_is_refused_on_load(tmp_path):
     path = tmp_path / "manifest.json"
     bad = {"version": 1, "tracked_matchups": [None] * 4,
