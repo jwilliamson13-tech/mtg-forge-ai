@@ -34,7 +34,7 @@ def normalize(name: str) -> str:
     """The comparison key: lowercase, no accents, no punctuation, one space between words."""
     text = unicodedata.normalize("NFKD", name)
     text = "".join(c for c in text if not unicodedata.combining(c))
-    text = text.casefold().replace("&", " and ")
+    text = re.sub("['‘’`]", "",text.casefold()).replace("&", " and ")
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return text.strip()
 
