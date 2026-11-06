@@ -17,4 +17,4 @@ data/
 runs/
 
 # Forge checkout lives beside this repo, not inside it
-forge/
+/forge/

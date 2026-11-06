@@ -1,24 +1,23 @@
 // Deck file created with mtgtop8.com
-4 [AVR] Cavern of Souls
-1 [EX] City of Traitors
-1 [] Sire of Seven Deaths
-4 [OGW] Thought-Knot Seer
-4 [] Eldrazi Linebreaker
 4 [MR] Chalice of the Void
-3 [] It That Heralds the End
+4 [] Abundant Countryside
+1 [EX] City of Traitors
+4 [] Eldrazi Linebreaker
 4 [] Glaring Fleshraker
-4 [] Wastescape Battlemage
+4 [] It That Heralds the End
 4 [] Kozilek's Command
 4 [OGW] Reality Smasher
-3 [WWK] Eye of Ugin
-4 [TE] Wasteland
+4 [AVR] Cavern of Souls
+4 [] Wastescape Battlemage
 4 [ROE] Eldrazi Temple
-4 [TE] Lotus Petal
-4 [] Abundant Countryside
+3 [WWK] Eye of Ugin
+4 [OGW] Thought-Knot Seer
 4 [TE] Ancient Tomb
-SB:  3 [OGW] Warping Wail
-SB:  2 [NPH] Dismember
+4 [TE] Lotus Petal
+4 [TE] Wasteland
+SB:  2 [] Eldrazi Confluence
 SB:  4 [GP] Leyline of the Void
-SB:  1 [] Eldrazi Confluence
+SB:  3 [WL] Null Rod
+SB:  2 [NPH] Dismember
+SB:  1 [OGW] Warping Wail
 SB:  3 [] Disruptor Flute
-SB:  2 [WL] Null Rod

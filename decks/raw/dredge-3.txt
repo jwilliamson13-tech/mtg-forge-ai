@@ -1,29 +1,32 @@
 // Deck file created with mtgtop8.com
-4 [MI] Lion's Eye Diamond
-3 [FUT] Bridge from Below
-3 [RAV] Golgari Thug
-4 [RAV] Golgari Grave-Troll
-4 [DKA] Faithless Looting
-2 [] Ox of Agonas
+2 [TO] Breakthrough
 4 [JU] Cabal Therapy
-4 [] Otherworldly Gaze
-1 [JU] Anger
-3 [] Poxwalkers
-4 [FUT] Narcomoeba
-4 [RAV] Stinkweed Imp
-1 [A] Underground Sea
-3 [TO] Breakthrough
-1 [A] Island
 4 [OD] Cephalid Coliseum
-1 [A] Mountain
-2 [B] Volcanic Island
-2 [TSP] Dread Return
-1 [ON] Flooded Strand
-1 [THS] Ashen Rider
-4 [ZEN] Scalding Tarn
-SB:  2 [] Shenanigans
-SB:  1 [JOU] Kiora's Dismissal
-SB:  2 [ON] Chain of Vapor
-SB:  4 [M11] Leyline of Sanctity
-SB:  2 [] Stern Dismissal
+4 [MI] Lion's Eye Diamond
+4 [DKA] Faithless Looting
+4 [RAV] Golgari Grave-Troll
+4 [RAV] Golgari Thug
+4 [FUT] Bridge from Below
+4 [FUT] Narcomoeba
+1 [WL] Gemstone Mine
+2 [] Poxwalkers
+4 [RAV] Stinkweed Imp
+4 [JOU] Mana Confluence
+4 [AN] City of Brass
+1 [TE] Lotus Petal
+1 [TSP] Dread Return
+2 [] Ox of Agonas
+1 [] Otherworldly Gaze
+3 [OD] Careful Study
+2 [TO] Ichorid
+1 [TO] Putrid Imp
+SB:  1 [TO] Breakthrough
+SB:  1 [TSP] Dread Return
+SB:  2 [] Static Prison
+SB:  1 [] Into the Flood Maw
+SB:  1 [TSP] Lightning Axe
+SB:  2 [WWK] Nature's Claim
+SB:  1 [] Hogaak, Arisen Necropolis
 SB:  4 [MM] Unmask
+SB:  1 [THS] Ashen Rider
+SB:  1 [] Molten Gatekeeper
