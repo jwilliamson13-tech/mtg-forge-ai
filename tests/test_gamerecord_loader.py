@@ -1,7 +1,7 @@
 """The game-record loader, from the outside: a game file in, validated records out.
 
-The fixtures in tests/fixtures/games/ are hand-written, because no Forge hook exists
-yet. Every expected value here comes from reading those files or the spec.
+The fixtures in tests/fixtures/games/ are hand-written, so that each case can be read
+in a diff. Every expected value here comes from reading those files or the spec.
 """
 
 import gzip

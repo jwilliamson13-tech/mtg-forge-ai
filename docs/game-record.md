@@ -352,4 +352,4 @@ One row per stack item per snapshot, long format.
 - Each snapshot is already one side's row, so #31 should not expand it into two rows as its text says. Doing that would double the data and give each row the other side's hand.
 - #31 joins on name and face, and it drops any snapshot with an unmatched card. A hidden card has no name, so #31 needs a rule for it, or it will drop most snapshots with a morph in play.
 - Name and face can't tell tokens apart. 35 token scripts are all named `Elemental Token`, with different stats and abilities. `Card` has no direct accessor for the token script, so this version doesn't record one.
-- A whole split card reports the combined name `Fire // Ice`, while the parser has faces `Fire` and `Ice`. The join has to allow for that. I read this in `CardRules`, and #18's first real files should confirm it.
+- A whole split card reports the combined name `Fire // Ice`, while the parser has faces `Fire` and `Ice`. The join has to allow for that. I read this in `CardRules`. #18's real batches had no split card, so it is still unconfirmed.
