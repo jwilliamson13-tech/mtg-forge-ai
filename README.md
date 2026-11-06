@@ -34,9 +34,17 @@ python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
 python -m gamerecord convert path/to/games path/to/parquet
 ```
 
+## Training
+
+`setmodel` joins game records to parsed cards, trains the two-level set model, runs the ablations and pair test, and exports the bundle Forge loads. `docs/training.md` has the commands and the PyTorch pin for the 1080 Ti, and `docs/tensor-contract.md` is the contract with Forge.
+
+```
+python -m setmodel train path/to/parquet data/cards.jsonl decks/manifest.json --out runs/gen0 --generation 0
+```
+
 ## Tests
 
-`cardscript`, `simrunner` and the `gamerecord` loader need nothing outside the standard library. The Parquet converter needs `pyarrow`. `requirements-dev.txt` holds that and the test runner:
+`cardscript`, `simrunner` and the `gamerecord` loader need nothing outside the standard library. The Parquet converter needs `pyarrow`, and `setmodel` needs PyTorch and the ONNX packages. `requirements-dev.txt` holds those and the test runner, with the pinned CUDA 12.6 PyTorch:
 
 ```
 pip install -r requirements-dev.txt

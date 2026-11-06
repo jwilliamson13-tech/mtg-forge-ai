@@ -12,7 +12,7 @@ import pytest
 
 from setmodel import dataset
 from setmodel.dataset import HELD_OUT_DECKS, LIVE, TRAIN, ZONE_IDS, DatasetError, load_corpus, load_manifest
-from setmodel.features import Caps, encode
+from setmodel.features import Caps, encode, key_scales
 from tests.setmodel_corpus import (HELD_OUT_DECK, TRAIN_DECKS, card, card_table, game, manifest, smoke_games, snapshot,
                                    vocabulary, write_manifest, write_parquet)
 
@@ -208,7 +208,6 @@ def test_truncation_rates_count_the_training_rows(tmp_path):
 
 def test_key_scales_come_from_training_cards_and_resist_an_outlier():
     numbers = np.array([[1.0], [2.0], [2.0], [3.0], [1000.0]], dtype=np.float32).reshape(5, 1, 1)
-    from setmodel.features import key_scales
     assert key_scales(numbers, np.ones_like(numbers)).tolist() == [1.0]
     assert key_scales(np.full((3, 1, 1), 4.0), np.ones((3, 1, 1))).tolist() == [4.0]  # no spread: its size
     assert key_scales(np.zeros((2, 1, 1)), np.zeros((2, 1, 1))).tolist() == [1.0]  # never seen

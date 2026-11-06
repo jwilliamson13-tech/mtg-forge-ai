@@ -1,5 +1,6 @@
 """The export bundle from the smoke model: ONNX against PyTorch, the table, and the committed contract."""
 
+import gzip
 import json
 import re
 from pathlib import Path
@@ -47,7 +48,6 @@ def test_the_check_fails_when_the_table_disagrees_with_the_model(smoke, tmp_path
     model, corpus, _, bundle = smoke
     for name in (MODEL, CARD_TABLE):
         (tmp_path / name).write_bytes((bundle / name).read_bytes())
-    import gzip
     text = gzip.decompress((tmp_path / CARD_TABLE).read_bytes()).decode("utf-8")
     lines = [json.loads(line) for line in text.splitlines()]
     for line in lines:
