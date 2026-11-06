@@ -26,6 +26,10 @@ STATUS_FILE = "batch.json"
 GAMES_FOLDER = "games"  # Forge's game records. See docs/forge-build.md.
 # The hook writes the batch id into each record, and the schema limits it. See docs/game-record.md.
 BATCH_ID = re.compile(r"[A-Za-z0-9_-]+")
+# How a printed result reads as a record's end reason. A game that threw gets no file at all.
+END_REASONS = {None: "win", DrawCause.RULES: "draw_rules", DrawCause.CLOCK: "draw_clock", DrawCause.TURN_CAP: "draw_turn_cap"}
+# A clock stop before the first priority pass leaves no file, and a game that threw never does.
+NO_FILE_BY_DESIGN = (DrawCause.CLOCK, DrawCause.EXCEPTION)
 
 
 class SetupError(Exception):
@@ -59,6 +63,53 @@ class BatchConfig:
     @property
     def games_folder(self) -> Path:
         return self.records_dir or self.run_dir / GAMES_FOLDER
+
+
+@dataclass(frozen=True)
+class RecordCheck:
+    """One worker's printed results read against its game files."""
+
+    matched: int = 0
+    no_file_by_design: int = 0  # games with no file, of a kind that may have none
+    missing: int = 0  # games that should have a file and have none
+    mismatches: tuple[str, ...] = ()  # every disagreement, missing files included
+
+
+def _disagreement(game: GameResult, metadata: dict) -> str | None:
+    """What a game's file says differently from its result line, if anything."""
+    if game.draw_cause == DrawCause.EXCEPTION:
+        return f"game {game.number}: printed as a game that threw, but it has a file"
+    reason = END_REASONS[game.draw_cause]
+    if metadata.get("end_reason") != reason:
+        return f"game {game.number}: printed {reason}, the file says {metadata.get('end_reason')}"
+    if metadata.get("winner") != game.winner_seat:
+        return f"game {game.number}: printed winner {game.winner_seat}, the file says {metadata.get('winner')}"
+    return None
+
+
+def check_records(worker: WorkerResult) -> RecordCheck:
+    """Read each finished game against its file, and each file against a finished game.
+
+    A worker the hard stop killed can leave a file for a game that never printed its result,
+    which is no disagreement: that game counts as not finished.
+    """
+    files = {record.metadata.get("game_number"): record.metadata for record in worker.records if record.metadata}
+    mismatches = [f"{record.path.name}: can't be read" for record in worker.records if not record.metadata]
+    matched = no_file = missing = 0
+    for game in worker.games:
+        metadata = files.pop(game.number, None)
+        if metadata is None and game.draw_cause in NO_FILE_BY_DESIGN:
+            no_file += 1
+        elif metadata is None:
+            missing += 1
+            mismatches.append(f"game {game.number}: printed {END_REASONS[game.draw_cause]}, but it has no file")
+        elif problem := _disagreement(game, metadata):
+            mismatches.append(problem)
+        else:
+            matched += 1
+    if not worker.stopped:
+        mismatches += [f"game {number}: a file with no result line" for number in sorted(files, key=str)]
+    return RecordCheck(matched, no_file, missing, tuple(mismatches))
 
 
 @dataclass
@@ -199,12 +250,17 @@ class BatchResult:
         return sum(len(worker.record_files) for worker in self.workers)
 
     def wrote_records(self, worker: WorkerResult) -> bool:
-        """Forge skips flags it doesn't know, so a jar without `-record` would play on and write nothing.
+        """Forge skips flags it doesn't know, so a jar without `-record` would play on and write nothing."""
+        return not self.config.records or not check_records(worker).missing
 
-        A game that threw writes no file, and neither does a clock stop before the first priority pass.
-        """
-        expected = sum(game.draw_cause not in (DrawCause.CLOCK, DrawCause.EXCEPTION) for game in worker.games)
-        return not self.config.records or len(worker.record_files) >= expected
+    def records_agree(self, worker: WorkerResult) -> bool:
+        """A game file and a result line that tell different stories mean one of them is wrong."""
+        return not self.config.records or not check_records(worker).mismatches
+
+    @property
+    def record_mismatches(self) -> list[str]:
+        return [f"worker {worker.plan.index}, {problem}" for worker in self.workers
+                for problem in check_records(worker).mismatches]
 
     def played_honestly(self, worker: WorkerResult) -> bool:
         """Forge skips flags it doesn't know, so a jar without `-honest` would play on with its peeks.
@@ -268,6 +324,7 @@ class BatchResult:
                                      and self.played_requested_modes(worker)
                                      and self.applied_search_budget(worker)
                                      and self.wrote_records(worker)
+                                     and self.records_agree(worker)
                                      and self.played_honestly(worker)
                                      and self.reported_tripwire(worker) for worker in self.workers)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from simrunner.batch import BatchResult
+from simrunner.batch import BatchResult, check_records
 from simrunner.output import DrawCause
 from simrunner.worker import DEFAULT_SIM_MODE, Seat, WorkerResult
 
@@ -10,6 +10,7 @@ from simrunner.worker import DEFAULT_SIM_MODE, Seat, WorkerResult
 OVERNIGHT_HOURS = 8
 KILL_CRITERION_GAMES = 500
 TOP_SIGNATURES = 20
+TOP_MISMATCHES = 20
 
 
 def _table(rows: list[tuple[str, ...]]) -> str:
@@ -51,6 +52,13 @@ def _tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
     return [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
 
 
+def _records_row(batch: BatchResult) -> tuple[str, str]:
+    checks = [check_records(worker) for worker in batch.workers]
+    return ("records against results", f"{sum(check.matched for check in checks)} match, "
+            f"{sum(check.no_file_by_design for check in checks)} no file by design, "
+            f"{sum(len(check.mismatches) for check in checks)} mismatches")
+
+
 def format_summary(batch: BatchResult) -> str:
     config = batch.config
     startups = batch.startup_times
@@ -77,6 +85,7 @@ def format_summary(batch: BatchResult) -> str:
     rows += [(f"  by {cause.value}", str(batch.draws(cause))) for cause in DrawCause]
     if config.records:
         rows.append(("game records written", f"{batch.records_written} of {batch.finished} games"))
+        rows.append(_records_row(batch))
         rows.append(("record digest", batch.record_digest or "no files"))
     rows += _tripwire_rows(batch)
     rows += [
@@ -116,6 +125,8 @@ def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
         notes.append("Forge did not report on the search budget, so the jar may be stale")
     if not batch.wrote_records(worker):
         notes.append("a game with no game record, so the jar may be stale")
+    if batch.wrote_records(worker) and not batch.records_agree(worker):
+        notes.append("game records that disagree with the results")
     if not batch.played_honestly(worker):
         notes.append("a game record that doesn't show honest play, so the jar may be stale")
     if not batch.reported_tripwire(worker):
@@ -148,5 +159,14 @@ def format_tripwire(batch: BatchResult) -> str:
     return "\n" + _table(rows) + (f"and {more} more\n" if more > 0 else "")
 
 
+def format_mismatches(batch: BatchResult) -> str:
+    """Where the game files and the result lines disagree."""
+    mismatches = batch.record_mismatches if batch.config.records else []
+    if not mismatches:
+        return ""
+    more = len(mismatches) - TOP_MISMATCHES
+    return "\n" + "\n".join(mismatches[:TOP_MISMATCHES]) + "\n" + (f"and {more} more\n" if more > 0 else "")
+
+
 def format_report(batch: BatchResult) -> str:
-    return format_summary(batch) + "\n" + format_workers(batch) + format_tripwire(batch)
+    return format_summary(batch) + "\n" + format_workers(batch) + format_mismatches(batch) + format_tripwire(batch)

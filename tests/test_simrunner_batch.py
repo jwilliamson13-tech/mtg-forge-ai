@@ -950,6 +950,71 @@ def test_an_exception_game_needs_no_file(config, records, monkeypatch):
     assert run_batch(config(games=2, records=True)).clean
 
 
+def test_files_that_agree_with_the_results_are_counted(config, records):
+    batch = run_batch(config(games=5, workers=2, records=True))
+    assert batch.record_mismatches == []
+    assert "5 match, 0 no file by design, 0 mismatches\n" in format_summary(batch)
+
+
+@pytest.mark.parametrize("scenario", ["clock", "exception"])
+def test_a_game_with_no_file_by_design_is_counted_and_is_no_mismatch(config, records, monkeypatch, scenario):
+    monkeypatch.setenv("STUB_SCENARIO", scenario)
+    batch = run_batch(config(games=2, records=True))
+    assert batch.clean
+    assert "0 match, 2 no file by design, 0 mismatches" in format_summary(batch)
+
+
+@pytest.mark.parametrize("scenario, says", [("file_names_other_winner", "printed winner"), ("file_says_clock", "the file says draw_clock"),
+                                            ("exception_with_file", "but it has a file"), ("no_game_files", "but it has no file")])
+def test_a_file_that_disagrees_with_the_result_fails_the_batch(config, records, monkeypatch, scenario, says):
+    monkeypatch.setenv("STUB_SCENARIO", scenario)
+    batch = run_batch(config(games=2, workers=1, records=True))
+    assert batch.complete
+    assert not batch.clean
+    assert len(batch.record_mismatches) == 2
+    assert says in format_report(batch)
+
+
+def test_the_worker_table_says_when_files_disagree(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "file_names_other_winner")
+    batch = run_batch(config(games=2, workers=1, records=True))
+    assert "game records that disagree with the results" in format_workers(batch)
+
+
+def test_a_file_with_no_result_line_is_a_mismatch(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "extra_file")
+    batch = run_batch(config(games=2, workers=1, records=True))
+    assert not batch.clean
+    assert batch.record_mismatches == ["worker 0, game 3: a file with no result line"]
+
+
+def test_a_game_the_hard_stop_cut_off_may_leave_a_file_with_no_result(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "extra_file")
+    batch = run_batch(config(games=2, workers=1, records=True))
+    batch.workers[0].stopped = True
+    assert batch.record_mismatches == []
+
+
+def test_an_unreadable_file_is_a_mismatch(config, records):
+    batch = run_batch(config(games=2, workers=1, records=True))
+    worker = batch.workers[0]
+    worker.records[0] = replace(worker.records[0], metadata=None)
+    assert any("can't be read" in problem for problem in batch.record_mismatches)
+    assert not batch.clean
+
+
+def test_only_a_batch_with_records_is_checked_against_them(config):
+    batch = run_batch(config())
+    assert batch.clean
+    assert "records against results" not in format_summary(batch)
+
+
+def test_a_long_list_of_mismatches_is_cut_short(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_game_files")
+    report = format_report(run_batch(config(games=25, workers=1, records=True)))
+    assert "and 5 more\n" in report
+
+
 def test_a_batch_id_the_schema_refuses_stops_before_launch(config, records, tmp_path):
     with pytest.raises(SetupError, match="batch id"):
         run_batch(config(records=True, run_dir=tmp_path / "night.1"))
