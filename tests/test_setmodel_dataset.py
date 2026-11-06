@@ -39,7 +39,7 @@ def rows_of_side(corpus, side_rows):
     return [row_inputs(corpus, row) for row in side_rows]
 
 
-def morph_game(hidden_from_side_one=True, other_side_name="Platinum Angel", other_side_life=20):
+def morph_game(other_side_name="Platinum Angel", other_side_life=20):
     """Side 1's line hides a face-down card, and side 2's line of the same moment names it."""
     hidden = card(None, 2, id=5, power=2, toughness=2, hidden=True, tapped=True)
     named = card(other_side_name, 2, id=9, power=2, toughness=2, tapped=True, face_down=True)
