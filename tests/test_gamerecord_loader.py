@@ -8,7 +8,7 @@ import gzip
 
 import pytest
 
-from gamerecord import ExceptionGameError, GameRecordError, load_game
+from gamerecord import ExceptionGameError, GameRecordError, game_digest, load_game
 
 
 def test_a_win_loads_with_its_metadata_and_every_snapshot(game_file):
@@ -445,6 +445,33 @@ def test_a_bad_snapshot_line_is_reported_by_line_and_field(game_lines, write_gam
 def test_a_missing_file_is_a_game_record_error(tmp_path):
     with pytest.raises(GameRecordError):
         load_game(tmp_path / "gone.jsonl.gz")
+
+
+def test_the_game_digest_leaves_out_what_differs_between_two_runs_of_a_game(game_lines, write_game):
+    lines = game_lines("win")
+    number, digest = game_digest(write_game(lines))
+    assert number == lines[0]["game_number"]
+    lines[0]["batch_id"] = "another-night"
+    lines[0]["tripwire"] = {"enabled": False, "hits": 0, "signatures": []}
+    assert game_digest(write_game(lines)) == (number, digest)
+
+
+@pytest.mark.parametrize("change", [lambda lines: lines[0].update(final_turn=99), lambda lines: card(lines).update(damage=9),
+                                    lambda lines: lines.pop()], ids=["metadata", "card", "missing line"])
+def test_the_game_digest_sees_any_change_to_the_game(game_lines, write_game, change):
+    lines = game_lines("win")
+    before = game_digest(write_game(lines))
+    change(lines)
+    assert game_digest(write_game(lines)) != before
+
+
+@pytest.mark.parametrize("content", [b"", gzip.compress(b""), gzip.compress(b"[]\n"), b"not gzip"],
+                         ids=["empty", "no lines", "no metadata", "not gzip"])
+def test_a_file_that_cant_be_hashed_is_a_game_record_error(tmp_path, content):
+    path = tmp_path / "bad.jsonl.gz"
+    path.write_bytes(content)
+    with pytest.raises(GameRecordError):
+        game_digest(path)
 
 
 def logged_card(lines):

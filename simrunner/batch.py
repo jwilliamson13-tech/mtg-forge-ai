@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from gamerecord import GameRecordError, game_digest
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
@@ -168,10 +169,12 @@ class BatchResult:
 
     @property
     def digest(self) -> str:
-        """A fingerprint of who won what, leaving out timing. Same games, same digest.
+        """A fingerprint of who won what, leaving out timing.
 
         Forge's random draw count goes in when it prints one. Two games can share a winner
-        and a final turn and still have played differently, but they can't share the draws.
+        and a final turn and still have played differently, but they rarely share the draws.
+        It says nothing about what happened on the way, so a claim that two runs played the
+        same games goes by `record_digest`.
         """
         rows = []
         for worker in self.workers:
@@ -181,8 +184,19 @@ class BatchResult:
         return hashlib.sha256("\n".join(rows).encode("ascii")).hexdigest()[:12]
 
     @property
+    def record_digest(self) -> str | None:
+        """A fingerprint of every game file's content. Same digest, the same games card by card.
+
+        It leaves out what differs between two runs of the same games: the run folder's name
+        and the tripwire's report. None when the batch wrote no files.
+        """
+        rows = [f"{worker.plan.index}:{number}:{digest}" for worker in self.workers
+                for number, digest in sorted(_file_digest(path) for path in worker.record_files)]
+        return hashlib.sha256("\n".join(rows).encode("ascii")).hexdigest()[:12] if rows else None
+
+    @property
     def records_written(self) -> int:
-        return sum(worker.records_written for worker in self.workers)
+        return sum(len(worker.record_files) for worker in self.workers)
 
     def wrote_records(self, worker: WorkerResult) -> bool:
         """Forge skips flags it doesn't know, so a jar without `-record` would play on and write nothing.
@@ -190,7 +204,7 @@ class BatchResult:
         A game that threw writes no file, and neither does a clock stop before the first priority pass.
         """
         expected = sum(game.draw_cause not in (DrawCause.CLOCK, DrawCause.EXCEPTION) for game in worker.games)
-        return not self.config.records or worker.records_written >= expected
+        return not self.config.records or len(worker.record_files) >= expected
 
     @property
     def tripwire_on(self) -> bool:
@@ -238,6 +252,14 @@ class BatchResult:
                                      and self.applied_search_budget(worker)
                                      and self.wrote_records(worker)
                                      and self.reported_tripwire(worker) for worker in self.workers)
+
+
+def _file_digest(path: Path) -> tuple[int, str]:
+    """A file that can't be read still changes the digest, and costs the report nothing else."""
+    try:
+        return game_digest(path)
+    except GameRecordError:
+        return 0, f"unreadable {path.name}"
 
 
 def plan_workers(games: int, batch_seed: int, workers: int) -> list[WorkerPlan]:
@@ -346,7 +368,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
         wall_s = time.monotonic() - began
         if records:
             for worker in workers:
-                worker.records_written = sum(1 for _ in records.folder.glob(f"{records.batch_id}_{worker.plan.seed}_*.jsonl.gz"))
+                worker.record_files = sorted(records.folder.glob(f"{records.batch_id}_{worker.plan.seed}_*.jsonl.gz"))
         return BatchResult(config, workers, wall_s)
     finally:
         for process in started:

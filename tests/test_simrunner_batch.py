@@ -1,5 +1,6 @@
 """Batches run against `tests/stub_java.py`, so nothing here needs Java or a built Forge."""
 
+import gzip
 import hashlib
 import json
 import os
@@ -857,7 +858,40 @@ def test_each_game_leaves_a_file_and_the_report_counts_them(config, records, tmp
 
 
 def test_the_report_says_nothing_about_records_when_they_are_off(config, records):
-    assert "game records" not in format_summary(run_batch(config()))
+    summary = format_summary(run_batch(config()))
+    assert "game records" not in summary
+    assert "record digest" not in summary
+
+
+def test_the_record_digest_replays_under_another_batch_id(config, records, tmp_path):
+    first = run_batch(config(records=True, run_dir=tmp_path / "one"))
+    second = run_batch(config(records=True, run_dir=tmp_path / "two"))
+    assert first.record_digest == second.record_digest
+    assert f"record digest                     {first.record_digest}" in format_summary(first)
+
+
+def test_the_record_digest_sees_what_the_result_digest_cant(config, records, tmp_path):
+    first = run_batch(config(records=True, run_dir=tmp_path / "one"))
+    second = run_batch(config(records=True, run_dir=tmp_path / "two"))
+    path = second.workers[0].record_files[0]
+    lines = gzip.decompress(path.read_bytes()).decode("utf-8").splitlines()
+    path.write_bytes(gzip.compress("\n".join(lines[:-1]).encode("utf-8")))
+    assert first.digest == second.digest
+    assert first.record_digest != second.record_digest
+
+
+def test_an_unreadable_game_file_changes_the_record_digest_and_breaks_nothing(config, records, tmp_path):
+    batch = run_batch(config(records=True))
+    before = batch.record_digest
+    batch.workers[0].record_files[0].write_bytes(b"cut off")
+    assert batch.record_digest != before
+
+
+def test_a_batch_with_no_files_has_no_record_digest(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_game_files")
+    batch = run_batch(config(games=2, records=True))
+    assert batch.record_digest is None
+    assert "record digest                     no files" in format_summary(batch)
 
 
 def test_records_can_go_to_another_folder(config, records, tmp_path):

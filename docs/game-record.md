@@ -248,6 +248,10 @@ Exactly one of the two is set.
 
 These are Forge's `CardStateName` values minus `FaceDown`. A value Forge adds later fails the loader until this list and the version change.
 
+## Replay digest
+
+`gamerecord.game_digest(path)` returns a file's game number and a SHA-256 of the game: its metadata less `batch_id` and `tripwire`, then every snapshot line as written. Those two fields are left out because they differ between two runs of the same games. The batch id is the run folder's name, and the tripwire only watched. `simrunner` hashes these per batch into the report's `record digest`, which is what a claim that two runs played the same games should rest on.
+
 ## What the loader checks
 
 `gamerecord.load_game(path)` returns a `GameRecord` with `metadata`, `snapshots` and `game_id`, or raises `GameRecordError`. Beyond the fields and types above, it enforces these rules:

@@ -85,7 +85,7 @@ class WorkerResult:
     stderr_traces: int = 0
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
-    records_written: int = 0  # game files with this worker's seed
+    record_files: list[Path] = field(default_factory=list)  # game files with this worker's seed
 
 
 def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:

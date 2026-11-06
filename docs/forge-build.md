@@ -162,7 +162,8 @@ Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Defa
 - **Game records written** counts this batch's files against the games finished, when records are on. A game that threw has no file, and neither does one the clock stopped before its first priority pass.
 - **Tripwire hits per game** gives the max and mean over the games that reported, when records are on. **Tripwire clean** is yes only when every finished game printed a count and every count is 0. A game that printed nothing means the jar has no tripwire. It fails the batch, and a jar like that never reads as a clean zero. With `--no-tripwire` the row says `off`.
 - **The signature table** after the worker table lists the top 20 signatures by hits across the batch, with the games each one showed up in.
-- **Result digest** is a hash of every game's seat, turn, draw cause and, when Forge prints it, random draws. Two runs with the same digest played the same games. Winner and turn alone aren't enough: the two runs that opened issue #50 agreed on all ten winners.
+- **Result digest** is a hash of every game's seat, turn, draw cause and, when Forge prints it, random draws. It only says the runs ended alike. Winner and turn alone aren't enough: the two runs that opened issue #50 agreed on all ten winners. Random draws catch most of the rest, but an AI that chooses differently without drawing leaves them unchanged.
+- **Record digest** is the replay check, when records are on. It hashes every snapshot of every game file, plus the metadata less `batch_id` and `tripwire`, which differ between two runs of the same games. The same digest means the same games card by card. Record ids come from the seed, so they replay too. Digests in this file from before it existed are result digests.
 
 The output can't separate everything:
 

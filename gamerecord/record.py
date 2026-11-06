@@ -8,6 +8,7 @@ a long game holds hundreds of thousands of cards and the converter wants dicts a
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import re
 import zlib
@@ -23,6 +24,9 @@ STACK_KINDS = ("spell", "ability")
 # `CardStateName` in Forge, minus FaceDown, which `face_down` says instead.
 FACES = ("Original", "Flipped", "Backside", "Meld", "LeftSplit", "RightSplit", "Secondary", "PreparedSpell",
          "EmptyRoom", "SpecializeW", "SpecializeU", "SpecializeB", "SpecializeR", "SpecializeG")
+
+# Metadata two runs of the same games can differ on: the run folder's name, and what only watched the play.
+NOT_PLAY = ("batch_id", "tripwire")
 
 # Java's `int` and `long`. Parquet columns use the same widths.
 INT_MAX = 2**31 - 1
@@ -308,6 +312,26 @@ def _read(lines: Iterable[str]) -> GameRecord:
     if not snapshots:
         raise GameRecordError("the file has no snapshots")
     return GameRecord(metadata, snapshots)
+
+
+def game_digest(path: Path) -> tuple[int, str]:
+    """Return a file's game number and a hash of the game in it, leaving out `NOT_PLAY`.
+
+    Every snapshot goes in, so two files with one hash hold the same game, card by card. The
+    file is hashed as written and not validated, because a replay check shouldn't need a clean bill first.
+    """
+    digest = hashlib.sha256()
+    try:
+        with gzip.open(path, "rb") as lines:
+            metadata = json.loads(next(lines))
+            number = metadata["game_number"]
+            played = {name: value for name, value in metadata.items() if name not in NOT_PLAY}
+            digest.update(json.dumps(played, sort_keys=True).encode("utf-8"))
+            for line in lines:
+                digest.update(line)
+    except (OSError, EOFError, zlib.error, ValueError, KeyError, TypeError, StopIteration) as e:
+        raise GameRecordError(f"can't read the file: {e!r}") from e
+    return number, digest.hexdigest()
 
 
 def load_game(path: Path) -> GameRecord:
