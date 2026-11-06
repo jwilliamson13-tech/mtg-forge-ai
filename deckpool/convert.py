@@ -40,28 +40,34 @@ def normalize(name: str) -> str:
 
 
 class NameSet:
-    """Known card names, looked up by normalized key. The value is the name as Forge spells it."""
+    """Known card names, looked up by normalized key. The value is the name as Forge spells it.
 
-    def __init__(self, names):
+    `split_cards` lists the `A // B` names of Forge's split cards. Forge reads `Fire // Ice` as one
+    card but doesn't read `Delver of Secrets // Insectile Aberration`, which it wants as the front
+    face alone, so a two-name entry resolves to the joined name only for a known split card. With
+    `split_cards` left as None the layouts are unknown, and any two known halves are joined.
+    """
+
+    def __init__(self, names, split_cards=None):
         self._by_key: dict[str, str] = {}
         for name in names:
             self._by_key.setdefault(normalize(name), name)
+        self._splits = None if split_cards is None else {normalize(n) for n in split_cards}
 
     def __len__(self) -> int:
         return len(self._by_key)
 
     def resolve(self, name: str) -> str | None:
-        """The known spelling of `name`, or None. A `A // B` name resolves when both halves do."""
-        hit = self._by_key.get(normalize(name))
-        if hit is not None:
-            return hit
+        """The known spelling of `name`, or None. An `A // B` name needs both halves to be known."""
         if SPLIT_SEP not in name and " / " in name:  # MTGTop8 writes `Wear / Tear`
             name = name.replace(" / ", SPLIT_SEP)
-        if SPLIT_SEP in name:
-            halves = [self._by_key.get(normalize(h)) for h in name.split(SPLIT_SEP)]
-            if all(halves):
-                return SPLIT_SEP.join(halves)
-        return None
+        if SPLIT_SEP not in name:
+            return self._by_key.get(normalize(name))
+        halves = [self._by_key.get(normalize(h)) for h in name.split(SPLIT_SEP)]
+        if not all(halves):
+            return None
+        joined = SPLIT_SEP.join(halves)
+        return joined if self._splits is None or normalize(joined) in self._splits else halves[0]
 
 
 @dataclass

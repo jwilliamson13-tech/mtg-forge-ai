@@ -14,7 +14,7 @@ from pathlib import Path
 
 from deckpool import manifest as mf
 from deckpool.convert import DeckError, convert
-from deckpool.names import load_name_set
+from deckpool.names import DEFAULT_CARDSFOLDER, load_name_set
 
 DEFAULT_CARDS = mf.DEFAULT_ROOT / "data" / "cards.jsonl"
 
@@ -47,18 +47,21 @@ def main(argv: list[str] | None = None) -> int:
     add.add_argument("--split", required=True, choices=mf.SPLITS)
     add.add_argument("--source", default="user")
     add.add_argument("--cards", default=str(DEFAULT_CARDS), help="sweep output with the known card names")
+    add.add_argument("--cardsfolder", default=str(DEFAULT_CARDSFOLDER), help="Forge cardsfolder, to tell split cards from double-faced ones")
     pull = commands.add_parser("pull", help="one-off pull of the Legacy pool from mtgtop8.com")
     pull.add_argument("--again", action="store_true", help="run even though decks/pull.json says the pool was pulled")
     pull.add_argument("--cache", default=str(mf.DEFAULT_ROOT / "runs" / "deckpool-cache"),
                       help="where fetched pages are saved, so a resume never refetches")
     pull.add_argument("--cards", default=str(DEFAULT_CARDS), help="sweep output with the known card names")
+    pull.add_argument("--cardsfolder", default=str(DEFAULT_CARDSFOLDER), help="Forge cardsfolder, to tell split cards from double-faced ones")
     args = parser.parse_args(argv)
     if not Path(args.cards).is_file():
         parser.error(f"no card names at {args.cards}; run the sweep first")
     if args.command == "pull":
         from deckpool import pull as pl
         try:
-            record = pl.run_pull(mf.DEFAULT_ROOT, Path(args.cache), load_name_set(Path(args.cards)), again=args.again)
+            names = load_name_set(Path(args.cards), Path(args.cardsfolder))
+            record = pl.run_pull(mf.DEFAULT_ROOT, Path(args.cache), names, again=args.again)
         except (pl.AlreadyPulled, pl.PullStopped) as e:
             print(f"pull stopped: {e}", file=sys.stderr)
             return 1
@@ -66,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         deck = add_deck(Path(args.list), args.id, args.archetype, args.split, args.source,
-                        load_name_set(Path(args.cards)))
+                        load_name_set(Path(args.cards), Path(args.cardsfolder)))
     except (DeckError, mf.ManifestError) as e:
         print(f"not added: {e}", file=sys.stderr)
         return 1

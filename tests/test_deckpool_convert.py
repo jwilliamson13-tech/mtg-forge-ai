@@ -65,3 +65,9 @@ def test_an_unreadable_line_or_empty_list_fails():
         parse_decklist("Lightning Bolt\n")
     with pytest.raises(DeckError):
         parse_decklist("\n\n")
+
+
+def test_only_known_split_cards_keep_both_names_and_a_double_faced_card_takes_its_front():
+    names = NameSet(["Fire", "Ice", "Delver of Secrets", "Insectile Aberration"], split_cards=["Fire // Ice"])
+    text = convert("1 Fire / Ice\n1 Delver of Secrets // Insectile Aberration\n", names, "x")
+    assert "1 Fire // Ice\n" in text and "1 Delver of Secrets\n" in text
