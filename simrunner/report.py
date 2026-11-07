@@ -13,7 +13,7 @@ TOP_SIGNATURES = 20
 TOP_MISMATCHES = 20
 
 
-def _table(rows: list[tuple[str, ...]]) -> str:
+def table(rows: list[tuple[str, ...]]) -> str:
     widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
     return "\n".join("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip()
                      for row in rows) + "\n"
@@ -33,7 +33,7 @@ def _status(batch: BatchResult) -> str:
     return "incomplete, stopped at the hard stop" if batch.stopped else "incomplete"
 
 
-def _tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
+def tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
     if not batch.tripwire_on:
         return [("tripwire", "off")]
     hits = batch.tripwire_hits
@@ -87,7 +87,7 @@ def format_summary(batch: BatchResult) -> str:
         rows.append(("game records written", f"{batch.records_written} of {batch.finished} games"))
         rows.append(_records_row(batch))
         rows.append(("record digest", batch.record_digest or "no files"))
-    rows += _tripwire_rows(batch)
+    rows += tripwire_rows(batch)
     rows += [
         ("wall time", f"{batch.wall_s:.1f} s"),
         ("games per hour", f"{batch.games_per_hour:.0f}"),
@@ -106,10 +106,10 @@ def format_summary(batch: BatchResult) -> str:
         ("stack traces on stderr", str(sum(worker.stderr_traces for worker in batch.workers))),
         ("result digest", batch.digest),
     ]
-    return _table(rows)
+    return table(rows)
 
 
-def _worker_note(batch: BatchResult, worker: WorkerResult) -> str:
+def worker_note(batch: BatchResult, worker: WorkerResult) -> str:
     notes = []
     if worker.timed_out:
         notes.append("killed at deadline")
@@ -137,9 +137,9 @@ def format_workers(batch: BatchResult) -> str:
             str(worker.plan.index), str(worker.plan.seed), str(worker.plan.games), str(len(worker.games)),
             "-" if worker.ready_s is None else f"{worker.ready_s:.1f}",
             "-" if worker.last_result_s is None else f"{worker.last_result_s:.1f}",
-            str(worker.exit_code), _worker_note(batch, worker),
+            str(worker.exit_code), worker_note(batch, worker),
         ))
-    return _table(rows)
+    return table(rows)
 
 
 def format_tripwire(batch: BatchResult) -> str:
@@ -150,7 +150,7 @@ def format_tripwire(batch: BatchResult) -> str:
     rows = [("hits", "games", "signature")]
     rows += [(str(hits), str(games), signature) for signature, hits, games in signatures[:TOP_SIGNATURES]]
     more = len(signatures) - TOP_SIGNATURES
-    return "\n" + _table(rows) + (f"and {more} more\n" if more > 0 else "")
+    return "\n" + table(rows) + (f"and {more} more\n" if more > 0 else "")
 
 
 def format_mismatches(batch: BatchResult) -> str:

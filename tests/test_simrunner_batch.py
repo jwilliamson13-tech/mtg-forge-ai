@@ -28,18 +28,6 @@ REPO = Path(__file__).parents[1]
 
 
 @pytest.fixture
-def forge(tmp_path):
-    """A folder laid out like a built Forge clone."""
-    root = tmp_path / "forge"
-    (root / "forge-gui" / "res").mkdir(parents=True)
-    (root / "forge-gui" / "res" / "marker.txt").write_text("real res", encoding="utf-8")
-    target = root / "forge-gui-desktop" / "target"
-    target.mkdir(parents=True)
-    (target / "forge-gui-desktop-2.0.16-SNAPSHOT-jar-with-dependencies.jar").write_bytes(b"")
-    return root
-
-
-@pytest.fixture
 def decks(tmp_path):
     folder = tmp_path / "decks"
     folder.mkdir()

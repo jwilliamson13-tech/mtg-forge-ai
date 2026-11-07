@@ -202,6 +202,54 @@ What the stop doesn't cover:
 - A machine asleep at the stop kills its workers when it wakes, and not before.
 - Each JVM keeps one `Match` for its whole run, and `Match` keeps every game's outcome, so heap use may grow through a night. No run has gone longer than the numbers below show.
 
+### Pool batches
+
+`pool` is `nightly` over the whole deck pool. It draws deck pairs from the manifest and plays them in chunks, one pair per JVM. This is the command that makes gen-0 training data.
+
+```powershell
+python -m simrunner pool --games 10000 --seed 20261107 --workers 4 --start 23:00 --stop 05:00 --run-dir runs/gen0-pool
+```
+
+It takes every `nightly` option except the two decks, and `--start` and `--stop` work the same way. Two defaults differ: both seats are `heuristic`, and records are on. The tripwire and honest play are on as usual, and `--no-tripwire` and `--no-honest` turn them off. `--manifest` picks another manifest, and its deck files resolve as they do for `batch`.
+
+Always pass `--run-dir`. The default name has the time in it, so a restart couldn't find the folder. The folder name is the batch id of every game in the run, which makes the whole run one batch in Parquet.
+
+**The plan.** `--held-out-share`, 0.15 by default, is the share of games played between held-out decks. The rest are train deck against train deck. A train deck never meets a held-out deck, and no deck meets itself. `setmodel` sends any game with a held-out deck to `held_out_decks`, so these games can't reach training. It still keeps back 10% of the train deck games as `held_out_games`, by a hash of the game id.
+
+Each split seats its decks around a random ring, and each deck plays the next one. A whole ring gives every deck one chunk in each seat, so games and seats balance together. The chunk count moves to a whole number of rings, which is why `--chunk-games` is approximate. On the 2026-11-06 pool, the command above plans 195 chunks of 51 or 52 games. Each train deck gets 204 or 205 games, each held-out deck 103 or 104, and no deck's two seats differ by more than 1 game.
+
+Train and held-out decks don't get the same number of games. There are 29 held-out decks of 112, and 15% of the games, so a held-out deck plays half as many. A share of 0.26 would even them out.
+
+The balance needs at least `--chunk-games` times the deck count in each split. Below that, not every deck can have a chunk in each seat. The 40-game proof below reached 10 of the 112 decks.
+
+The two splits interleave in the playing order, so a stop leaves games in both. The same seed and manifest give the same plan. A chunk's seed comes from its place in the plan, so the worker count doesn't change the games.
+
+**Stopping and restarting.** The stop works as in `nightly`: it kills what is playing, keeps every finished game, marks `batch.json` incomplete, and the command exits 1. Run the same command again to continue. It reads `plan.json` from the run folder and refuses to go on if the seed, games, manifest split or any other setting that changes the games differs. Workers and the window can change.
+
+A restart skips each chunk with a `finished` result. It plays every other chunk from its first game, with the same seed, so a replayed game overwrites its own file and nothing counts twice. A chunk the stop cut off costs at most one chunk of replay per worker. Ctrl-C starts nothing new and still writes the report.
+
+**Failed chunks.** A chunk fails when `batch` would call it not clean, such as a deck that won't load or a dead JVM. The run goes on, the report lists the chunk and why, the command exits 1, and a restart tries the chunk again. A bad `--forge` path or a missing deck file fails at the start, before anything launches.
+
+**The report.** `report.txt` covers every start of the run folder. Games per deck counts a deck that played nothing as 0, and has rows for all decks and for each split. Train and held-out deck games go by the deck's split in the manifest, so the train figure still includes the games `setmodel` keeps back. Tripwire clean means the same as for `batch`: every finished game printed a count, and every count is 0. Wall time and games per hour add up all the starts, and include the replays.
+
+```
+runs\<batch>\
+    plan.json                 settings and every chunk, written once
+    batch.json                as for a batch, plus chunk counts and wall_s
+    report.txt                the one report
+    games\                    every chunk's game records
+    chunks\chunk-NNNN\        one plain batch folder, plus result.json
+```
+
+Checked on 2026-11-06 with 2 workers: 40 games, `--chunk-games 8`, 5 chunks, one of them held out. A stop at 100 seconds left 2 chunks finished, 2 cut off and 1 not started. The restart skipped the 2, left their logs untouched and played the other 3. All 40 games were wins, every tripwire count was 0, and there were no stack traces. `gamerecord convert`, `setmodel join` and a 1-epoch `setmodel train` all ran on the output. The Parquet held 40 game ids with no mixed pair: 29 `train`, 5 `held_out_games` and 6 `held_out_decks`.
+
+What that run doesn't cover:
+
+- No chunk failed on real Forge. The failure path has only run against the stub.
+- The stop cut both chunks off before their first game, so a stop that keeps part of a chunk has only run against the stub.
+- Ctrl-C has only run as a simulated interrupt in the runner. I expect the JVMs in the same console to take it too, and haven't seen that.
+- 4 workers and 50-game chunks are untested.
+
 ### Batch output folder
 
 Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.
