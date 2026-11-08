@@ -22,8 +22,9 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, GameResult, count_stack_traces,
-                              find_fatal, parse_games, printed_evaluators, printed_sim_modes)
+from simrunner.generations import ONNX, Generation
+from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, GameResult, count_stack_traces, find_fatal, onnx_summary,
+                              parse_games, printed_evaluators, printed_onnx_seats, printed_sim_modes)
 
 JVM_PROPERTIES = ("-Dfile.encoding=UTF-8", "-Dsentry.enabled=false")
 PROFILE_FILE = "forge.profile.properties"
@@ -31,8 +32,12 @@ DEFAULT_AI_PROFILE = "Default"
 SIM_MODES = ("heuristic", "hybrid", "full")
 DEFAULT_SIM_MODE = "heuristic"
 # What the search scores states with, per seat: Forge's own evaluator, noise, or Forge's through the seam (#23).
+# These are the names `-eval` takes. A model generation is `onnx`, with the seat's `generation` saying which.
 EVALUATORS = ("forge", "random", "passthrough")
 DEFAULT_EVALUATOR = "forge"
+# Forge's ONNX evaluator reads these JVM properties (#35). See `evaluator_wiring`.
+ONNX_BUNDLE_PROPERTY = "forge.onnx.bundle"
+ONNX_SEATS_PROPERTY = "forge.onnx.seats"
 DECK_NAMES = ("seat1.dck", "seat2.dck")
 # Search steps per AI decision. See "Full-sim replay" in docs/forge-build.md for how this was chosen.
 DEFAULT_SEARCH_BUDGET = 100
@@ -54,6 +59,14 @@ class Seat:
     ai_profile: str | None = None
     sim_mode: str | None = None
     evaluator: str | None = None  # None leaves `-eval` to the other seat, or off the command
+    generation: Generation | None = None  # the bundle an `onnx` seat plays
+
+    @property
+    def evaluator_label(self) -> str | None:
+        """The evaluator as a person names it: `onnx:gen1` for a generation."""
+        if self.evaluator == ONNX and self.generation:
+            return self.generation.label
+        return self.evaluator
 
 
 @dataclass(frozen=True)
@@ -96,6 +109,8 @@ class WorkerResult:
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
     evaluators: tuple[str, ...] = ()  # what the header says each seat's search scores with
+    onnx_seats: tuple[tuple[int, str], ...] = ()  # (seat, bundle) for each seat the ONNX evaluator says it took
+    onnx_summary: str | None = None  # the ONNX evaluator's line at exit: calls and time per call
     records: list[GameFile] = field(default_factory=list)  # game files with this worker's seed
 
     @property
@@ -119,12 +134,58 @@ def seat_searches(seat: Seat) -> bool:
     return (seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE
 
 
+@dataclass(frozen=True)
+class EvaluatorWiring:
+    """How a batch tells Forge what each seat's search scores with."""
+
+    jvm_properties: tuple[str, ...] = ()  # before `-jar`
+    eval_values: tuple[str, ...] = ()  # the `-eval` values; empty leaves the flag out
+    onnx_seats: tuple[tuple[int, str], ...] = ()  # (seat, bundle) that Forge should report taking the model
+
+
+def onnx_problem(seats: tuple[Seat, Seat]) -> str | None:
+    """Why these seats can't be wired to Forge as it stands, or None."""
+    onnx = [(number, seat) for number, seat in enumerate(seats, 1) if seat.evaluator == ONNX]
+    for number, seat in onnx:
+        if seat.generation is None:
+            return f"seat {number} asks for the ONNX evaluator with no generation"
+    if len({seat.generation.bundle for _, seat in onnx}) > 1:
+        return ("both seats name a generation, and they differ: Forge loads one bundle per JVM, from "
+                f"-D{ONNX_BUNDLE_PROPERTY}, so two generations can't meet until it takes a bundle per seat")
+    others = [seat.evaluator for seat in seats if seat.evaluator not in (None, DEFAULT_EVALUATOR, ONNX)]
+    if onnx and others:
+        return (f"a generation can't sit across from the {others[0]} evaluator yet: no Forge build has both "
+                "the ONNX properties and -eval")
+    return None
+
+
+def evaluator_wiring(seats: tuple[Seat, Seat]) -> EvaluatorWiring:
+    """The Forge arguments that put each seat's evaluator in place. `onnx_problem` has to pass first.
+
+    Forge's `-eval` (#23) names `forge`, `random` or `passthrough` per seat. The ONNX evaluator (#35)
+    isn't one of its names yet: a JVM property gives the bundle and another the seats that use it.
+    So a seat with a generation goes in `-D` properties, and `-eval` stays off, because the Forge
+    build with the ONNX evaluator doesn't know it. The other seat then plays Forge's evaluator.
+
+    This is the one place that knows that. Once `Evaluators` in the fork takes `onnx:DIR` (a bundle
+    per seat, cached by folder, in place of `OnnxSeats`' one bundle per JVM), an ONNX seat becomes
+    `-eval onnx:<bundle>` here, the properties go, and `onnx_problem`'s two refusals go with them.
+    """
+    onnx = tuple((number, str(seat.generation.bundle)) for number, seat in enumerate(seats, 1)
+                 if seat.evaluator == ONNX and seat.generation)
+    if onnx:
+        properties = (f"-D{ONNX_BUNDLE_PROPERTY}={onnx[0][1]}",
+                      f"-D{ONNX_SEATS_PROPERTY}={','.join(str(number) for number, _ in onnx)}")
+        return EvaluatorWiring(properties, (), onnx)
+    if not any(seat.evaluator for seat in seats):
+        return EvaluatorWiring()
+    # `-eval` fills seats in order, so name both.
+    return EvaluatorWiring((), tuple(seat.evaluator or DEFAULT_EVALUATOR for seat in seats))
+
+
 def requested_evaluators(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
     """The `-eval` values for these seats. Empty means leave the flag out."""
-    if not any(seat.evaluator for seat in seats):
-        return ()
-    # `-eval` fills seats in order, so name both.
-    return tuple(seat.evaluator or DEFAULT_EVALUATOR for seat in seats)
+    return evaluator_wiring(seats).eval_values
 
 
 def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> int:
@@ -282,6 +343,8 @@ def run_worker(plan: WorkerPlan, command: list[str], folder: Path, log_stem: Pat
     result.exit_code = process.returncode
     result.profile_used = profile_was_used(folder)
     result.stderr_traces = count_stack_traces(line for _, line in err_lines)
+    result.onnx_seats = printed_onnx_seats(line for _, line in err_lines)
+    result.onnx_summary = onnx_summary(line for _, line in err_lines)
     _read_stdout(result, out_lines)
     return result
 

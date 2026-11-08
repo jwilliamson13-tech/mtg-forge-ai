@@ -80,3 +80,37 @@ def games_needed(rate: float, half_width: float, confidence: float = DEFAULT_CON
         else:
             low = middle
     return high
+
+
+@dataclass(frozen=True)
+class Difference:
+    """One rate minus another, with its interval. Signed: below 0 means the first rate is lower."""
+
+    estimate: float
+    low: float
+    high: float
+    confidence: float = DEFAULT_CONFIDENCE
+
+    @property
+    def half_width(self) -> float:
+        return (self.high - self.low) / 2
+
+    @property
+    def excludes_zero(self) -> bool:
+        return self.low > 0 or self.high < 0
+
+
+def newcombe(first: Interval, second: Interval) -> Difference:
+    """`first.rate - second.rate` with Newcombe's hybrid score interval.
+
+    Method 10 of Newcombe, "Interval estimation for the difference between independent proportions:
+    comparison of eleven methods", Statistics in Medicine 17 (1998) 873-890. Each side of the
+    difference's interval combines the two Wilson intervals' reaches on that side, in quadrature.
+    It takes the two samples as independent.
+    """
+    if first.confidence != second.confidence:
+        raise ValueError("the two intervals need the same confidence level")
+    estimate = first.rate - second.rate
+    low = estimate - sqrt((first.rate - first.low) ** 2 + (second.high - second.rate) ** 2)
+    high = estimate + sqrt((first.high - first.rate) ** 2 + (second.rate - second.low) ** 2)
+    return Difference(estimate, max(-1.0, low), min(1.0, high), first.confidence)

@@ -155,6 +155,7 @@ class Corpus:
     labels: np.ndarray  # [R]
     weights: np.ndarray  # [R], 1 over the game's row count
     game: np.ndarray  # [R], index into game_ids
+    snapshot_index: np.ndarray  # [R], the row's line in its game file, for finding a row. Never a model input.
     split: np.ndarray  # [R], index into SPLITS
     own_deck: np.ndarray  # [R], index into decks
     game_ids: list[str]
@@ -526,7 +527,7 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
     return Corpus(
         scoreboard=scoreboard, labels=labels,
         weights=1.0 / rows_per_game[game],
-        game=game, split=split, own_deck=np.searchsorted(own_codes, own).astype(np.int32),
+        game=game, snapshot_index=(keys[keep] % stride).astype(np.int64), split=split, own_deck=np.searchsorted(own_codes, own).astype(np.int32),
         game_ids=game_ids, decks=[all_decks[code] for code in own_codes.tolist()],
         batch_ids=sorted(batch_names[code] for code in train_batches.tolist()),
         held_out_decks=sorted(deck for deck, where in manifest.items() if where == "held_out"),

@@ -17,7 +17,8 @@ from gamerecord import GameRecordError, game_digest, read_metadata
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
-from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_SIM_MODE, JVM_PROPERTIES, GameFile, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
+from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_SIM_MODE, JVM_PROPERTIES, GameFile, RecordPlan, Seat,
+                              WorkerPlan, WorkerResult, any_seat_searches, evaluator_wiring, kill_tree, onnx_problem,
                               prepare_folder, remove_folder, requested_evaluators, requested_sim_modes,
                               resolve_search_budget, run_worker, seat_searches, sim_args)
 
@@ -262,6 +263,8 @@ class BatchResult:
             ignored.append("a game with no tripwire count")
         if worker.ready_s is not None and worker.evaluators != requested_evaluators(self.config.seats):
             ignored.append("Forge did not name the evaluators asked for")
+        if worker.ready_s is not None and worker.onnx_seats != evaluator_wiring(self.config.seats).onnx_seats:
+            ignored.append("Forge did not put the ONNX evaluator on the seats asked for")
         return ignored
 
     def records_agree(self, worker: WorkerResult) -> bool:
@@ -370,8 +373,10 @@ def check_setup(config: BatchConfig) -> None:
     for number, seat in enumerate(config.seats, 1):
         if seat.evaluator not in (None, DEFAULT_EVALUATOR) and not seat_searches(seat):
             # A heuristic seat never scores a state, so it would play stock under another name.
-            raise SetupError(f"the {seat.evaluator} evaluator needs a seat that searches, and seat {number} "
+            raise SetupError(f"the {seat.evaluator_label} evaluator needs a seat that searches, and seat {number} "
                              f"is {seat.sim_mode or DEFAULT_SIM_MODE}")
+    if problem := onnx_problem(config.seats):
+        raise SetupError(problem)
     if config.records and config.records.turn_cap is not None and config.records.turn_cap < 1:
         raise SetupError("a turn cap has to be at least 1")
     if config.records and not BATCH_ID.fullmatch(config.batch_id):
@@ -441,7 +446,8 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
             folder = config.run_dir / f"worker-{plan.index:02d}"
             folders.append(folder)
             deck_dir = prepare_folder(folder, forge_gui, config.seats)
-            command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES, "-jar", str(jar),
+            command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES,
+                       *evaluator_wiring(config.seats).jvm_properties, "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
                                  resolve_search_budget(config.seats, config.search_budget), records, config.batch_id,
                                  config.tripwire, config.prune)]

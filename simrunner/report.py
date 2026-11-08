@@ -20,7 +20,7 @@ def table(rows: list[tuple[str, ...]]) -> str:
 
 
 def describe_seat(seat: Seat) -> str:
-    evaluator = f", eval {seat.evaluator}" if seat.evaluator else ""
+    evaluator = f", eval {seat.evaluator_label}" if seat.evaluator else ""
     return f"{seat.deck.stem} (AI {seat.ai_profile or 'default'}, sim {seat.sim_mode or DEFAULT_SIM_MODE}{evaluator})"
 
 
@@ -53,6 +53,18 @@ def tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
     rows = [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
     if copies := batch.tripwire_copies:
         rows.append(("search copies checked", f"{sum(copies)} in {len(copies)} games"))
+    return rows
+
+
+def onnx_rows(batch: BatchResult) -> list[tuple[str, str]]:
+    """Which bundle the ONNX evaluator played, and what each worker's evaluator said at exit."""
+    generations = {seat.generation for seat in batch.config.seats if seat.generation}
+    if not generations:
+        return []
+    rows = [("generation", f"{gen.label}, bundle {gen.bundle}, generation {gen.number}, model {gen.model_digest}")
+            for gen in sorted(generations, key=lambda gen: gen.name)]
+    rows += [(f"ONNX worker {worker.plan.index}", worker.onnx_summary or "no summary line")
+             for worker in batch.workers]
     return rows
 
 
@@ -92,6 +104,7 @@ def format_summary(batch: BatchResult) -> str:
         rows.append(_records_row(batch))
         rows.append(("record digest", batch.record_digest or "no files"))
     rows += tripwire_rows(batch)
+    rows += onnx_rows(batch)
     rows += [
         ("wall time", f"{batch.wall_s:.1f} s"),
         ("games per hour", f"{batch.games_per_hour:.0f}"),

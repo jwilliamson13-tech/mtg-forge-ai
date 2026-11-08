@@ -140,6 +140,9 @@ def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     if any(evaluators):
         # only when set, so that a plan written before evaluators existed still matches on a restart
         fields["evaluators"] = evaluators
+    generations = [seat.generation.fields() if seat.generation else None for seat in batch.seats]
+    if any(generations):
+        fields["generations"] = generations
     return fields
 
 

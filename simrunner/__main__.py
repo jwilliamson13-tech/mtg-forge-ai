@@ -2,7 +2,8 @@
 
 `nightly` takes the same arguments plus `--start` and `--stop`. `pool` takes those without
 the two decks, and draws its deck pairs from the manifest. `matchup` takes the two decks and
-plays seat-swapped rounds until the win rate's interval is narrow enough.
+plays seat-swapped rounds until the win rate's interval is narrow enough. `cardswap` runs two
+matchups, deck A and deck A with `--swap OLD=NEW` made, against the same opponent.
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 
 from simrunner.batch import BatchConfig, SetupError, run_batch
+from simrunner.cardswap import CardSwapConfig, Swap, format_cardswap_report, parse_swap, run_cardswap
+from simrunner.generations import DEFAULT_MODELS, ONNX, PREFIX, Generation, GenerationError, is_onnx, resolve
 from simrunner.matchup import (DEFAULT_MAX_GAMES, DEFAULT_ROUND_GAMES, DEFAULT_WIDTH, MatchupConfig,
                                format_matchup_report, run_matchup)
 from simrunner.pool import DEFAULT_CHUNK_GAMES, DEFAULT_HELD_OUT_SHARE, PoolConfig, format_pool_report, run_pool
@@ -27,6 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FORGE = REPO_ROOT.parent / "forge"
 DEFAULT_RUNS = REPO_ROOT / "runs"
 DEFAULT_MANIFEST = REPO_ROOT / "decks" / "manifest.json"
+DEFAULT_CARDS = REPO_ROOT / "data" / "cards.jsonl"
 
 
 def _cores_minus(reserve: int) -> int:
@@ -54,6 +58,27 @@ def _deck_path(arg: str, manifest_path: Path | None, parser: argparse.ArgumentPa
         parser.error(f"not a file: {arg}, and {e}")
 
 
+def _evaluator_value(text: str) -> str:
+    if text in EVALUATORS or (is_onnx(text) and len(text) > len(PREFIX)):
+        return text
+    raise argparse.ArgumentTypeError(f"invalid choice: {text!r} (choose from {', '.join(EVALUATORS)} or "
+                                     f"{PREFIX}GENERATION)")
+
+
+def _seat_evaluators(args: argparse.Namespace) -> list[tuple[str | None, Generation | None]]:
+    """Each seat's evaluator, with the generation an `onnx:NAME` names resolved to its bundle."""
+    seats = []
+    for value in args.evaluator or (None, None):
+        if value and is_onnx(value):
+            try:
+                seats.append((ONNX, resolve(value.removeprefix(PREFIX), Path(args.models))))
+            except GenerationError as e:
+                args.parser.error(str(e))
+        else:
+            seats.append((value, None))
+    return seats
+
+
 def _batch(args: argparse.Namespace) -> int:
     return _run(args, args.workers)
 
@@ -77,7 +102,7 @@ def _nightly(args: argparse.Namespace) -> int:
 def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, window: Window | None) -> BatchConfig:
     profiles = args.ai or (None, None)
     modes = args.sim_mode or (None, None)
-    evaluators = args.evaluator or (None, None)
+    evaluators = _seat_evaluators(args)
     run_dir = args.run_dir or DEFAULT_RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-seed{args.seed}"
     records = None
     if args.records or args.records_dir is not None:
@@ -85,8 +110,8 @@ def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, wi
     elif args.turn_cap is not None or args.no_honest:
         args.parser.error("--turn-cap and --no-honest need records")
     return BatchConfig(
-        seats=(Seat(decks[0], profiles[0], modes[0], evaluators[0]),
-               Seat(decks[1], profiles[1], modes[1], evaluators[1])),
+        seats=(Seat(decks[0], profiles[0], modes[0], *evaluators[0]),
+               Seat(decks[1], profiles[1], modes[1], *evaluators[1])),
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
@@ -156,6 +181,58 @@ def _matchup(args: argparse.Namespace) -> int:
     return 0
 
 
+def _swap_value(text: str) -> Swap:
+    try:
+        return parse_swap(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
+def _checked_swap(args: argparse.Namespace) -> Swap:
+    """The swap with the new card spelled as Forge spells it, when the card list is at hand."""
+    swap = args.swap
+    cards = Path(args.cards)
+    if not cards.is_file():
+        print(f"no card list at {cards}, so {swap.new!r} is unchecked", file=sys.stderr)
+        return swap
+    from deckpool.names import load_name_set
+    known = load_name_set(cards, cardsfolder=None).resolve(swap.new)
+    if known is None:
+        args.parser.error(f"not a card Forge knows: {swap.new} (checked against {cards})")
+    return Swap(swap.old, known, swap.count)
+
+
+def _cardswap(args: argparse.Namespace) -> int:
+    decks = (_deck_path(args.deck1, args.manifest, args.parser), _deck_path(args.deck2, args.manifest, args.parser))
+    matchup = MatchupConfig(_config(args, decks, args.workers, None), args.width, args.round_games, args.max_games)
+    config = CardSwapConfig(matchup, _checked_swap(args))
+    try:
+        result = run_cardswap(config)
+    except SetupError as e:
+        args.parser.error(str(e))
+    _write_report(config.run_dir, format_cardswap_report(result))
+    if not result.met:
+        print(f"no difference ({result.status}), logs in {config.run_dir}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _add_matchup_arguments(parser: argparse.ArgumentParser) -> None:
+    _add_batch_arguments(parser)
+    parser.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
+                        help="parallel JVMs per batch (default: logical cores minus 2)")
+    parser.add_argument("--width", type=float, default=DEFAULT_WIDTH,
+                        help="stop once the 95%% interval reaches no more than this many points either side of "
+                             f"the rate (default: {DEFAULT_WIDTH:g})")
+    parser.add_argument("--round-games", type=int, default=DEFAULT_ROUND_GAMES,
+                        help="games per round, an even number, half with each deck in seat 1 "
+                             f"(default: {DEFAULT_ROUND_GAMES})")
+    parser.add_argument("--max-games", type=int, default=DEFAULT_MAX_GAMES,
+                        help=f"the game budget; past it the matchup refuses to give a rate (default: {DEFAULT_MAX_GAMES})")
+    # The base batch's game count is unused: each round sets its own.
+    parser.set_defaults(sim_mode=["heuristic", "heuristic"], records=True, games=0)
+
+
 def _add_deck_arguments(batch: argparse.ArgumentParser, first: str = "seat 1", second: str = "seat 2") -> None:
     batch.add_argument("deck1", help=f"path to the .dck file for {first}, or a deck id from the manifest")
     batch.add_argument("deck2", help=f"path to the .dck file for {second}, or a deck id from the manifest")
@@ -183,9 +260,13 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
                        help="AI profile per seat, such as Default Reckless")
     batch.add_argument("--sim-mode", nargs=2, metavar=("SEAT1", "SEAT2"), choices=SIM_MODES,
                        help="simulation mode per seat: heuristic, hybrid or full (default: heuristic)")
-    batch.add_argument("--evaluator", nargs=2, metavar=("SEAT1", "SEAT2"), choices=EVALUATORS,
-                       help="what each seat's search scores states with: forge, random or passthrough (default: "
-                            "forge, with -eval left off the command); any but forge needs hybrid or full")
+    batch.add_argument("--evaluator", nargs=2, metavar=("SEAT1", "SEAT2"), type=_evaluator_value,
+                       help="what each seat's search scores states with: forge, random, passthrough, or "
+                            "onnx:GENERATION for a model generation, a folder under --models or a bundle path "
+                            "(default: forge, with -eval left off the command); any but forge needs hybrid or full")
+    batch.add_argument("--models", default=str(DEFAULT_MODELS),
+                       help="folder of generations, one export bundle per folder, named for its generation "
+                            "(default: models)")
     batch.add_argument("--search-budget", type=int,
                        help="search steps per AI decision, in place of Forge's wall-clock limit (default: "
                             f"{DEFAULT_SEARCH_BUDGET} when a seat searches, otherwise off; 0 turns it off)")
@@ -247,19 +328,21 @@ def build_parser() -> argparse.ArgumentParser:
                                   description="--ai, --sim-mode and --evaluator name deck A's setting first, and "
                                               "each setting moves with its deck when the seats swap.")
     _add_deck_arguments(matchup, "deck A, whose win rate is reported", "deck B")
-    _add_batch_arguments(matchup)
-    matchup.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
-                         help="parallel JVMs per batch (default: logical cores minus 2)")
-    matchup.add_argument("--width", type=float, default=DEFAULT_WIDTH,
-                         help="stop once the 95%% interval reaches no more than this many points either side of "
-                              f"the rate (default: {DEFAULT_WIDTH:g})")
-    matchup.add_argument("--round-games", type=int, default=DEFAULT_ROUND_GAMES,
-                         help="games per round, an even number, half with each deck in seat 1 "
-                              f"(default: {DEFAULT_ROUND_GAMES})")
-    matchup.add_argument("--max-games", type=int, default=DEFAULT_MAX_GAMES,
-                         help=f"the game budget; past it the matchup refuses to give a rate (default: {DEFAULT_MAX_GAMES})")
-    # The base batch's game count is unused: each round sets its own.
-    matchup.set_defaults(handler=_matchup, parser=matchup, sim_mode=["heuristic", "heuristic"], records=True, games=0)
+    _add_matchup_arguments(matchup)
+    matchup.set_defaults(handler=_matchup, parser=matchup)
+
+    cardswap = commands.add_parser("cardswap", help="compare deck A with deck A with one card swapped, as two "
+                                                    "matchups against the same opponent on the same seed",
+                                   description="Each arm is a matchup run to the target width. The report gives "
+                                               "both rates and A' minus A with its interval. --ai, --sim-mode and "
+                                               "--evaluator name deck A's setting first, as in matchup.")
+    _add_deck_arguments(cardswap, "deck A, the original", "the opponent")
+    cardswap.add_argument("--swap", type=_swap_value, required=True, metavar="[N ]OLD=NEW",
+                          help="the main-deck swap that makes deck A': every copy of OLD, or N of them, for NEW")
+    cardswap.add_argument("--cards", default=str(DEFAULT_CARDS),
+                          help="card list from the sweep, to check NEW's spelling (default: data/cards.jsonl)")
+    _add_matchup_arguments(cardswap)
+    cardswap.set_defaults(handler=_cardswap, parser=cardswap)
     return parser
 
 

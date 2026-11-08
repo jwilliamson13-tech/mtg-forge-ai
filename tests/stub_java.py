@@ -20,6 +20,11 @@ gives every game hits, more of them in odd games. The `no_honest_jar` scenario i
 `-honest`, and writes files without saying it played honestly. The `no_eval_jar` scenario
 ignores `-eval`, as a jar from before issue #23 would, and `stale_jar` ignores it too.
 
+`-Dforge.onnx.bundle=DIR` and `-Dforge.onnx.seats=1,2` before `-jar` get the stderr lines Forge's
+ONNX evaluator (#35) writes: one when it loads the bundle, one per seat it takes, and a summary at
+exit. A bundle folder with no contract.json stops the run with a stack trace before any game, as
+Forge's does. The `no_onnx_jar` scenario ignores the properties, as a jar without the evaluator would.
+
 A game file's metadata says what the game printed, as Forge's does. These scenarios break
 that: `file_names_other_winner`, `file_says_clock`, `exception_with_file`, and `extra_file`,
 which leaves a file for a game that printed no result.
@@ -27,7 +32,9 @@ which leaves a file for a game that printed no result.
 STUB_PATTERN fixes the outcomes instead of drawing them from the seed. `Burn:WWL` cycles
 over each JVM's game numbers from Burn's side, whichever seat Burn sits in: W a win, L a
 loss, D a draw by the rules, T a draw at the turn cap. `seat1:WL` does the same for
-whoever sits in seat 1.
+whoever sits in seat 1. A subject of `has=CARD` is a deck whose main deck holds CARD, so a
+card-swap arm can play differently from the original. Patterns separated by `;` are tried in
+order, and the first whose subject sits at the table decides each game.
 """
 
 import gzip
@@ -47,6 +54,16 @@ GAME_FIXTURE = Path(__file__).parent / "fixtures" / "games" / "win.jsonl"
 def profile_values() -> dict:
     lines = Path("forge.profile.properties").read_text(encoding="utf-8").splitlines()
     return dict(line.split("=", 1) for line in lines)
+
+
+def main_cards(path: Path) -> set[str]:
+    cards, main = set(), False
+    for line in (path.read_text(encoding="utf-8") if path.exists() else "").splitlines():
+        if line.startswith("["):
+            main = line.strip().lower() == "[main]"
+        elif main and line.strip():
+            cards.add(line.split(" ", 1)[1].split("|")[0].strip())
+    return cards
 
 
 def deck_name(path: Path) -> str | None:
@@ -149,10 +166,24 @@ def play_turn_cap(n: int, players: list[str]) -> dict:
     return {"winner": None, "end_reason": "draw_turn_cap", "final_turn": 51}
 
 
-def play_pattern(n: int, players: list[str], names: list[str], rng: random.Random) -> dict:
-    subject, letters = os.environ["STUB_PATTERN"].split(":")
+def pattern_seat(subject: str, names: list[str], cards: list[set[str]]) -> int | None:
+    if subject == "seat1":
+        return 0
+    if subject.startswith("has="):
+        held = [seat for seat, deck in enumerate(cards) if subject.removeprefix("has=") in deck]
+        return held[0] if held else None
+    return names.index(subject) if subject in names else None
+
+
+def play_pattern(n: int, players: list[str], names: list[str], cards: list[set[str]], rng: random.Random) -> dict:
+    for entry in os.environ["STUB_PATTERN"].split(";"):
+        subject, letters = entry.rsplit(":", 1)
+        seat = pattern_seat(subject, names, cards)
+        if seat is not None:
+            break
+    else:
+        raise SystemExit(f"no STUB_PATTERN subject at the table: {names}")
     letter = letters[(n - 1) % len(letters)]
-    seat = 0 if subject == "seat1" else names.index(subject)
     if letter == "D":
         return play_rules_draw(n, players)
     if letter == "T":
@@ -184,6 +215,31 @@ def write_game_file(argv: list[str], n: int, scenario: str, ending: dict) -> Non
         game.writelines(lines[1:])
 
 
+def jvm_property(argv: list[str], name: str) -> str | None:
+    for arg in argv[:argv.index("-jar")] if "-jar" in argv else []:
+        if arg.startswith(f"-D{name}="):
+            return arg.split("=", 1)[1]
+    return None
+
+
+def start_onnx(argv: list[str], scenario: str) -> bool:
+    """What OnnxSeats prints as the seats are set up. False when the bundle won't load."""
+    folder = jvm_property(argv, "forge.onnx.bundle")
+    if not folder or scenario in ("stale_jar", "no_onnx_jar"):
+        return True
+    contract = Path(folder, "contract.json")
+    if not contract.is_file():
+        print(f"java.lang.IllegalArgumentException: can't load the ONNX bundle {folder}: no contract.json", file=sys.stderr)
+        print("	at forge.view.OnnxSeats.evaluator(OnnxSeats.java:66)", file=sys.stderr)
+        return False
+    generation = json.loads(contract.read_text(encoding="utf-8"))["bundle"]["generation"]
+    print(f"ONNX evaluator: loaded {folder}, generation {generation}, 12 card entries", file=sys.stderr)
+    seats = jvm_property(argv, "forge.onnx.seats") or "1,2"
+    for seat in seats.split(","):
+        print(f"ONNX evaluator: seat {seat.strip()} searches with {folder}", file=sys.stderr)
+    return True
+
+
 def main() -> int:
     argv = sys.argv[1:]
     scenario = os.environ.get("STUB_SCENARIO", "wins")
@@ -203,6 +259,7 @@ def main() -> int:
             print(f"Could not load deck - {deck}, match cannot start")
             return 0
         names.append(name)
+    cards = [main_cards(deck_dir / deck) for deck in option(argv, "-d", 2)]
     if "-a" in argv and "Bogus" in option(argv, "-a", 2):
         print("Unknown AI profile - Bogus. Available profiles: Default, Reckless")
         return 0
@@ -221,6 +278,8 @@ def main() -> int:
             print("Unknown evaluator - Bogus. Available evaluators: forge, random, passthrough")
             return 0
 
+    if not start_onnx(argv, scenario):
+        return 1
     games = int(option(argv, "-n")[0])
     seed = int(option(argv, "-s")[0])
     players = [f"Ai({seat})-{name}" for seat, name in enumerate(names, 1)]
@@ -268,13 +327,16 @@ def main() -> int:
         elif scenario == "turn_cap":
             ending = play_turn_cap(n, players)
         elif os.environ.get("STUB_PATTERN"):
-            ending = play_pattern(n, players, names, rng)
+            ending = play_pattern(n, players, names, cards, rng)
         else:
             ending = play_win(n, players, rng)
         write_game_file(argv, n, scenario, ending)
         sys.stdout.flush()
     if scenario == "extra_file":
         write_game_file(argv, games + 1, scenario, ending)
+    if jvm_property(argv, "forge.onnx.bundle") and scenario not in ("stale_jar", "no_onnx_jar"):
+        print(f"ONNX evaluator: {games * 40} calls, 5.000 ms per call, {games * 20} states, 27.0 cards per state, "
+              "0 cards scored without features, 0 names missing", file=sys.stderr)
     return 0
 
 
