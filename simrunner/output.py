@@ -24,7 +24,7 @@ OUTCOME_WON_LINE = re.compile(r"^Game Outcome: Ai\(\d+\)-.* has won because all 
 HEADER_LINE = re.compile(r"^Ai\(1\)-.* vs Ai\(2\)-.* seed (\d+)$")
 SIM_MODE_TAG = re.compile(r"\[sim=(\w+)\]")
 EVALUATOR_TAG = re.compile(r"\[eval=(\w+)\]")
-# What Forge's ONNX evaluator writes to stderr (#35): a line per seat that takes the model, one at exit.
+# What Forge's ONNX evaluator writes to stderr: a line per seat that takes a bundle, and one per bundle at exit.
 ONNX_SEAT_LINE = re.compile(r"ONNX evaluator: seat (\d+) searches with (.+)$")
 ONNX_SUMMARY_LINE = re.compile(r"ONNX evaluator: \d+ calls, ")
 AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws"
@@ -32,6 +32,7 @@ AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget 
                             r"(\d+) land drops missed)?$")
 TRIPWIRE_LINE = re.compile(r"^Tripwire: (\d+) hits$")
 TRIPWIRE_HIT_LINE = re.compile(r"^Tripwire hit: (\d+) (.+)$")
+TRIPWIRE_COPIES_LINE = re.compile(r"^Tripwire copies: (\d+) checked$")
 TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
 TURN_CAP_LINE = "Stopping game at the turn cap as draw"
@@ -72,6 +73,7 @@ class GameResult:
     ai_limits: AiLimits | None = None
     tripwire_hits: int | None = None  # None when Forge printed no tripwire line for this game
     tripwire_signatures: tuple[tuple[str, int], ...] = ()  # each signature with its hits in this game
+    tripwire_copies: int | None = None  # search copies the tripwire checked; None when Forge didn't say
 
     @property
     def is_win(self) -> bool:
@@ -87,6 +89,7 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
     outcome_winners = 0
     limits = None
     tripwire_hits = None
+    tripwire_copies = None
     signatures = []
     for line in lines:
         if line == CLOCK_LINE:
@@ -99,12 +102,15 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
             tripwire_hits = int(match[1])
         elif match := TRIPWIRE_HIT_LINE.match(line):
             signatures.append((match[2], int(match[1])))
+        elif match := TRIPWIRE_COPIES_LINE.match(line):
+            tripwire_copies = int(match[1])
         elif match := TURN_LINE.match(line):
             turn = int(match[1])
         elif OUTCOME_WON_LINE.match(line):
             outcome_winners += 1
         elif line.startswith("Game Result:"):
-            printed = {"ai_limits": limits, "tripwire_hits": tripwire_hits, "tripwire_signatures": tuple(signatures)}
+            printed = {"ai_limits": limits, "tripwire_hits": tripwire_hits, "tripwire_signatures": tuple(signatures),
+                       "tripwire_copies": tripwire_copies}
             if match := WIN_LINE.match(line):
                 number, duration = int(match[1]), int(match[2])
                 if clock_stopped:
@@ -123,6 +129,7 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
             outcome_winners = 0
             limits = None
             tripwire_hits = None
+            tripwire_copies = None
             signatures = []
     return results
 
@@ -152,12 +159,9 @@ def printed_onnx_seats(lines: Iterable[str]) -> tuple[tuple[int, str], ...]:
 
 
 def onnx_summary(lines: Iterable[str]) -> str | None:
-    """The ONNX evaluator's last line, with its call count and time per call."""
-    found = None
-    for line in lines:
-        if ONNX_SUMMARY_LINE.match(line):
-            found = line.removeprefix("ONNX evaluator: ").strip()
-    return found
+    """The ONNX evaluator's lines at exit, with each bundle's call count and time per call, joined by `; `."""
+    found = [line.removeprefix("ONNX evaluator: ").strip() for line in lines if ONNX_SUMMARY_LINE.match(line)]
+    return "; ".join(found) or None
 
 
 def count_stack_traces(lines: Iterable[str]) -> int:

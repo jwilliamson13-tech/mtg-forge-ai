@@ -16,7 +16,7 @@ import torch
 
 from cardscript.vocab import Vocabulary
 from setmodel.config import FULL, TrainConfig
-from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, Corpus
+from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, ZONE_NAMES, Corpus
 from setmodel.features import Caps
 from setmodel.model import ModelConfig, SetModel, weighted_loss
 
@@ -47,26 +47,29 @@ def pick_device(device: str) -> str:
     return device
 
 
-def _keep_cards(corpus: Corpus, keep: np.ndarray) -> Corpus:
-    kept_before = np.concatenate([[0], np.cumsum(keep)])
-    return replace(corpus, card_offsets=kept_before[corpus.card_offsets], card_feature=corpus.card_feature[keep],
-                   card_zone=corpus.card_zone[keep], card_live=corpus.card_live[keep])
-
-
 def ablated(corpus: Corpus, ablation: str, key_scale: np.ndarray) -> Corpus:
-    """This corpus with one input group gone. The rest of the run doesn't change."""
+    """This corpus with one input group gone. The rest of the run doesn't change.
+
+    Nothing here copies the card arrays: dropped cards are skipped where a batch is built,
+    and the live state is replaced by a zero view.
+    """
     if ablation == FULL:
         return corpus
     if ablation == NO_CARDS:
-        return _keep_cards(corpus, np.zeros(len(corpus.card_feature), dtype=bool))
+        return replace(corpus, dropped_zones=tuple(range(len(ZONE_NAMES))))
     if ablation == NO_GRAVEYARD_EXILE:
-        return _keep_cards(corpus, ~np.isin(corpus.card_zone, [ZONE_IDS[zone] for zone in GRAVEYARD_EXILE]))
+        return replace(corpus, dropped_zones=tuple(ZONE_IDS[zone] for zone in GRAVEYARD_EXILE))
     if ablation == NO_LIVE_STATE:
-        return replace(corpus, card_live=np.zeros_like(corpus.card_live))
+        return replace(corpus, card_flags=_zeros_like(corpus.card_flags), card_counts=_zeros_like(corpus.card_counts))
     if ablation == NO_NUMBERS:
         # 1 after scaling: the key stays, as a token would
         return replace(corpus, numbers=corpus.number_mask * key_scale)
     raise ValueError(f"unknown ablation {ablation!r}")
+
+
+def _zeros_like(array: np.ndarray) -> np.ndarray:
+    """Zeros of this shape and type that take no memory. Indexing it gives real zeros."""
+    return np.broadcast_to(np.zeros((), dtype=array.dtype), array.shape)
 
 
 def _batch(corpus: Corpus, rows: np.ndarray, device: str) -> dict[str, torch.Tensor]:
@@ -79,7 +82,7 @@ def _batch(corpus: Corpus, rows: np.ndarray, device: str) -> dict[str, torch.Ten
 
     return {"token_ids": tensor(corpus.token_ids[used], torch.int64), "token_mask": tensor(corpus.token_mask[used]),
             "numbers": tensor(corpus.numbers[used]), "number_mask": tensor(corpus.number_mask[used]),
-            "slot": tensor(slot, torch.int64), "live": tensor(corpus.card_live[positions]),
+            "slot": tensor(slot, torch.int64), "live": tensor(corpus.live(positions)),
             "zone": tensor(corpus.card_zone[positions], torch.int64), "row": tensor(owner, torch.int64),
             "scoreboard": tensor(corpus.scoreboard[rows]), "labels": tensor(corpus.labels[rows]),
             "weights": tensor(corpus.weights[rows])}

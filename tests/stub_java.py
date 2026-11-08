@@ -13,16 +13,18 @@ With `-record` it writes one game file per game, named as Forge names them, exce
 what Forge would skip: a game that threw, and a game the clock stopped before its first
 priority pass. The `stale_jar` scenario ignores the flag, as a jar from before it would.
 
-It prints a game's tripwire lines, unless `-tripwire off` says not to.
-The `no_tripwire_jar` scenario is a jar from before them, and `tripwire_hits` gives every
-game hits, more of them in odd games. The `no_honest_jar` scenario ignores `-honest`, and
-writes files without saying it played honestly. The `no_eval_jar` scenario ignores `-eval`, as a
-jar from before issue #23 would, and `stale_jar` ignores it too.
+It prints a game's tripwire lines, unless `-tripwire off` says not to, and with a seat that
+searches the number of search copies checked, 40 a game. The `no_tripwire_jar` scenario is a
+jar from before them, `no_copy_check_jar` one from before the copy check, and `tripwire_hits`
+gives every game hits, more of them in odd games. The `no_honest_jar` scenario ignores
+`-honest`, and writes files without saying it played honestly. The `no_eval_jar` scenario
+ignores `-eval`, as a jar from before issue #23 would, and `stale_jar` ignores it too.
 
-`-Dforge.onnx.bundle=DIR` and `-Dforge.onnx.seats=1,2` before `-jar` get the stderr lines Forge's
-ONNX evaluator (#35) writes: one when it loads the bundle, one per seat it takes, and a summary at
-exit. A bundle folder with no contract.json stops the run with a stack trace before any game, as
-Forge's does. The `no_onnx_jar` scenario ignores the properties, as a jar without the evaluator would.
+`-eval onnx:DIR` gets the stderr lines Forge's ONNX evaluator writes: one when it loads a bundle
+folder, once per folder, one per seat that takes a bundle, and a summary per folder at exit. The
+header names such a seat `[eval=onnx]`. A bundle folder with no contract.json stops the run before
+any game with Forge's `-eval onnx:DIR can't be used: ...` line. The `no_onnx_jar` scenario is a jar
+with `-eval` but without the `onnx:` name, which refuses it as an unknown evaluator.
 
 A game file's metadata says what the game printed, as Forge's does. These scenarios break
 that: `file_names_other_winner`, `file_says_clock`, `exception_with_file`, and `extra_file`,
@@ -132,6 +134,8 @@ def print_tripwire(argv: list[str], scenario: str, n: int) -> None:
         print("Tripwire hit: 1 forge.ai.ability.ClashAi.chooseSinglePlayer:75")
     else:
         print("Tripwire: 0 hits")
+    if "-sim" in argv and set(option(argv, "-sim", 2)) & {"hybrid", "full"} and scenario != "no_copy_check_jar":
+        print("Tripwire copies: 40 checked")
 
 
 def play_win(n: int, players: list[str], rng: random.Random, winner: int | None = None) -> dict:
@@ -217,28 +221,25 @@ def write_game_file(argv: list[str], n: int, scenario: str, ending: dict) -> Non
         game.writelines(lines[1:])
 
 
-def jvm_property(argv: list[str], name: str) -> str | None:
-    for arg in argv[:argv.index("-jar")] if "-jar" in argv else []:
-        if arg.startswith(f"-D{name}="):
-            return arg.split("=", 1)[1]
-    return None
+def onnx_folders(evaluators: list[str]) -> list[str]:
+    """The bundle folders the `-eval` values name, each once, in seat order."""
+    folders = []
+    for evaluator in evaluators:
+        if evaluator.startswith("onnx:") and evaluator[len("onnx:"):] not in folders:
+            folders.append(evaluator[len("onnx:"):])
+    return folders
 
 
-def start_onnx(argv: list[str], scenario: str) -> bool:
-    """What OnnxSeats prints as the seats are set up. False when the bundle won't load."""
-    folder = jvm_property(argv, "forge.onnx.bundle")
-    if not folder or scenario in ("stale_jar", "no_onnx_jar"):
-        return True
-    contract = Path(folder, "contract.json")
-    if not contract.is_file():
-        print(f"java.lang.IllegalArgumentException: can't load the ONNX bundle {folder}: no contract.json", file=sys.stderr)
-        print("	at forge.view.OnnxSeats.evaluator(OnnxSeats.java:66)", file=sys.stderr)
-        return False
-    generation = json.loads(contract.read_text(encoding="utf-8"))["bundle"]["generation"]
-    print(f"ONNX evaluator: loaded {folder}, generation {generation}, 12 card entries", file=sys.stderr)
-    seats = jvm_property(argv, "forge.onnx.seats") or "1,2"
-    for seat in seats.split(","):
-        print(f"ONNX evaluator: seat {seat.strip()} searches with {folder}", file=sys.stderr)
+def start_onnx(evaluators: list[str]) -> bool:
+    """What Forge prints as it checks `-eval` and loads each bundle once. False when one won't load."""
+    for folder in onnx_folders(evaluators):
+        contract = Path(folder, "contract.json")
+        if not contract.is_file():
+            print(f"-eval onnx:{folder} can't be used: can't load the ONNX bundle {folder}: {folder} is not an "
+                  "export bundle: it needs contract.json, model.onnx and card_features.jsonl.gz")
+            return False
+        generation = json.loads(contract.read_text(encoding="utf-8"))["bundle"]["generation"]
+        print(f"ONNX evaluator: loaded {folder}, generation {generation}, 12 card entries", file=sys.stderr)
     return True
 
 
@@ -276,19 +277,23 @@ def main() -> int:
     evaluators = None
     if "-eval" in argv and scenario not in ("stale_jar", "no_eval_jar"):
         evaluators = option(argv, "-eval", 2)
-        if "Bogus" in evaluators:
-            print("Unknown evaluator - Bogus. Available evaluators: forge, random, passthrough")
+        unknown = [evaluator for evaluator in evaluators
+                   if evaluator == "Bogus" or (evaluator.startswith("onnx:") and scenario == "no_onnx_jar")]
+        if unknown:
+            print(f"Unknown evaluator - {unknown[0]}. Available evaluators: forge, random, passthrough")
             return 0
-
-    if not start_onnx(argv, scenario):
-        return 1
+        if not start_onnx(evaluators):
+            return 0
     games = int(option(argv, "-n")[0])
     seed = int(option(argv, "-s")[0])
     players = [f"Ai({seat})-{name}" for seat, name in enumerate(names, 1)]
     if modes:
         players = [f"{player} [sim={mode}]" for player, mode in zip(players, modes)]
     if evaluators:
-        players = [f"{player} [eval={evaluator}]" for player, evaluator in zip(players, evaluators)]
+        players = [f"{player} [eval={evaluator.split(':')[0]}]" for player, evaluator in zip(players, evaluators)]
+        for seat, evaluator in enumerate(evaluators, 1):
+            if evaluator.startswith("onnx:"):
+                print(f"ONNX evaluator: seat {seat} searches with {evaluator[len('onnx:'):]}", file=sys.stderr)
     print(f"{players[0]} vs {players[1]} - {games} games of Constructed seed {seed}", flush=True)
 
     rng = random.Random(seed)
@@ -336,9 +341,9 @@ def main() -> int:
         sys.stdout.flush()
     if scenario == "extra_file":
         write_game_file(argv, games + 1, scenario, ending)
-    if jvm_property(argv, "forge.onnx.bundle") and scenario not in ("stale_jar", "no_onnx_jar"):
+    for folder in onnx_folders(evaluators or []):
         print(f"ONNX evaluator: {games * 40} calls, 5.000 ms per call, {games * 20} states, 27.0 cards per state, "
-              "0 cards scored without features, 0 names missing", file=sys.stderr)
+              f"0 cards scored without features, 0 names missing, bundle {folder}", file=sys.stderr)
     return 0
 
 

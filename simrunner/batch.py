@@ -19,7 +19,7 @@ from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
 from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_SIM_MODE, JVM_PROPERTIES, GameFile, RecordPlan, Seat,
                               WorkerPlan, WorkerResult, any_seat_searches, evaluator_wiring, kill_tree, onnx_problem,
-                              prepare_folder, remove_folder, requested_evaluators, requested_sim_modes,
+                              prepare_folder, remove_folder, expected_printed_evaluators, requested_sim_modes,
                               resolve_search_budget, run_worker, seat_searches, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
@@ -53,6 +53,7 @@ class BatchConfig:
     window: Window | None = None  # None runs the batch now, with no hard stop
     records: RecordPlan | None = None  # None has Forge write no game records
     tripwire: bool = True  # catch forge-ai reading hidden cards
+    prune: bool = True  # False passes -prune off, so a searching seat's copies hold the hidden cards
     batch_name: str | None = None  # the batch id, when it isn't the run folder's name
 
     @property
@@ -260,7 +261,7 @@ class BatchResult:
             ignored.append("a game record that doesn't show honest play")
         if self.tripwire_on and not all(game.tripwire_hits is not None for game in worker.games):
             ignored.append("a game with no tripwire count")
-        if worker.ready_s is not None and worker.evaluators != requested_evaluators(self.config.seats):
+        if worker.ready_s is not None and worker.evaluators != expected_printed_evaluators(self.config.seats):
             ignored.append("Forge did not name the evaluators asked for")
         if worker.ready_s is not None and worker.onnx_seats != evaluator_wiring(self.config.seats).onnx_seats:
             ignored.append("Forge did not put the ONNX evaluator on the seats asked for")
@@ -294,9 +295,18 @@ class BatchResult:
                 and not any(self.tripwire_hits))
 
     @property
+    def tripwire_copies(self) -> list[int]:
+        """Search copies checked per game, for the games that said. Only a game with a searching seat says."""
+        return [game.tripwire_copies for game in self.games if game.tripwire_copies is not None]
+
+    @property
     def search_unchecked(self) -> bool:
-        """True when a seat searches: the tripwire watches the real game only, so copies with hidden cards go unseen."""
-        return self.tripwire_on and any_seat_searches(self.config.seats)
+        """True when a seat searches and a game didn't say its copies were checked, as a jar from before #25 can't.
+
+        Reads on a copy never count, so without the copy check a search could see hidden cards on its copies.
+        """
+        return (self.tripwire_on and any_seat_searches(self.config.seats)
+                and len(self.tripwire_copies) < self.finished)
 
     def tripwire_signatures(self) -> list[tuple[str, int, int]]:
         """Each signature with its hits and the games it showed up in, most hits first."""
@@ -437,10 +447,10 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
             folders.append(folder)
             deck_dir = prepare_folder(folder, forge_gui, config.seats)
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES,
-                       *evaluator_wiring(config.seats).jvm_properties, "-jar", str(jar),
+                       "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
                                  resolve_search_budget(config.seats, config.search_budget), records, config.batch_id,
-                                 config.tripwire)]
+                                 config.tripwire, config.prune)]
             jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started,
                          config.window.kill_at if config.window else None))
 

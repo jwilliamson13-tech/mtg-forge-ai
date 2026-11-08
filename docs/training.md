@@ -175,3 +175,21 @@ The fork's Java tests run on a fixture that `tests/forge_fixture.py` builds: a s
 ## First real files
 
 On 2026-11-06 the commands ran on the 10 `jar-smoke` games and `tests/fixtures/games/real_game.jsonl.gz`, with the full dump and a throwaway manifest. That made 1,886 snapshots and 32,764 card and stack rows, with 33 hidden cards, 0 unmatched and none dropped. Training ran on the 1080 Ti, and the export check's largest difference was 1.19e-07 over 198 states. That is a plumbing check on one held-out game. Its accuracies mean nothing, so they aren't recorded here. The run came before the fixed loss scale, so that difference belongs to the earlier weights.
+
+## Memory
+
+`load_corpus` never holds a whole card or stack table. It reads each one twice, about 250,000 rows at a time. `gamerecord convert` writes a row group per game, so a chunk is a run of whole games. The first pass resolves names, counts each snapshot's card rows and finds the snapshots an unmatched card drops. That fixes where every kept card row goes, and the second pass writes each row straight to its place. A row's cards come out in the same order as before: its card table rows in table order, then its stack rows.
+
+A card row takes 19 bytes. The feature index is a `uint16`, the zone an `int8`, and the 11 yes-or-no live fields are bits of one `uint16`. The 7 numeric live fields are `int16`, and the whole array widens to `int32` if any value doesn't fit. `Corpus.live` builds the contract's float `live` rows for one batch's positions. No ablation copies the card arrays. `no_cards` and `no_graveyard_exile` leave their zones out where a batch is built, and `no_live_state` swaps in a zero view that takes no memory.
+
+The old join held the whole Arrow tables, turned the zone column into one Python string per row, stored live state as 18 float32s a row, and copied the card arrays twice to drop and reorder rows. An ablation copied them again. On the dry run, 676 games with 166,054 snapshots and 4.8 million card and stack rows, peak private bytes went like this:
+
+| Command | Before | After |
+|---|---|---|
+| `join` | 2,917 MiB | 1,051 MiB |
+| `train`, CPU, 3 epochs | 3,650 MiB | 2,073 MiB |
+| `export` | 3,665 MiB | 1,957 MiB |
+
+Before, each snapshot added about 12 KB, which put a 10,000-game join near 30 GB. Copies of the dry run with renamed games, up to 8 times its size, measured the cost now. A snapshot adds about 760 bytes to `join` and 700 to `train` on CUDA, and `ablate` peaks where `train` does. For gen 0's 2,452,446 snapshots that comes to about 2.7 GiB for `join` and 3.9 GiB for `train`. About 1 GiB of the join's figure doesn't grow with the corpus: the card dump, and buffers OpenBLAS reserves when numpy loads. `train` adds about 1.4 GiB more for PyTorch and CUDA.
+
+Training on the CPU with more than one thread doesn't repeat itself bit for bit, because the order of float additions changes between runs. On one thread the old and new code gave the same weights and the same `metrics.json` for `train` and for all five `ablate` runs on the dry run, and the same export bundle.

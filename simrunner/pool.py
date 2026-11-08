@@ -68,6 +68,7 @@ class ChunkResult:
     stack_traces: int = 0
     records_written: int = 0
     note: str = ""
+    tripwire_copies: list[int] = field(default_factory=list)  # one per game that said how many copies were checked
 
 
 @dataclass(frozen=True)
@@ -127,15 +128,22 @@ def plan_pool(splits: dict[str, str], games: int, seed: int, chunk_games: int = 
 def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     """Everything that decides which games a run folder holds. Workers and the window don't."""
     batch = config.batch
-    # Only when set, so that a plan written before evaluators existed still matches on a restart.
-    evaluators = [seat.evaluator for seat in batch.seats]
-    generations = [seat.generation.fields() if seat.generation else None for seat in batch.seats]
-    return {**({"evaluators": evaluators} if any(evaluators) else {}),
-            **({"generations": generations} if any(generations) else {}), "seed": batch.batch_seed, "games": batch.games, "chunk_games": config.chunk_games,
+    fields = {"seed": batch.batch_seed, "games": batch.games, "chunk_games": config.chunk_games,
             "held_out_share": config.held_out_share, "ai": [seat.ai_profile for seat in batch.seats],
             "sim_modes": [seat.sim_mode for seat in batch.seats], "clock_s": batch.clock_s,
             "search_budget": batch.search_budget, "turn_cap": batch.records.turn_cap,
             "honest": batch.records.honest, "tripwire": batch.tripwire, "chunks": [asdict(chunk) for chunk in chunks]}
+    if not batch.prune:
+        # left out when on, so that a plan written before the setting existed still matches
+        fields["prune"] = False
+    evaluators = [seat.evaluator for seat in batch.seats]
+    if any(evaluators):
+        # only when set, so that a plan written before evaluators existed still matches on a restart
+        fields["evaluators"] = evaluators
+    generations = [seat.generation.fields() if seat.generation else None for seat in batch.seats]
+    if any(generations):
+        fields["generations"] = generations
+    return fields
 
 
 def _hold_plan(config: PoolConfig, chunks: list[Chunk]) -> None:
@@ -185,7 +193,8 @@ def _result_of(chunk: Chunk, batch: BatchResult) -> ChunkResult:
     status = FINISHED if batch.clean else STOPPED if batch.stopped else FAILED
     return ChunkResult(chunk.index, status, batch.finished, batch.usable,
                        {cause.value: batch.draws(cause) for cause in DrawCause}, batch.tripwire_hits,
-                       sum(worker.stderr_traces for worker in batch.workers), batch.records_written, "; ".join(notes))
+                       sum(worker.stderr_traces for worker in batch.workers), batch.records_written, "; ".join(notes),
+                       batch.tripwire_copies)
 
 
 def _play_chunk(config: PoolConfig, chunk: Chunk, decks: dict[str, Path], halted: threading.Event) -> ChunkResult | None:
@@ -305,8 +314,13 @@ class PoolResult:
                 and not any(self.tripwire_hits))
 
     @property
+    def tripwire_copies(self) -> list[int]:
+        return [copies for result in self.results.values() for copies in result.tripwire_copies]
+
+    @property
     def search_unchecked(self) -> bool:
-        return self.tripwire_on and any_seat_searches(self.config.batch.seats)
+        return (self.tripwire_on and any_seat_searches(self.config.batch.seats)
+                and len(self.tripwire_copies) < self.finished)
 
 
 def _write_status(pool: PoolResult, status: str) -> None:
