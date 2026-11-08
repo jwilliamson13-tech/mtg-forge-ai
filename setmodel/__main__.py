@@ -1,4 +1,4 @@
-"""Command line: `python -m setmodel join|train|export|ablate|pairtest`. `docs/training.md` has each one."""
+"""Command line: `python -m setmodel join|train|export|ablate|pairtest|parity`. `docs/training.md` has each one."""
 
 from __future__ import annotations
 
@@ -103,6 +103,19 @@ def _pairtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parity(args: argparse.Namespace) -> int:
+    from setmodel.dataset import load_corpus, load_manifest
+    from setmodel.features import CardTable
+    from setmodel.parity import parity, read_scores
+    from setmodel.train import load_model
+
+    model, vocab, caps, _ = load_model(args.model)
+    corpus = load_corpus(args.parquet, CardTable.load(args.cards), vocab, load_manifest(args.manifest), caps=caps)
+    result = parity(model, vocab, corpus, read_scores(args.scores), threshold=args.threshold)
+    _print(result.format())
+    return 0 if result.passed else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m setmodel")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -136,6 +149,14 @@ def build_parser() -> argparse.ArgumentParser:
     pair.add_argument("--fixture", default=str(Path(__file__).parent / "pair_fixture.json"),
                       help="the cards and scoreboard to test")
     pair.set_defaults(handler=_pairtest)
+
+    check = commands.add_parser("parity", help="compare Forge's ONNX scores of game files with PyTorch's, "
+                                               "exit 1 if they differ")
+    check.add_argument("model", help="folder `train` wrote, the one the bundle was exported from")
+    _inputs(check)
+    check.add_argument("scores", help="the scores file Forge's OnnxScoreRecords wrote")
+    check.add_argument("--threshold", type=float, default=CHECK_THRESHOLD, help="largest difference allowed")
+    check.set_defaults(handler=_parity)
     return parser
 
 

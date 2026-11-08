@@ -622,6 +622,43 @@ What this doesn't cover:
 
 Memory peaked at 5.2 GB across 4 JVMs. No run produced a stack trace.
 
+### The ONNX evaluator
+
+Issue #35 lets a seat's search score states with an export bundle from `python -m setmodel export`, through the evaluator seam of #22. Until #23's evaluator flag lands, three system properties pick it:
+
+- `-Dforge.onnx.bundle=DIR` turns it on, with the bundle in `DIR`. Use an absolute path, because each worker runs in its own folder.
+- `-Dforge.onnx.seats=1` names the seats that use it, in deck order, comma-separated. Every seat if left out.
+- `-Dforge.onnx.threads=N` gives ONNX Runtime N threads. The default is 1, because workers already run in parallel.
+
+Only a `full` or `hybrid` seat searches, so the properties change nothing for a `heuristic` seat. Each JVM writes `ONNX evaluator: loaded ...` to stderr when it loads the bundle, one line per seat that uses it, and at exit one summary line with the call count and the time per call. The sim-runner has no option for JVM properties, so `--java` takes a wrapper script:
+
+```
+@echo off
+"C:\...\runs\t35-jdk21-vc14.51\bin\java.exe" "-Dforge.onnx.bundle=C:\...\runs\dryrun\bundle" -Dforge.onnx.seats=1 %*
+```
+
+```powershell
+python -m simrunner batch boros-aggro-1 dimir-tempo-1 --games 10 --seed 3501 --workers 2 --forge ..\forge-wt-35 --sim-mode full heuristic --records --run-dir runs/t35-onnx-full --java C:\...\java-onnx.cmd
+```
+
+**The JDK on this machine can't run it as installed.** ONNX Runtime 1.31 needs `msvcp140.dll` 14.40 or newer. The JVM loads that file from its own `bin` folder at startup, before ONNX Runtime asks for it, and Oracle JDK 21.0.2 ships 14.31. ONNX Runtime then binds to the old copy, and the JVM dies with an access violation in `msvcp140.dll` while the evaluator starts. Loading the newer DLL from `C:\Windows\System32` first doesn't help, because by then the old one is already in the process. The evaluator now reads the file's version first and refuses with a message instead.
+
+The fix used here leaves the installed JDK alone. It is a jlink image of the same JDK with the three runtime DLLs copied in from `System32`, which held 14.51:
+
+```powershell
+$rt = "runs\t35-jdk21-vc14.51"
+& "C:\Program Files\Java\jdk-21\bin\jlink.exe" --add-modules ALL-MODULE-PATH --module-path "C:\Program Files\Java\jdk-21\jmods" --output $rt --no-header-files --no-man-pages
+foreach ($d in "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll") { Copy-Item "C:\Windows\System32\$d" "$rt\bin\$d" -Force }
+```
+
+It is the same JVM build, 21.0.2+13, and 167 MB. Maven's tests need it too, through `-Djvm=...\bin\java.exe`. A newer JDK whose `bin` holds a 14.40 or newer `msvcp140.dll` would also do, but none was tried.
+
+The ONNX Runtime jar holds the native libraries for every platform it supports, so it adds about 50 MB to the jar with dependencies, which went from 32 MB to 84 MB.
+
+On 2026-11-07, 10 games of boros-aggro-1 (full, on the dry-run bundle) against dimir-tempo-1 (heuristic) ran with 2 workers, budget 100, records on and below-normal priority, beside the gen-0 pool batch. All 10 finished: 5 wins for seat 1, 3 for seat 2, and 2 draws by exception. Both exceptions were in the search's own bookkeeping, `SpellAbilityChoicesIterator.advance` throwing `RuntimeException: -1` and a null `getLastDecision()` in `SimulationController.doneEvaluating`. Both come from the iterator that walks a spell's choices, inside a nested search, and mean its count of open choices went wrong. A second batch, seed 3502, finished 10 of 10 with one more of the null kind. A control batch on the same jar, decks and seed 3501 with Forge's own evaluator had no exception in 10 games, and nothing earlier in `runs\` shows either one. So the model's search reaches a path the stock search didn't, and the cause isn't known yet. The comment above `evaluateSa` says the iterator breaks when a spell's choices differ between its replays, and a score-dependent cache in `SimulationController` is one way that could happen. The tripwire counted 0 hits. In the first batch the evaluator was called 9,564 and 8,871 times in the two workers, at 5.9 and 4.9 ms per call, with 29 and 22 cards per state on average. In the second it was 7,204 calls at 4.3 ms with 19 cards, and 11,380 at 8.0 ms with 42. Nearly all of that time is ONNX Runtime: the Python runtime takes 6.5 ms for 27 cards on one thread on the same loaded machine.
+
+With a budget of 100 steps and two looks per scored state, one decision can make about 200 calls, which is about a second. The model computes each card's text vector on every call, though that part depends only on the card. Splitting the export so Forge can cache it per card would cut most of the time, and that would be a new contract version.
+
 ## The decks
 
 `forge-gui\res\geneticaidecks\` holds 786 decks at this commit, and only 7 are `GAL_`. The rest are 442 `GAS_`, 326 `GAM_`, 9 `GAP_` and 2 `GAV_`.
