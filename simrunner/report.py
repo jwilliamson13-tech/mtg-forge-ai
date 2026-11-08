@@ -48,8 +48,11 @@ def tripwire_rows(batch: BatchResult) -> list[tuple[str, str]]:
     if missing:
         verdict += f", {missing} reported nothing"
     if batch.search_unchecked:
-        verdict += ", search copies unchecked until #25"
-    return [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
+        verdict += ", search copies unchecked, so the jar may be from before #25"
+    rows = [("tripwire hits per game", f"max {max(hits)}, mean {sum(hits) / len(hits):.2f}"), ("tripwire clean", verdict)]
+    if copies := batch.tripwire_copies:
+        rows.append(("search copies checked", f"{sum(copies)} in {len(copies)} games"))
+    return rows
 
 
 def _records_row(batch: BatchResult) -> tuple[str, str]:

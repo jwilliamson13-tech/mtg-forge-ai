@@ -12,10 +12,11 @@ With `-record` it writes one game file per game, named as Forge names them, exce
 what Forge would skip: a game that threw, and a game the clock stopped before its first
 priority pass. The `stale_jar` scenario ignores the flag, as a jar from before it would.
 
-It prints a game's tripwire lines, unless `-tripwire off` says not to.
-The `no_tripwire_jar` scenario is a jar from before them, and `tripwire_hits` gives every
-game hits, more of them in odd games. The `no_honest_jar` scenario ignores `-honest`, and
-writes files without saying it played honestly.
+It prints a game's tripwire lines, unless `-tripwire off` says not to, and with a seat that
+searches the number of search copies checked, 40 a game. The `no_tripwire_jar` scenario is a
+jar from before them, `no_copy_check_jar` one from before the copy check, and `tripwire_hits`
+gives every game hits, more of them in odd games. The `no_honest_jar` scenario ignores
+`-honest`, and writes files without saying it played honestly.
 
 A game file's metadata says what the game printed, as Forge's does. These scenarios break
 that: `file_names_other_winner`, `file_says_clock`, `exception_with_file`, and `extra_file`,
@@ -101,6 +102,8 @@ def print_tripwire(argv: list[str], scenario: str, n: int) -> None:
         print("Tripwire hit: 1 forge.ai.ability.ClashAi.chooseSinglePlayer:75")
     else:
         print("Tripwire: 0 hits")
+    if "-sim" in argv and set(option(argv, "-sim", 2)) & {"hybrid", "full"} and scenario != "no_copy_check_jar":
+        print("Tripwire copies: 40 checked")
 
 
 def play_win(n: int, players: list[str], rng: random.Random) -> dict:

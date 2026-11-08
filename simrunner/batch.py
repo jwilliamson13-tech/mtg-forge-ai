@@ -52,6 +52,7 @@ class BatchConfig:
     window: Window | None = None  # None runs the batch now, with no hard stop
     records: RecordPlan | None = None  # None has Forge write no game records
     tripwire: bool = True  # catch forge-ai reading hidden cards
+    prune: bool = True  # False passes -prune off, so a searching seat's copies hold the hidden cards
     batch_name: str | None = None  # the batch id, when it isn't the run folder's name
 
     @property
@@ -289,9 +290,18 @@ class BatchResult:
                 and not any(self.tripwire_hits))
 
     @property
+    def tripwire_copies(self) -> list[int]:
+        """Search copies checked per game, for the games that said. Only a game with a searching seat says."""
+        return [game.tripwire_copies for game in self.games if game.tripwire_copies is not None]
+
+    @property
     def search_unchecked(self) -> bool:
-        """True when a seat searches: the tripwire watches the real game only, so copies with hidden cards go unseen."""
-        return self.tripwire_on and any_seat_searches(self.config.seats)
+        """True when a seat searches and a game didn't say its copies were checked, as a jar from before #25 can't.
+
+        Reads on a copy never count, so without the copy check a search could see hidden cards on its copies.
+        """
+        return (self.tripwire_on and any_seat_searches(self.config.seats)
+                and len(self.tripwire_copies) < self.finished)
 
     def tripwire_signatures(self) -> list[tuple[str, int, int]]:
         """Each signature with its hits and the games it showed up in, most hits first."""
@@ -427,7 +437,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES, "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
                                  resolve_search_budget(config.seats, config.search_budget), records, config.batch_id,
-                                 config.tripwire)]
+                                 config.tripwire, config.prune)]
             jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started,
                          config.window.kill_at if config.window else None))
 
