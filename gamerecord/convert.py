@@ -1,7 +1,8 @@
 """Turn a folder of game files into three Parquet tables, partitioned by batch.
 
-Only wins are kept: a draw has no label to train on. `docs/game-record.md` lists the
-columns. Rows go out one game at a time, because a night of games would not fit in
+Only wins are kept: a draw has no label to train on. With `drop_tripwire_hits`, so is a game
+the tripwire caught reading hidden cards, because the AI in it cheated. `docs/game-record.md`
+lists the columns. Rows go out one game at a time, because a night of games would not fit in
 memory as Python objects.
 
 The schemas are written out, not inferred. A batch with no attachment in it would
@@ -25,6 +26,7 @@ GAME_FILES = "*.jsonl.gz"
 PART_FILE = "part-0.parquet"
 # A leading dot keeps a leftover out of any pyarrow dataset read.
 TEMP_FILE = f".{PART_FILE}.tmp"
+TRIPWIRE = "tripwire"  # the dropped count for games with tripwire hits
 
 SEAT_COLUMNS = [(f"seat{seat}_{name}", kind) for seat in (1, 2) for name, kind in (
     ("deck", pa.string()), ("ai_profile", pa.string()), ("sim_mode", pa.string()), ("search_budget", pa.int32()))]
@@ -83,6 +85,7 @@ class ConversionReport:
     kept: Counter = field(default_factory=Counter)  # by end reason
     dropped: Counter = field(default_factory=Counter)  # by end reason
     rejected: list[tuple[Path, str]] = field(default_factory=list)  # file and why
+    tripwire_games: list[tuple[str, int, list[str]]] = field(default_factory=list)  # game id, hits, signatures
     snapshot_rows: int = 0
     card_rows: int = 0
     stack_rows: int = 0
@@ -153,11 +156,13 @@ def game_files(folder: Path) -> list[Path]:
     return sorted(folder.rglob(GAME_FILES))
 
 
-def convert_folder(folder: Path, out: Path) -> ConversionReport:
+def convert_folder(folder: Path, out: Path, drop_tripwire_hits: bool = False) -> ConversionReport:
     """Write `out/snapshots`, `out/cards` and `out/stack` from every game file under `folder`.
 
     An exception game counts as dropped, by its end reason. Any other file the loader
-    refuses is listed in `rejected`, and the rest of the folder still converts.
+    refuses is listed in `rejected`, and the rest of the folder still converts. With
+    `drop_tripwire_hits`, a game with tripwire hits counts as dropped under `tripwire`,
+    whatever its end reason, and `tripwire_games` names it with its signatures.
     """
     report = ConversionReport()
     with (_PartitionedTable(out / "snapshots", SNAPSHOT_SCHEMA) as snapshots,
@@ -173,6 +178,11 @@ def convert_folder(folder: Path, out: Path) -> ConversionReport:
                 report.rejected.append((path, str(e)))
                 continue
             reason = game.metadata["end_reason"]
+            tripwire = game.metadata["tripwire"]
+            if drop_tripwire_hits and tripwire["hits"]:
+                report.dropped[TRIPWIRE] += 1
+                report.tripwire_games.append((game.game_id, tripwire["hits"], list(tripwire["signatures"])))
+                continue
             if reason != "win":
                 report.dropped[reason] += 1
                 continue
@@ -193,6 +203,9 @@ def format_report(report: ConversionReport) -> str:
     lines += [f"  {reason}: {count}" for reason, count in sorted(report.kept.items())]
     lines.append(f"dropped {report.dropped.total()}")
     lines += [f"  {reason}: {count}" for reason, count in sorted(report.dropped.items())]
+    for game_id, hits, signatures in report.tripwire_games:
+        lines.append(f"  tripwire game {game_id}: {hits} hits")
+        lines += [f"    {signature}" for signature in signatures]
     lines.append(f"rejected {len(report.rejected)}")
     lines += [f"  {path}: {why}" for path, why in report.rejected]
     lines += [f"snapshot rows {report.snapshot_rows}", f"card rows {report.card_rows}", f"stack rows {report.stack_rows}"]

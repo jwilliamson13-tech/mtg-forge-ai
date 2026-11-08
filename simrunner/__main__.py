@@ -5,7 +5,9 @@ the two decks, and draws its deck pairs from the manifest. `matchup` takes the t
 plays seat-swapped rounds until the win rate's interval is narrow enough. `cardswap` runs two
 matchups, deck A and deck A with `--swap OLD=NEW` made, against the same opponent. `ladder` rates
 AI configurations against each other over a sample of manifest deck pairs. `converge` runs the
-four tracked matchups under two of them and says whether each win rate moved.
+four tracked matchups under two of them and says whether each win rate moved. `generation` runs
+all of it in order, from the games one generation plays to the next generation's entry in the
+results log.
 """
 
 from __future__ import annotations
@@ -39,6 +41,8 @@ DEFAULT_MANIFEST = REPO_ROOT / "decks" / "manifest.json"
 DEFAULT_CARDS = REPO_ROOT / "data" / "cards.jsonl"
 DEFAULT_LADDER = DEFAULT_RUNS / "ladder"
 DEFAULT_CONVERGENCE = DEFAULT_RUNS / "convergence"
+DEFAULT_GENERATIONS = DEFAULT_RUNS / "generations"
+DEFAULT_RESULTS = REPO_ROOT / "results"
 
 
 def _cores_minus(reserve: int) -> int:
@@ -282,6 +286,119 @@ def _converge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _generation(args: argparse.Namespace) -> int:
+    from simrunner import loop
+
+    try:
+        window = resolve_window(args.start, args.stop, datetime.now())
+    except ValueError as e:
+        args.parser.error(str(e))
+    run_dir = Path(args.run_dir).resolve() if args.run_dir else DEFAULT_GENERATIONS / args.to
+    options = {"pool": [], "ladder": [], "converge": [], "forge": []}
+    for kind, flag, value in (("pool", "--chunk-games", args.chunk_games), ("pool", "--held-out-share", args.held_out_share),
+                              ("ladder", "--deck-pairs", args.deck_pairs), ("ladder", "--pair-games", args.pair_games),
+                              ("converge", "--width", args.width), ("converge", "--round-games", args.round_games),
+                              ("converge", "--max-games", args.max_games), ("forge", "--search-budget", args.search_budget),
+                              ("forge", "--clock", args.clock), ("forge", "--heap", args.heap),
+                              ("forge", "--forge", args.forge and Path(args.forge).resolve())):
+        if value is not None:
+            options[kind] += [flag, str(value)]
+    config = loop.LoopConfig(
+        source=args.source, target=args.to, games=args.games, seed=args.seed, workers=args.workers, window=window,
+        window_args=(args.start.isoformat(), args.stop.isoformat()), run_dir=run_dir,
+        # The steps run from the repository root, so every path goes to them absolute.
+        data_dir=Path(args.data_dir).resolve() if args.data_dir else run_dir / "pool", models=Path(args.models).resolve(),
+        manifest=Path(args.manifest or DEFAULT_MANIFEST).resolve(), cards=Path(args.cards).resolve(),
+        results=Path(args.results).resolve(), ladder_dir=Path(args.ladder_dir).resolve(),
+        converge_dir=Path(args.converge_dir).resolve(), python=tuple(args.python),
+        ladder_players=tuple(args.ladder_players), ladder_seed=args.ladder_seed, converge_seed=args.converge_seed,
+        pool_options=tuple(options["pool"]), ladder_options=tuple(options["ladder"]),
+        converge_options=tuple(options["converge"]), forge_options=tuple(options["forge"]),
+        train=loop.TrainOptions(args.epochs, args.batch_size, args.device, args.train_seed),
+        max_tripwire_share=args.max_tripwire_share, max_drop_share=args.max_drop_share, min_free_mb=args.min_free_mb,
+        memory_floor_mb=args.memory_floor_mb, ignore_kill_criterion=args.ignore_kill_criterion, redo=args.redo)
+    try:
+        entry = loop.Loop(config).run()
+    except loop.LoopError as e:
+        args.parser.error(str(e))
+    except loop.LoopStop as stop:
+        logged = f" The results log has an entry for it in {config.results}." if stop.result else ""
+        print(f"generation loop stopped at {stop.step}: {stop.why}.{logged} Logs in {run_dir}", file=sys.stderr)
+        return 1
+    print(f"{args.to} done: entry {len(loop.read_entries(config.results))} in {config.results / 'log.jsonl'}, "
+          f"convergence {entry['convergence']['status']}", file=sys.stderr)
+    return 0
+
+
+def _add_generation_arguments(parser: argparse.ArgumentParser) -> None:
+    from simrunner import loop
+
+    parser.add_argument("--from", dest="source", required=True, metavar="SOURCE",
+                        help="whose games the new generation trains on: heuristic for gen0, otherwise the "
+                             "generation before, such as gen0, which plays both seats in full sim")
+    parser.add_argument("--to", required=True, metavar="TARGET", help="the generation to make, such as gen1")
+    parser.add_argument("--games", type=int, required=True, help="games in the data pool")
+    parser.add_argument("--seed", type=int, required=True, help="the data pool's seed")
+    parser.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
+                        help="parallel JVMs for every Forge step (default: logical cores minus 2)")
+    parser.add_argument("--start", type=_clock_time, required=True,
+                        help="local time the window opens, HH:MM; inside it, the loop starts at once")
+    parser.add_argument("--stop", type=_clock_time, required=True,
+                        help="local time of the hard stop: Forge steps stop at it, and any other step running then "
+                             "is killed and runs again next time")
+    parser.add_argument("--run-dir", help="this generation's folder (default: runs/generations/TARGET)")
+    parser.add_argument("--data-dir", help="the pool run folder, to reuse a pool that already played (default: "
+                                           "pool in the generation's folder)")
+    parser.add_argument("--models", default=str(DEFAULT_MODELS), help="folder of generations (default: models)")
+    parser.add_argument("--manifest", help="deck manifest (default: decks/manifest.json)")
+    parser.add_argument("--cards", default=str(DEFAULT_CARDS), help="parsed card dump (default: data/cards.jsonl)")
+    parser.add_argument("--results", default=str(DEFAULT_RESULTS), help="folder of the results log (default: results)")
+    parser.add_argument("--ladder-dir", default=str(DEFAULT_LADDER), help="the ladder folder (default: runs/ladder)")
+    parser.add_argument("--converge-dir", default=str(DEFAULT_CONVERGENCE),
+                        help="the convergence folder (default: runs/convergence)")
+    parser.add_argument("--ladder-players", nargs="+", default=list(loop.DEFAULT_LADDER_PLAYERS), metavar="PLAYER",
+                        help="the ladder's fixed rungs; every generation with a bundle joins them "
+                             "(default: heuristic full)")
+    parser.add_argument("--ladder-seed", type=int, default=loop.DEFAULT_LADDER_SEED,
+                        help=f"the ladder's seed, the same every generation (default: {loop.DEFAULT_LADDER_SEED})")
+    parser.add_argument("--converge-seed", type=int, default=loop.DEFAULT_CONVERGE_SEED,
+                        help=f"the convergence seed, the same every generation (default: {loop.DEFAULT_CONVERGE_SEED})")
+    passed = parser.add_argument_group("passed through", "left out, each takes the command's own default")
+    passed.add_argument("--chunk-games", type=int, help="to pool")
+    passed.add_argument("--held-out-share", type=float, help="to pool")
+    passed.add_argument("--deck-pairs", type=int, help="to ladder")
+    passed.add_argument("--pair-games", type=int, help="to ladder")
+    passed.add_argument("--width", type=float, help="to converge")
+    passed.add_argument("--round-games", type=int, help="to converge")
+    passed.add_argument("--max-games", type=int, help="to converge")
+    passed.add_argument("--search-budget", type=int, help="to pool, ladder and converge")
+    passed.add_argument("--clock", type=int, help="to pool, ladder and converge")
+    passed.add_argument("--heap", help="to pool, ladder and converge")
+    passed.add_argument("--forge", help="to pool, ladder and converge")
+    passed.add_argument("--epochs", type=int, help="to train and ablate")
+    passed.add_argument("--batch-size", type=int, help="to train and ablate")
+    passed.add_argument("--device", help="to train and ablate")
+    passed.add_argument("--train-seed", type=int, help="to train and ablate, as --seed")
+    gates = parser.add_argument_group("gates")
+    gates.add_argument("--max-tripwire-share", type=float, default=loop.DEFAULT_MAX_TRIPWIRE_SHARE,
+                       help="stop if more of the pool's games than this had tripwire hits; those under it are left "
+                            f"out of training (default: {loop.DEFAULT_MAX_TRIPWIRE_SHARE})")
+    gates.add_argument("--max-drop-share", type=float, default=loop.DEFAULT_MAX_DROP_SHARE,
+                       help="stop if join drops more of the snapshots than this for an unmatched card "
+                            f"(default: {loop.DEFAULT_MAX_DROP_SHARE})")
+    gates.add_argument("--min-free-mb", type=float, default=loop.DEFAULT_MIN_FREE_MB,
+                       help="free memory a convert, join, train, ablate, pairtest or export step needs to start "
+                            f"(default: {loop.DEFAULT_MIN_FREE_MB})")
+    gates.add_argument("--memory-floor-mb", type=float, default=loop.DEFAULT_MEMORY_FLOOR_MB,
+                       help="kill such a step if free memory falls under this while it runs "
+                            f"(default: {loop.DEFAULT_MEMORY_FLOOR_MB})")
+    gates.add_argument("--ignore-kill-criterion", action="store_true",
+                       help="go on past ablate when full doesn't beat no_cards by 5 points")
+    parser.add_argument("--redo", choices=loop.STEPS, help="run this step and every one after it again")
+    parser.add_argument("--python", nargs="+", default=[sys.executable],
+                        help="command that starts Python for each step (default: this Python)")
+
+
 def _add_optional_window(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--start", type=_clock_time,
                         help="local time to start, HH:MM or HH:MM:SS, with --stop; inside the window, it starts at "
@@ -472,6 +589,17 @@ def build_parser() -> argparse.ArgumentParser:
     _add_matchup_arguments(converge, deck_arguments=False)
     _add_optional_window(converge)
     converge.set_defaults(handler=_converge, parser=converge)
+
+    generation = commands.add_parser("generation", help="one generation step end to end: play with the source, "
+                                                        "check, convert, join, train, ablate, pair-test, export, "
+                                                        "ladder, converge, and one entry in the results log",
+                                     description="Each step that finishes leaves a record in the generation's "
+                                                 "steps folder, and a later start skips it, so the same command "
+                                                 "continues after a crash, a stop or a kill. A failed gate stops "
+                                                 "the loop and is logged. See 'Generation loop' in "
+                                                 "docs/forge-build.md.")
+    _add_generation_arguments(generation)
+    generation.set_defaults(handler=_generation, parser=generation)
     return parser
 
 

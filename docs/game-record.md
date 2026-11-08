@@ -283,6 +283,8 @@ This reads every `*.jsonl.gz` under `FOLDER` and writes `OUT/snapshots/batch_id=
 
 It prints what it kept and dropped by end reason, then each rejected file and why. An exception file counts as dropped. Any other file the loader refuses is rejected, and the rest of the folder still converts. The exit code is 1 if it rejected anything.
 
+`--drop-tripwire-hits` also leaves out every game whose tripwire caught a hit, whatever its end reason, because the AI in it read hidden cards. Those count as dropped under `tripwire`, and the report names each game with its hits and signatures. The generation loop always passes it. See "Generation loop" in `forge-build.md`.
+
 Converting again replaces each batch it finds a win for. To read a table:
 
 ```python

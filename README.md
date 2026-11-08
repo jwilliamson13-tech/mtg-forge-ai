@@ -34,6 +34,8 @@ Each seat plays stock heuristic, stock full sim, or a model generation: `--sim-m
 
 `python -m simrunner converge onnx:gen0 onnx:gen1 --seed S` runs the four tracked matchups under both generations to the same width and gives each a verdict: converged when the two intervals overlap, moved when they don't. "Convergence" in `docs/forge-build.md` has the details.
 
+`python -m simrunner generation --from gen0 --to gen1 --games N --seed S --start 23:00 --stop 07:00` runs one generation step end to end: a pool played by gen0 in both seats, the data checks, conversion, training, ablations, pair test, export, ladder and convergence check, then one entry in `results/log.jsonl`. A step that finished is skipped on the next start, so the same command continues after a crash or the hard stop. "Generation loop" in `docs/forge-build.md` has the steps, the gates and the commands for #44.
+
 ## Deck pool
 
 `deckpool` holds the real Legacy lists in `decks/` and splits them into training and held-out decks. `docs/deck-pool.md` has the commands and the near-copy rule. `simrunner` takes a deck id from `decks/manifest.json` in place of a file.

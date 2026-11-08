@@ -13,6 +13,8 @@ data/
 *.jsonl.gz
 !tests/fixtures/games/*.jsonl
 !tests/fixtures/games/real_game.jsonl.gz
+# The results log is committed. See "Results log" in docs/forge-build.md.
+!/results/log.jsonl
 *.onnx
 runs/
 
