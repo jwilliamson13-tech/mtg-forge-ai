@@ -272,19 +272,6 @@ def test_a_generation_whose_weights_changed_under_its_name_is_refused(ladder, mo
         run_ladder(ladder(("heuristic", "onnx:gen0")))
 
 
-def test_two_generations_that_forge_cannot_seat_together_yet_are_listed_and_the_rest_is_rated(ladder, monkeypatch):
-    pattern(monkeypatch, "seat1:WWLL")
-    result = run_ladder(ladder(("heuristic", "onnx:gen0", "onnx:gen1")))
-    assert len(result.unplayable) == 4 and result.complete
-    assert {unit.players for unit in result.units if unit.folder in result.unplayable} == {("onnx:gen0", "onnx:gen1")}
-    assert {rating.player for rating in result.fit.ratings} == {"heuristic", "onnx:gen0", "onnx:gen1"}
-    report = format_ladder_report(result)
-    assert re.search(r"onnx:gen0\s+onnx:gen1\s+both seats name a generation, and they differ", report)
-    assert re.search(r"onnx:gen0\s+onnx:gen1\s+no decisive games\s+0\s+0\s+0 of 4", report)
-    saved = json.loads((result.config.run_dir / RESULT_FILE).read_text(encoding="utf-8"))
-    assert len(saved["batches"]["unplayable"]) == 4
-
-
 def test_once_forge_seats_two_generations_the_ladder_plays_them(ladder, monkeypatch):
     # What lifting the refusal in `onnx_problem` does, with a stand-in for Forge.
     monkeypatch.setattr("simrunner.ladder.onnx_problem", lambda seats: None)

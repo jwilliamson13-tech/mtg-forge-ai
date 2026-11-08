@@ -144,6 +144,7 @@ class UnitResult:
     digest: str | None = None
     record_digest: str | None = None
     note: str = ""
+    tripwire_copies: list[int] = field(default_factory=list)  # search copies checked, per game that said
 
     @property
     def tally(self) -> Tally:
@@ -240,7 +241,7 @@ def result_of(unit: Unit, batch: BatchResult) -> UnitResult:
     notes = [] if batch.complete else [f"{batch.finished} of {unit.games} games finished"]
     notes += [note for worker in batch.workers if (note := worker_note(batch, worker))]
     status = FINISHED if batch.clean else STOPPED if batch.stopped else FAILED
-    return _unit_result(unit, status, tally, tripwire_hits=list(batch.tripwire_hits), digest=batch.digest,
+    return _unit_result(unit, status, tally, tripwire_hits=list(batch.tripwire_hits), tripwire_copies=list(batch.tripwire_copies), digest=batch.digest,
                         record_digest=batch.record_digest, note="; ".join(notes))
 
 
@@ -378,8 +379,14 @@ class LadderResult:
                 and not any(self.tripwire_hits))
 
     @property
+    def tripwire_copies(self) -> list[int]:
+        return [copies for unit in self.finished_units for copies in self.results[unit.folder].tripwire_copies]
+
+    @property
     def search_unchecked(self) -> bool:
-        return self.tripwire_on and any(seat_searches(player.seat(Path())) for player in self.config.players)
+        """As for a batch: a player searches and some game didn't say its search copies were checked."""
+        return (self.tripwire_on and any(seat_searches(player.seat(Path())) for player in self.config.players)
+                and len(self.tripwire_copies) < self.finished)
 
 
 def check_ladder(config: LadderConfig) -> None:
