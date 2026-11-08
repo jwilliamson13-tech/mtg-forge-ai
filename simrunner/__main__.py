@@ -20,7 +20,7 @@ from simrunner.matchup import (DEFAULT_MAX_GAMES, DEFAULT_ROUND_GAMES, DEFAULT_W
 from simrunner.pool import DEFAULT_CHUNK_GAMES, DEFAULT_HELD_OUT_SHARE, PoolConfig, format_pool_report, run_pool
 from simrunner.report import format_report
 from simrunner.window import Window, parse_clock, resolve_window
-from simrunner.worker import DEFAULT_SEARCH_BUDGET, SIM_MODES, RecordPlan, Seat
+from simrunner.worker import DEFAULT_SEARCH_BUDGET, EVALUATORS, SIM_MODES, RecordPlan, Seat
 
 CORES_RESERVED = 2
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -77,6 +77,7 @@ def _nightly(args: argparse.Namespace) -> int:
 def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, window: Window | None) -> BatchConfig:
     profiles = args.ai or (None, None)
     modes = args.sim_mode or (None, None)
+    evaluators = args.evaluator or (None, None)
     run_dir = args.run_dir or DEFAULT_RUNS / f"{time.strftime('%Y%m%d-%H%M%S')}-seed{args.seed}"
     records = None
     if args.records or args.records_dir is not None:
@@ -84,7 +85,8 @@ def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, wi
     elif args.turn_cap is not None or args.no_honest:
         args.parser.error("--turn-cap and --no-honest need records")
     return BatchConfig(
-        seats=(Seat(decks[0], profiles[0], modes[0]), Seat(decks[1], profiles[1], modes[1])),
+        seats=(Seat(decks[0], profiles[0], modes[0], evaluators[0]),
+               Seat(decks[1], profiles[1], modes[1], evaluators[1])),
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
@@ -181,6 +183,9 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
                        help="AI profile per seat, such as Default Reckless")
     batch.add_argument("--sim-mode", nargs=2, metavar=("SEAT1", "SEAT2"), choices=SIM_MODES,
                        help="simulation mode per seat: heuristic, hybrid or full (default: heuristic)")
+    batch.add_argument("--evaluator", nargs=2, metavar=("SEAT1", "SEAT2"), choices=EVALUATORS,
+                       help="what each seat's search scores states with: forge, random or passthrough (default: "
+                            "forge, with -eval left off the command); any but forge needs hybrid or full")
     batch.add_argument("--search-budget", type=int,
                        help="search steps per AI decision, in place of Forge's wall-clock limit (default: "
                             f"{DEFAULT_SEARCH_BUDGET} when a seat searches, otherwise off; 0 turns it off)")
@@ -239,8 +244,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     matchup = commands.add_parser("matchup", help="play two decks in seat-swapped rounds until deck A's win rate "
                                                   "has a narrow enough interval",
-                                  description="--ai and --sim-mode name deck A's setting first, and each setting "
-                                              "moves with its deck when the seats swap.")
+                                  description="--ai, --sim-mode and --evaluator name deck A's setting first, and "
+                                              "each setting moves with its deck when the seats swap.")
     _add_deck_arguments(matchup, "deck A, whose win rate is reported", "deck B")
     _add_batch_arguments(matchup)
     matchup.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),

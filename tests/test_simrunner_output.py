@@ -7,7 +7,7 @@ it ends a clocked one, without the clock's line.
 """
 
 from simrunner.output import (AiLimits, DrawCause, HEADER_LINE, count_stack_traces, find_fatal, parse_games,
-                              printed_sim_modes)
+                              printed_evaluators, printed_sim_modes)
 
 A = "Ai(1)-GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18"
 B = "Ai(2)-GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19"
@@ -211,6 +211,26 @@ def test_a_game_without_tripwire_lines_reports_none():
     [game] = parse_games(["Game Result: Game 1 ended in 2679 ms. Ai(1)-Burn has won!"])
     assert game.tripwire_hits is None
     assert game.tripwire_signatures == ()
+
+
+def test_the_match_header_gives_the_evaluator_per_seat():
+    header = (f"{A} [sim=full] [eval=random] [Reckless] vs {B} [sim=hybrid] [eval=forge] - "
+              "2 games of Constructed seed 42")
+    assert HEADER_LINE.match(header)
+    assert printed_evaluators(header) == ("random", "forge")
+    assert printed_sim_modes(header) == ("full", "hybrid")
+    assert printed_evaluators(f"{A} [sim=full] vs {B} [sim=full] - one game of Constructed seed 42") == ()
+
+
+def test_a_win_with_evaluators_in_the_names_still_names_the_seat():
+    text = WIN.replace(A, f"{A} [sim=full] [eval=passthrough]").replace(B, f"{B} [sim=full] [eval=forge]")
+    [game] = parse(text)
+    assert game.winner_seat == 2
+
+
+def test_an_evaluator_refusal_is_fatal():
+    assert find_fatal(["Unknown evaluator - x. Available evaluators: forge, random, passthrough"])
+    assert find_fatal(["-eval random needs a seat that searches, and seat 2 is heuristic"])
 
 
 def test_a_searching_game_says_how_many_copies_were_checked():

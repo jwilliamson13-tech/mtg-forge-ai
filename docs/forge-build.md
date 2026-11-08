@@ -110,6 +110,7 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-turncap N` stops a recorded game as a draw once turn N is over, default 50. A capped game prints `Stopping game at the turn cap as draw` before its result lines.
 - `-tripwire on|off` is on by default for every `forge sim` run, with or without `-record`, and off for any game outside `forge sim`. It reports in `Tripwire` lines before each result, and in the game record if there is one. It can't go with `-t`, and a tournament has none. See "Tripwire" below.
 - `-honest on|off` keeps the AI to what a person in its seat could know, and off is the default, so a plain `forge sim` is the stock AI with its peeks. It works without `-record`, but only `-record` keeps a reveal log, so the AI then goes by public cards alone. It can't go with `-t`. See `docs/peek-fixes.md`.
+- `-eval` is the evaluator per seat, in deck order, such as `-eval random forge`: what that seat's search scores game states with. The names are `forge`, `random` and `passthrough`, and `forge`, Forge's own evaluator, is the default for a seat left out. Any other name needs the seat to be `hybrid` or `full`, because a heuristic seat never scores a state, and Forge refuses it otherwise. With the flag, each player name ends in `[eval=name]` after its `[sim=mode]`. An unknown name prints the valid ones and stops, and so does `-eval` with `-t`. See "Evaluators" below.
 - `-prune on|off` decides what the copies a search plays on hold of the other players' hidden cards. On, a copy holds placeholders, plus what the searching seat was shown. It is on by default whenever `-sim` gives a seat `hybrid` or `full`, and off otherwise, where no seat searches. It can't go with `-t`. See "Pruned copies" below.
 - `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
@@ -144,13 +145,13 @@ $decks = "..\forge\forge-gui\res\geneticaidecks"
 python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
 ```
 
-Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` doesn't get those modes back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. It also exits 1 if a game file and a result line disagree.
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--evaluator random forge` sets `-eval` per seat, in deck order, and leaving it out leaves the flag off. The runner refuses anything but `forge` on a heuristic seat before it launches. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` or `--evaluator` doesn't get those modes or evaluators back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. It also exits 1 if a game file and a result line disagree.
 
 `--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, with or without records. `--no-prune` passes `-prune off`. Without it the runner leaves the flag out, so Forge prunes a searching seat's copies. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
 
 ### What the report counts
 
-- **Seat 1** and **seat 2** give the deck, AI profile and simulation mode.
+- **Seat 1** and **seat 2** give the deck, AI profile and simulation mode, and the evaluator when `--evaluator` named one.
 - **Attempted** is what you asked for. **Finished** is every game with a `Game Result:` line. Games not finished is the difference, and covers a deck that won't load, an unknown AI profile and a JVM that died.
 - **Wins** come from the `Ai(n)-` prefix, so they are per seat, and seat n holds deck n for the whole batch.
 - **Draws by rules** are games Forge printed as a draw. In the runs below that meant both players lost.
@@ -259,7 +260,7 @@ What that run doesn't cover:
 python -m simrunner matchup hogaak-1 ur-tempo-1 --seed 1 --run-dir runs/hogaak-vs-ur-tempo
 ```
 
-It takes `batch`'s options except `--games`, plus three of its own. `--width` is the target, 5 points by default. `--round-games` is the games per round, 100 by default, and has to be even. `--max-games` is the budget, 1000 by default. As with `pool`, both seats default to `heuristic` and records are on. Records are on so that the AI plays honestly, because the runner only passes `-honest on` with records, and so that each game's file is checked against its result line. They also bring Forge's turn cap of 50. `--ai` and `--sim-mode` take deck A's setting first, and each setting moves with its deck when the seats swap.
+It takes `batch`'s options except `--games`, plus three of its own. `--evaluator` is how one deck's search runs a model while the other runs stock. `--width` is the target, 5 points by default. `--round-games` is the games per round, 100 by default, and has to be even. `--max-games` is the budget, 1000 by default. As with `pool`, both seats default to `heuristic` and records are on. Records are on so that the AI plays honestly, because the runner only passes `-honest on` with records, and so that each game's file is checked against its result line. They also bring Forge's turn cap of 50. `--ai`, `--sim-mode` and `--evaluator` take deck A's setting first, and each setting moves with its deck when the seats swap.
 
 **Width means half-width.** The target is how far the interval reaches on each side of the rate, averaged over the two sides because Wilson is lopsided away from 50%. That's the only reading under which HANDOFF.md's figures work out: a half-width of 5 points takes 381 decisive games at even odds, and 2 points takes 2,398. The full width of the interval is twice the target.
 
@@ -684,6 +685,48 @@ What this doesn't cover:
 - These runs came before #25, so the search saw the opponent's hand and library. The hook and tripwire weren't in yet either. "Game records" below has the hook's cost.
 
 Memory peaked at 5.2 GB across 4 JVMs. No run produced a stack trace.
+
+### Evaluators
+
+The full-sim search scores each state it reaches, and `-eval` picks what scores it, per seat. Issue #22 put a seam there: an evaluator gives a win probability, and `TwoLookScorer` in the fork turns it into Forge's two integers. Issue #23 added the first two evaluators behind it.
+
+- `forge` is Forge's hand-tuned `GameStateEvaluator`, called as stock Forge calls it. It doesn't go through the seam. A seat without `-eval` plays this.
+- `random` scores every state with a uniform draw. It has its own `java.util.Random`, seeded from `-s` and the seat number, and draws nothing from Forge's `MyRandom`. So a seeded run with a search budget still replays.
+- `passthrough` is Forge's evaluator through the seam. It hands `TwoLookScorer` Forge's score as a probability, chosen so that the scorer gets back Forge's integer exactly. Forge's evaluator also returns its win and loss bands for a live game whose coming combat ends it. Those keep their order, at the top and bottom of the seam's range.
+
+A seat picks one in the fork's `SimulateMatch`: the name goes through `Evaluators.scorer(name, seed)`, which returns a `SearchScorer`, and that goes on the seat's `LobbyPlayerAi` with `setSearchScorer`. The search's copies of the game share the lobby player, so they score the same way. An ONNX evaluator is one more name in `Evaluators`, and one more value in `EVALUATORS` in `simrunner/worker.py`.
+
+A game record doesn't say which evaluator a seat used. Adding it means a schema change, so it waits for a ticket that needs it.
+
+**Random finishes games.** Run 2026-11-07 with fork commit `9327d11`: Burn against Merfolk, the two `GAL_` decks from step 5, `--sim-mode full full --evaluator random random`, seed 1, 10 games on 2 workers, the default budget of 100. All 10 finished, 4 to seat 1 and 6 to seat 2, in 5 to 12 turns and 15 to 60 seconds a game. No draws and no stack traces. The batch was clean and exited 0. It ran without records, so honest play was off and the tripwire caught the stock AI's own peeks, 306 hits a game on average. That says nothing about the evaluator.
+
+**Passthrough doesn't play as stock does.** Every run below is Burn against Merfolk, `--sim-mode full full`, seed 2, 20 games on 2 workers, the default budget of 100, with `--records`. The comparison is record against record, game by game.
+
+| Run | Seat 1 and seat 2 wins | Record digest | Result digest | Same winner as stock | Same record as stock |
+|---|---|---|---|---|---|
+| stock, no `-eval` | 8 and 12 | `7753a6080bcd` | `b5da809ebc07` | | |
+| `-eval forge forge` | 8 and 12 | `7753a6080bcd` | `b5da809ebc07` | 20 of 20 | 20 of 20 |
+| `passthrough`, fork `9327d11` | 6 and 10, 4 exception draws | `6f19b94fa46c` | `f3fb12f833ba` | 8 of 20 | 1 of 20 |
+| `passthrough`, fork `164dd62` | 9 and 11 | `ff0943f49b68` | `95ce6b2eb447` | 9 of 20 | 1 of 20 |
+
+The second row is the control. Stock replays itself, and `-eval forge` changes nothing but the player names.
+
+Read the last two columns with care. One JVM plays its games from one random stream, so once a game parts from stock, every later game in that JVM starts from a different stream and is a different game. The "same winner" count after that point is a coin toss. What counts is where each JVM first parts. On fork `164dd62`, worker 0's first game is the same card by card, but its search drew differently on the way, so its second game differs from the first snapshot. Worker 1's first game parts at snapshot 112 of 118. Every later game in both workers differs from its first snapshot.
+
+The first passthrough run turned up two faults in the second look, both fixed in `164dd62`:
+
+- **A crash.** The second look took a sick creature out of the battlefield into its owner's `None` zone. When another card remembered that creature, Forge's combat look copied the derived state and `GameCopier` threw `Couldn't map`. That happened in 4 games, on Merrow Reejerey and Cursecatcher. The creature now goes to no zone, which the copier already skips.
+- **The game's stream.** The passthrough's second look runs Forge's evaluator again, whose combat look runs the AI's attack code, which draws from `MyRandom`. Stock takes no second look, so the stream moved on where stock's didn't, and the next game in the JVM was a different game. The second look now draws from a generator of its own. Those draws still count in the `random draws` of the `AI limits:` line, so that number can't be compared with stock's.
+
+Three causes remain, and they come from the design of the seam rather than from a fault:
+
+- **Forge's bands lose their meaning.** Forge's evaluator gives a win or loss band when the combat it plays out for this turn ends the game. Stock's search stops looking deeper once its best line scores a win (`SimulationController.shouldRecurse`), and its effect cache stores score changes that include the band. Through the seam a band is a live score near the top or bottom of the range, so the search goes on and caches other numbers. A diagnostic scorer that gave Forge's own two numbers through the mapping, with no second look, still parted from stock: 3 of 20 records the same, and a game with the same record drew 2777 times to stock's 1658. Its scores differ from stock's in the bands and nowhere else. 14% of the states the passthrough scored had a band for Forge's value.
+- **A sick lord loses its pump.** Forge counts a sick creature as 0 but keeps what its static abilities give the rest of the board. The second look removes the creature, and the pump goes with it. This is the point where worker 1's first game parted. On Merfolk's turn, stock cast Phantasmal Image as a copy of Merrow Reejerey before combat, because the copy's +1/+1 raised the available value. The passthrough held the Image and attacked first, because without the pump the cast didn't raise it. A sick lord does pump this turn's attackers, so here Forge is right and the second look is wrong. I read this from the two records and the counts below, not from the scores at that decision.
+- **A sick creature can't block in the second look.** On the opponent's turn, a creature the AI flashed in is sick by Forge's rule, so the second look removes it, and Forge's combat look then plays the opponent's attack with one blocker fewer.
+
+A throwaway scorer counted where the passthrough's available value differs from Forge's over 11,428 states it scored, played the same way: 1,803 states differ. 1,619 had a sick creature with a static ability, a lord or a copy of one. 74 were on the opponent's turn with no such creature, which I take to be the missing blocker. 110 had a band on one side. The two decks have no mana creatures, so the opposite case never came up: a sick mana creature can't tap, and Forge still counts its mana, where the second look doesn't. `EvaluatorsTest` pins that case with Llanowar Elves. The diagnostic run ran out of its 2048m heap after 4 games. Those 4 games match the `164dd62` passthrough record for record, so the counts describe the passthrough's own play.
+
+What this doesn't cover: one matchup, one seed, 20 games. The passthrough runs took 1035 to 1259 seconds against stock's 747, and memory wasn't measured.
 
 ## The decks
 

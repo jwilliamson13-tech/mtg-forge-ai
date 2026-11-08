@@ -17,9 +17,9 @@ from gamerecord import GameRecordError, game_digest, read_metadata
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
-from simrunner.worker import (JVM_PROPERTIES, GameFile, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
-                              prepare_folder, remove_folder, requested_sim_modes, resolve_search_budget,
-                              run_worker, sim_args)
+from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_SIM_MODE, JVM_PROPERTIES, GameFile, RecordPlan, Seat, WorkerPlan, WorkerResult, any_seat_searches, kill_tree,
+                              prepare_folder, remove_folder, requested_evaluators, requested_sim_modes,
+                              resolve_search_budget, run_worker, seat_searches, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
 STATUS_FILE = "batch.json"
@@ -260,6 +260,8 @@ class BatchResult:
             ignored.append("a game record that doesn't show honest play")
         if self.tripwire_on and not all(game.tripwire_hits is not None for game in worker.games):
             ignored.append("a game with no tripwire count")
+        if worker.ready_s is not None and worker.evaluators != requested_evaluators(self.config.seats):
+            ignored.append("Forge did not name the evaluators asked for")
         return ignored
 
     def records_agree(self, worker: WorkerResult) -> bool:
@@ -365,6 +367,11 @@ def check_setup(config: BatchConfig) -> None:
         raise SetupError("games and workers must both be at least 1")
     if config.search_budget is not None and config.search_budget < 0:
         raise SetupError("the search budget can't be negative")
+    for number, seat in enumerate(config.seats, 1):
+        if seat.evaluator not in (None, DEFAULT_EVALUATOR) and not seat_searches(seat):
+            # A heuristic seat never scores a state, so it would play stock under another name.
+            raise SetupError(f"the {seat.evaluator} evaluator needs a seat that searches, and seat {number} "
+                             f"is {seat.sim_mode or DEFAULT_SIM_MODE}")
     if config.records and config.records.turn_cap is not None and config.records.turn_cap < 1:
         raise SetupError("a turn cap has to be at least 1")
     if config.records and not BATCH_ID.fullmatch(config.batch_id):

@@ -23,13 +23,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, GameResult, count_stack_traces,
-                              find_fatal, parse_games, printed_sim_modes)
+                              find_fatal, parse_games, printed_evaluators, printed_sim_modes)
 
 JVM_PROPERTIES = ("-Dfile.encoding=UTF-8", "-Dsentry.enabled=false")
 PROFILE_FILE = "forge.profile.properties"
 DEFAULT_AI_PROFILE = "Default"
 SIM_MODES = ("heuristic", "hybrid", "full")
 DEFAULT_SIM_MODE = "heuristic"
+# What the search scores states with, per seat: Forge's own evaluator, noise, or Forge's through the seam (#23).
+EVALUATORS = ("forge", "random", "passthrough")
+DEFAULT_EVALUATOR = "forge"
 DECK_NAMES = ("seat1.dck", "seat2.dck")
 # Search steps per AI decision. See "Full-sim replay" in docs/forge-build.md for how this was chosen.
 DEFAULT_SEARCH_BUDGET = 100
@@ -50,6 +53,7 @@ class Seat:
     deck: Path
     ai_profile: str | None = None
     sim_mode: str | None = None
+    evaluator: str | None = None  # None leaves `-eval` to the other seat, or off the command
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,7 @@ class WorkerResult:
     stderr_traces: int = 0
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
+    evaluators: tuple[str, ...] = ()  # what the header says each seat's search scores with
     records: list[GameFile] = field(default_factory=list)  # game files with this worker's seed
 
     @property
@@ -107,7 +112,19 @@ def requested_sim_modes(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
 
 
 def any_seat_searches(seats: tuple[Seat, Seat]) -> bool:
-    return any((seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE for seat in seats)
+    return any(seat_searches(seat) for seat in seats)
+
+
+def seat_searches(seat: Seat) -> bool:
+    return (seat.sim_mode or DEFAULT_SIM_MODE) != DEFAULT_SIM_MODE
+
+
+def requested_evaluators(seats: tuple[Seat, Seat]) -> tuple[str, ...]:
+    """The `-eval` values for these seats. Empty means leave the flag out."""
+    if not any(seat.evaluator for seat in seats):
+        return ()
+    # `-eval` fills seats in order, so name both.
+    return tuple(seat.evaluator or DEFAULT_EVALUATOR for seat in seats)
 
 
 def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> int:
@@ -128,6 +145,8 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-a", *(seat.ai_profile or DEFAULT_AI_PROFILE for seat in seats)]
     if modes := requested_sim_modes(seats):
         args += ["-sim", *modes]
+    if evaluators := requested_evaluators(seats):
+        args += ["-eval", *evaluators]
     if search_budget:
         args += ["-budget", str(search_budget)]
     if not tripwire:
@@ -276,5 +295,6 @@ def _read_stdout(result: WorkerResult, lines: list[tuple[float, str]]) -> None:
         if result.ready_s is None and HEADER_LINE.match(line):
             result.ready_s = stamp
             result.sim_modes = printed_sim_modes(line)
+            result.evaluators = printed_evaluators(line)
         if line.startswith("Game Result:"):
             result.last_result_s = stamp

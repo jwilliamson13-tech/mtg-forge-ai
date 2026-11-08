@@ -23,6 +23,7 @@ TURN_LINE = re.compile(r"^Game Outcome: Turn (\d+)$")
 OUTCOME_WON_LINE = re.compile(r"^Game Outcome: Ai\(\d+\)-.* has won because all opponents have lost$")
 HEADER_LINE = re.compile(r"^Ai\(1\)-.* vs Ai\(2\)-.* seed (\d+)$")
 SIM_MODE_TAG = re.compile(r"\[sim=(\w+)\]")
+EVALUATOR_TAG = re.compile(r"\[eval=(\w+)\]")
 AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws"
                             r"(?:, (\d+) stops played, (\d+) stops passed, (\d+) stops with a land, "
                             r"(\d+) land drops missed)?$")
@@ -33,7 +34,7 @@ TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
 TURN_CAP_LINE = "Stopping game at the turn cap as draw"
 AI_TIMEOUT_LINE = "AI eval thread at timeout:"
-FATAL_LINES = ("Could not load deck", "Unknown AI profile", "Unknown simulation mode")
+FATAL_LINES = ("Could not load deck", "Unknown AI profile", "Unknown simulation mode", "Unknown evaluator", "-eval ")
 
 
 class DrawCause(Enum):
@@ -141,6 +142,11 @@ def find_fatal(lines: Iterable[str]) -> str | None:
 def printed_sim_modes(header: str) -> tuple[str, ...]:
     """Return the mode per seat from a match header. Empty when Forge ran without `-sim`."""
     return tuple(SIM_MODE_TAG.findall(header))
+
+
+def printed_evaluators(header: str) -> tuple[str, ...]:
+    """Return the evaluator per seat from a match header. Empty when Forge ran without `-eval`."""
+    return tuple(EVALUATOR_TAG.findall(header))
 
 
 def count_stack_traces(lines: Iterable[str]) -> int:

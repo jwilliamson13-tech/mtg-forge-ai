@@ -53,11 +53,12 @@ def records(tmp_path, monkeypatch):
 
 @pytest.fixture
 def config(forge, decks, tmp_path):
-    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None),
+    def build(games=6, workers=2, seed=42, profiles=(None, None), modes=(None, None), evaluators=(None, None),
               records=False, records_dir=None, turn_cap=None, honest=True, **overrides):
         settings = dict(
             records=RecordPlan(records_dir, turn_cap, honest) if records else None,
-            seats=(Seat(decks[0], profiles[0], modes[0]), Seat(decks[1], profiles[1], modes[1])),
+            seats=(Seat(decks[0], profiles[0], modes[0], evaluators[0]),
+                   Seat(decks[1], profiles[1], modes[1], evaluators[1])),
             games=games, batch_seed=seed, workers=workers, forge_root=forge,
             run_dir=tmp_path / "run", clock_s=60, java=(sys.executable, str(STUB)),
         )
@@ -1223,3 +1224,92 @@ def test_one_silent_game_keeps_a_batch_from_being_tripwire_clean():
 def test_a_jar_with_no_tripwire_says_so_in_the_report(config, monkeypatch):
     monkeypatch.setenv("STUB_SCENARIO", "no_tripwire_jar")
     assert "no game reported, so the jar may be stale" in format_summary(run_batch(config(games=2)))
+
+
+def flag_values(argv, flag):
+    return argv[argv.index(flag) + 1:argv.index(flag) + 3]
+
+
+def test_the_evaluator_passes_through_per_seat(config, records):
+    batch = run_batch(config(modes=("full", "hybrid"), evaluators=("random", "passthrough")))
+    for run in records().values():
+        assert flag_values(run["argv"], "-eval") == ["random", "passthrough"]
+    assert batch.clean
+    assert all(worker.evaluators == ("random", "passthrough") for worker in batch.workers)
+
+
+def test_one_named_seat_still_gives_forge_both_evaluators(config, records):
+    batch = run_batch(config(modes=("full", None), evaluators=("random", None)))
+    for run in records().values():
+        assert flag_values(run["argv"], "-eval") == ["random", "forge"]
+    assert batch.clean
+
+
+def test_no_evaluator_leaves_the_flag_out(config, records):
+    batch = run_batch(config(modes=("full", "full")))
+    assert all("-eval" not in run["argv"] for run in records().values())
+    assert batch.clean
+
+
+def test_forge_on_a_heuristic_seat_is_allowed(config, records):
+    assert run_batch(config(evaluators=("forge", "forge"))).clean
+    assert all(flag_values(run["argv"], "-eval") == ["forge", "forge"] for run in records().values())
+
+
+def test_another_evaluator_on_a_heuristic_seat_is_refused(config):
+    # A heuristic seat never scores a state, so it would play stock under another name.
+    with pytest.raises(SetupError, match="the random evaluator needs a seat that searches, and seat 2 is heuristic"):
+        run_batch(config(modes=("full", None), evaluators=(None, "random")))
+    with pytest.raises(SetupError, match="seat 1 is heuristic"):
+        run_batch(config(modes=("heuristic", "full"), evaluators=("passthrough", None)))
+
+
+def test_a_jar_that_ignores_the_evaluator_fails_the_batch(config, monkeypatch):
+    # A jar from before #23 plays the stock evaluator and says nothing.
+    monkeypatch.setenv("STUB_SCENARIO", "no_eval_jar")
+    batch = run_batch(config(modes=("full", None), evaluators=("random", None)))
+    assert batch.finished == 6
+    assert not batch.clean
+    assert "Forge did not name the evaluators asked for, so the jar may be stale" in format_workers(batch)
+
+
+def test_without_an_evaluator_a_jar_from_before_them_is_clean(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_eval_jar")
+    assert run_batch(config(modes=("full", None))).clean
+
+
+def test_an_unknown_evaluator_finishes_nothing_despite_exit_code_zero(config):
+    batch = run_batch(config(modes=("full", "full"), evaluators=("Bogus", None)))
+    assert batch.finished == 0
+    assert all(worker.fatal.startswith("Unknown evaluator - Bogus") for worker in batch.workers)
+    assert not batch.clean
+
+
+def test_the_report_names_an_evaluator_only_when_one_was_set():
+    config = BatchConfig(
+        seats=(Seat(Path("burn.dck"), None, "full", "random"), Seat(Path("merfolk.dck"), None, "full")),
+        games=1, batch_seed=1, workers=1, forge_root=Path("forge"), run_dir=Path("run"),
+    )
+    report = format_summary(BatchResult(config, [], wall_s=0.0))
+    assert "burn (AI default, sim full, eval random)\n" in report
+    assert "merfolk (AI default, sim full)\n" in report
+
+
+def test_the_evaluator_flag_takes_one_evaluator_per_seat(decks, forge, tmp_path, records):
+    args = cli_args(decks, forge, tmp_path / "run", "--sim-mode", "full", "full", "--evaluator", "passthrough", "forge")
+    assert main(args) == 0
+    assert all(flag_values(run["argv"], "-eval") == ["passthrough", "forge"] for run in records().values())
+
+
+def test_the_evaluator_flag_refuses_an_unknown_name(decks, forge, tmp_path, capsys):
+    with pytest.raises(SystemExit) as stop:
+        main(cli_args(decks, forge, tmp_path / "run", "--sim-mode", "full", "full", "--evaluator", "onnx", "forge"))
+    assert stop.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
+
+
+def test_the_evaluator_flag_refuses_a_heuristic_seat(decks, forge, tmp_path, capsys):
+    with pytest.raises(SystemExit) as stop:
+        main(cli_args(decks, forge, tmp_path / "run", "--evaluator", "random", "forge"))
+    assert stop.value.code == 2
+    assert "needs a seat that searches" in capsys.readouterr().err

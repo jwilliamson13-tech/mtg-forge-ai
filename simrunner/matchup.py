@@ -289,7 +289,8 @@ def run_matchup(config: MatchupConfig) -> MatchupResult:
 
 
 def _side(seat: Seat) -> dict:
-    return {"deck": seat.deck.stem, "file": str(seat.deck), "ai_profile": seat.ai_profile, "sim_mode": seat.sim_mode}
+    return {"deck": seat.deck.stem, "file": str(seat.deck), "ai_profile": seat.ai_profile, "sim_mode": seat.sim_mode,
+            "evaluator": seat.evaluator}
 
 
 def _tally_fields(tally: Tally) -> dict:

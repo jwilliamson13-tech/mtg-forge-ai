@@ -136,6 +136,10 @@ def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     if not batch.prune:
         # left out when on, so that a plan written before the setting existed still matches
         fields["prune"] = False
+    evaluators = [seat.evaluator for seat in batch.seats]
+    if any(evaluators):
+        # only when set, so that a plan written before evaluators existed still matches on a restart
+        fields["evaluators"] = evaluators
     return fields
 
 
