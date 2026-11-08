@@ -152,3 +152,14 @@ def test_a_restart_plays_only_what_did_not_finish(pool_manifest, forge, tmp_path
     with pytest.raises(SystemExit):
         main(pool_args(pool_manifest, forge, run_dir, seed="6"))
     assert "different plan" in capsys.readouterr().err
+
+
+def test_the_plan_names_the_prune_only_when_it_is_off(pool_manifest, forge, tmp_path, capsys, launches):
+    run_dir = tmp_path / "run"
+    main(pool_args(pool_manifest, forge, run_dir))
+    # a plan written before the setting existed has no such field, and has to keep matching
+    assert "prune" not in json.loads((run_dir / "plan.json").read_text(encoding="utf-8"))
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        main(pool_args(pool_manifest, forge, run_dir) + ["--no-prune"])
+    assert "different plan, in: prune" in capsys.readouterr().err

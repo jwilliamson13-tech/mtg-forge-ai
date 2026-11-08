@@ -211,3 +211,17 @@ def test_a_game_without_tripwire_lines_reports_none():
     [game] = parse_games(["Game Result: Game 1 ended in 2679 ms. Ai(1)-Burn has won!"])
     assert game.tripwire_hits is None
     assert game.tripwire_signatures == ()
+
+
+def test_a_searching_game_says_how_many_copies_were_checked():
+    games = parse_games([
+        "Tripwire: 1 hits",
+        "Tripwire hit: 1 copy: Hand",
+        "Tripwire copies: 312 checked",
+        "Game Result: Game 1 ended in 2679 ms. Ai(1)-Burn has won!",
+        "Tripwire: 0 hits",
+        "Game Result: Game 2 ended in 2679 ms. Ai(2)-Merfolk has won!",
+    ])
+    assert games[0].tripwire_copies == 312
+    assert games[0].tripwire_signatures == (("copy: Hand", 1),)
+    assert games[1].tripwire_copies is None

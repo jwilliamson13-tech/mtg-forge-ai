@@ -74,7 +74,7 @@ With `-tripwire off`, the hook writes `{"enabled": false, "hits": 0, "signatures
 | `hits` | integer, 0 or more | How many hidden-zone reads it caught. |
 | `signatures` | array of strings | The unique stack signatures behind those hits, sorted. |
 
-`enabled` is there because 0 hits from a tripwire that was off says nothing. A batch is clean only when every game has `enabled` true and `hits` 0. That covers the real game. With a `hybrid` or `full` seat the search's copies are unchecked until #25.
+`enabled` is there because 0 hits from a tripwire that was off says nothing. A batch is clean only when every game has `enabled` true and `hits` 0. With a `hybrid` or `full` seat the hits also count the search's copies, which `GameCopier` checks as it makes each one, under signatures that start `copy: `. The count of copies checked goes to stdout only, as `Tripwire copies: N checked`.
 
 A signature is up to three `forge.ai` frames, nearest first, as `Class.method:line`, joined with ` < `. The first frame is the line that asked for the cards. A signature that starts with `no decider: ` is a forge-ai read that no controller call had opened. Line numbers belong to the jar, so compare signatures only within one build. The record has no count per signature, and the sim-runner gets those from Forge's stdout.
 
