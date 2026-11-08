@@ -410,6 +410,104 @@ runs\convergence\                   the default folder
 
 In `convergence.json`, `status` is `converged`, `moved` or `incomplete`. Each entry of `matchups` has the slot, both deck ids, `verdict` (`converged`, `moved` or `no verdict`), `why`, and `before` and `after` with the status, interval, counts and whether the folder was reused. A rate appears only when its target was met, and never without its interval.
 
+### Generation loop
+
+`generation` runs one generation step end to end. It plays a data pool with generation k, checks it, trains generation k+1 on it, reviews and exports the model, adds it to the ladder, runs the convergence check against k, and appends one entry to the results log.
+
+```powershell
+python -m simrunner generation --from gen0 --to gen1 --games 10000 --seed 20261108 --workers 4 --start 23:00 --stop 07:00
+```
+
+**Who plays the data.** Generation k+1 trains on games generation k played, with k in both seats in full sim, as HANDOFF.md asks. Two different generations can't sit at one table yet, because Forge loads one ONNX bundle per JVM, but one bundle in both seats works today. Gen k against heuristic would also run, and I left it out because half of every game's moves would come from the AI being replaced. Gen 0 is the exception. It trains on the stock heuristic AI's games, so its step is `--from heuristic --to gen0`, and its convergence check is heuristic against gen0. `--from` has to be the generation just before `--to`.
+
+**The steps**, in order. Each one is the existing command, run as a subprocess from the repository root at below-normal priority, with its output in `logs\<step>.log`.
+
+| Step | Command | Stops the loop when |
+|---|---|---|
+| `play` | `simrunner pool`, the source player in both seats | any chunk is unfinished or failed |
+| `check` | reads the pool folder, in the loop | more than `--max-tripwire-share` of games, 1% by default, had tripwire hits, or the tripwire was off |
+| `hiddencheck` | `gamerecord hiddencheck` | record ids name a hidden card |
+| `convert` | `gamerecord convert --drop-tripwire-hits` | any game file is rejected |
+| `join` | `setmodel join` | more than `--max-drop-share` of snapshots, 1% by default, drop for an unmatched card |
+| `train` | `setmodel train --generation k+1` | the metrics name another generation |
+| `ablate` | `setmodel ablate` | kill criterion 2 fails: full beats no_cards by under 5 points of held-out accuracy |
+| `pairtest` | `setmodel pairtest` | never. The verdict goes in the log |
+| `export` | `setmodel export --out models\gen{k+1}` | the export check fails, or the bundle doesn't resolve to generation k+1 |
+| `ladder` | `simrunner ladder`, `--ladder-players` plus every generation up to k+1 | the ladder isn't complete |
+| `converge` | `simrunner converge` source against gen{k+1} | a tracked matchup hasn't ended |
+| `log` | appends to `results\log.jsonl` and rebuilds `results\log.md`, in the loop | |
+
+The 2026-11-07 gen-0 pool is why `check` exists. Its report said 1 of 10,000 games had a tripwire hit and 418 stack traces, and nothing more. `check` names the game, `gen0-pool-80267367397852-35`, and its signature, `face-down: forge.ai.ability.PlayAi.chooseSingleCard:173`. It also shows that all 418 traces were the AI's eval-thread `TimeoutException`, spread over 6 games of one chunk, with 318 of them in game 32 of chunk 160. A game with a tripwire hit never reaches training, because `convert --drop-tripwire-hits` leaves it out and names it. Games with AI timeouts are counted and kept. Over the share, the loop stops instead, since that many hits means a peek to fix before any more data.
+
+**Resuming.** A step that finishes writes `steps\<step>.json` with its command, log, exit code, time, peak memory and what its gate read. The next start skips every step whose record and outputs are still there, and runs the first one that isn't, plus everything after it. A step that ran again makes everything after it run again too, so a stale model never reaches the ladder. `--redo STEP` forces a step and all that follow. A finished pool folder from before the loop, such as `runs\gen0-pool`, is adopted through `--data-dir` without replaying, as long as its seed, games, modes and generation match the command. A different pool in that folder is refused before anything runs.
+
+**What stops the loop.** A failed gate is a result. The loop appends a `stopped` entry with the step, the reason and everything measured so far, and exits 1. A second start that fails the same gate doesn't log it twice. Anything else that stops a step can be resumed: a crash, an unfinished pool, the hard stop or a memory kill. The loop logs nothing for it, exits 1, and the same command continues.
+
+**The window.** `--start` and `--stop` are required. The loop waits for the window, and passes it to `pool`, `ladder` and `converge`, which stop at it themselves. Every other step gets killed at the stop, its tree included, and runs again from the start next time. The loop also starts no subprocess step after the stop. So the machine is free in the morning, at the cost of losing a training run the stop cuts off. A whole night is needed for ablate on a big pool, because it trains five models.
+
+**Memory.** Before convert, join, train, ablate, pairtest or export starts, the loop wants `--min-free-mb` of free physical memory, 4,096 by default, and stops with a message if it isn't there. While one of them runs, the loop polls free memory each second and kills the step if it falls under `--memory-floor-mb`, 1,024 by default, rather than let the PC page itself to a halt. Each record has the step's peak working set, summed over its process tree, because a venv's `python.exe` is a launcher whose own peak is a few MB. It also has the least free memory seen while the step ran.
+
+**Settings passed through.** `--chunk-games` and `--held-out-share` go to `pool`. `--deck-pairs` and `--pair-games` go to `ladder`. `--width`, `--round-games` and `--max-games` go to `converge`. `--search-budget`, `--clock`, `--heap` and `--forge` go to all three Forge steps, and `--epochs`, `--batch-size`, `--device` and `--train-seed` to train and ablate. Left out, each takes the command's own default. The ladder and convergence seeds default to 41 and 42 and must stay the same every generation, because both folders refuse a seed change.
+
+```
+runs\generations\gen{k+1}\
+    pool\               the data pool, unless --data-dir names another
+    check.json          what check read: tripwire games, AI timeouts, stack traces, record counts
+    parquet\  model\  ablation\
+    logs\<step>.log     each command's output, its command line first
+    steps\<step>.json   each finished step's record
+    loop.log            every command and output path, as the loop ran them
+models\gen{k+1}\        the export bundle
+runs\ladder\  runs\convergence\   shared with every generation, so each one plays only what's new
+results\log.jsonl  results\log.md
+```
+
+### Results log
+
+`results\log.jsonl` is committed and append-only, one JSON line per entry. `results\log.md` is rendered from it after every append, so don't edit the page. Each line holds:
+
+- `generation`, `name`, `source`, `status` (`complete` or `stopped`), `stopped_at`, `why`, `finished_at`, `commit` and `run_dir`.
+- `seeds`, for the data pool, training, the ladder and convergence.
+- `data`, the check's output, with games planned and finished, draws by cause, every deck id the pool played, chunk statuses, game records, tripwire games and signatures, AI timeouts and stack traces by exception, plus the hiddencheck counts.
+- `conversion` and `join`, with kept and dropped games by reason and dropped snapshots with the top unmatched names.
+- `training`, with train games and rows, held-out accuracy and log loss with their game and row counts, device, epochs and seconds.
+- `ablation`, which is the table and `kill_criterion_2`, with `margin_points`, `bar_points` and `passed`.
+- `pair_test`, `export` with the bundle, model digest and check, `ladder` with every player's rating, interval and decisive games, and `convergence` with each tracked matchup's two intervals and verdict.
+- `steps`, each step's record: status (`ran`, `skipped` or `adopted`), command, log, exit, seconds and peak MB.
+
+The page never prints a bare percentage. A win rate carries its interval and game count, or says why it has none. A share carries its two counts, and an accuracy carries the games behind it. A sample section, from the stub test:
+
+```
+### Convergence
+
+- onnx:gen0 against onnx:gen1: moved, 3 converged, 1 moved, 0 with no verdict. Seed 42, target half-width 5.0 points, converged when the two Wilson intervals overlap.
+
+| Slot | Deck A | Deck B | onnx:gen0 win rate | onnx:gen1 win rate | Verdict |
+|---|---|---|---|---|---|
+| 1 | held0 | held1 | 50.0% (45.1% to 54.9%, 400 games) | 52.5% (47.6% to 57.4%, 400 games) | converged |
+| 2 | held0 | held2 | 50.0% (45.1% to 54.9%, 400 games) | 62.5% (57.6% to 67.4%, 400 games) | moved |
+```
+
+`tests/test_simrunner_loop.py` runs the loop against `tests/stub_loop.py`, which stands in for every command. It covers step order, skip and resume, each gate, the memory and window kills, and the rendering. No test plays Forge or trains a model.
+
+### Running gen 0 and gen 1 (#44)
+
+Merge first, in this order: the stack under this branch (#67 and every PR below it), this PR, and #65, the memory-lean `setmodel`. Join and train on a 10,000-game pool need #65 on this PC, and without it expect the memory floor to kill one of them. The `-eval onnx:DIR` branch is optional. Without it the ladder lists gen0 against gen1 as not played and rates both through heuristic and full.
+
+Gen 0 trains on the heuristic pool already played on 2026-11-07, which the loop adopts as it is:
+
+```powershell
+python -m simrunner generation --from heuristic --to gen0 --data-dir runs/gen0-pool --games 10000 --seed 20261107 --workers 4 --start 23:00 --stop 07:00
+```
+
+That ladder rates heuristic, full and gen0, and the convergence check runs heuristic against gen0. Then gen 1 plays its own pool with gen0 in both seats:
+
+```powershell
+python -m simrunner generation --from gen0 --to gen1 --games 10000 --seed 20261108 --workers 4 --start 23:00 --stop 07:00
+```
+
+Its ladder has the four rungs #44 asks for, and its convergence check is the first real one, gen0 against gen1. Each command takes as many nights as its pool and its ladder need. Run the same command each night until it exits 0. A full-sim pool is slower than the heuristic one's 1,853 games an hour, so `--games` may want to come down for gen 1 once the first night's rate is in `runs\generations\gen1\pool\report.txt`.
+
 ### Batch output folder
 
 Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.

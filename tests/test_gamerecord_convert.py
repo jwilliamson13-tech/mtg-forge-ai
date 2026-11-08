@@ -283,3 +283,33 @@ def test_the_command_refuses_a_folder_with_no_game_files(tmp_path, out, capsys):
         main(["convert", str(tmp_path / "empty"), str(out)])
     assert stopped.value.code == 2
     assert "no game files" in capsys.readouterr().err
+
+
+def test_tripwire_games_stay_in_by_default(tmp_path, game_file, out):
+    folder = tmp_path / "night"
+    game_file("win", folder)  # its tripwire caught 3 hits
+
+    assert convert_folder(folder, out).kept == {"win": 1}
+
+
+def test_dropping_tripwire_games_names_each_with_its_signatures(night, out):
+    report = convert_folder(night, out, drop_tripwire_hits=True)
+
+    assert report.kept == {}
+    assert report.dropped == {"tripwire": 1, "draw_clock": 1, "draw_turn_cap": 1, "exception": 1}
+    assert report.tripwire_games == [(GAME_ID, 3, ["forge.ai.ComputerUtil.hasAFogEffect:2971",
+                                                   "forge.ai.ability.ClashAi.checkApi:72"])]
+    assert not (out / "snapshots").exists()
+
+
+def test_the_command_drops_tripwire_games_on_request(tmp_path, game_file, out, capsys):
+    folder = tmp_path / "night"
+    game_file("win", folder)
+    game_file("draw_clock", folder)
+
+    assert main(["convert", str(folder), str(out), "--drop-tripwire-hits"]) == 0
+    printed = capsys.readouterr().out
+    assert "kept 0" in printed
+    assert "tripwire: 1" in printed
+    assert f"tripwire game {GAME_ID}: 3 hits" in printed
+    assert "    forge.ai.ability.ClashAi.checkApi:72" in printed

@@ -14,7 +14,7 @@ def _convert(args: argparse.Namespace) -> int:
     folder = Path(args.folder)
     if not game_files(folder):
         args.parser.error(f"no game files under {folder}")
-    report = convert_folder(folder, Path(args.out))
+    report = convert_folder(folder, Path(args.out), args.drop_tripwire_hits)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
     sys.stdout.write(format_report(report))
@@ -37,6 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     convert = commands.add_parser("convert", help="convert a folder of game files to Parquet, keeping wins only")
     convert.add_argument("folder", help="folder of .jsonl.gz game files, searched with its subfolders")
     convert.add_argument("out", help="folder for the snapshots, cards and stack tables")
+    convert.add_argument("--drop-tripwire-hits", action="store_true",
+                         help="leave out every game the tripwire caught reading hidden cards, and name each one")
     convert.set_defaults(handler=_convert, parser=convert)
 
     hidden = commands.add_parser("hiddencheck", help="try to name a batch's hidden cards from its ids, exit 1 if any are")
