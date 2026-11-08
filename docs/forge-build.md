@@ -383,6 +383,33 @@ The report never prints a bare percentage. Each head-to-head rate carries its Wi
 
 #41's second criterion, that the rungs reproduce on the real sim-runner, needs a real run. A 4-game smoke run on 2026-11-08, heuristic against full on one held-out deck pair (initiative-stompy-1 and oops-all-spells-3), 1 worker at below-normal priority, finished all four batches clean in 176 seconds with a tripwire count of 0. initiative-stompy-1 won all four games, whichever AI piloted it, so the split was 2 to 2. That checks the wiring and says nothing about strength. The heuristic against full rung should agree with what #26 measures, once #26 has run.
 
+### Convergence
+
+`converge` is the trust gate from HANDOFF.md. It runs the manifest's four tracked matchups under two players, the one before and the one after, and says for each whether the win rate moved.
+
+```powershell
+python -m simrunner converge onnx:gen0 onnx:gen1 --seed 42
+```
+
+Players are named as for `ladder`. Each tracked matchup is a `matchup` with that player in both seats, deck A first as the manifest lists it, to the target width (`--width`, 5 points by default). Both players use the same seed, round size and budget, so round r of each starts from the same shuffles. The manifest has to have all four slots filled, and the command refuses before any game otherwise.
+
+**The verdict** follows HANDOFF.md and Spec 6. A matchup converged when the two Wilson intervals overlap, and moved when they don't. Touching counts as overlap. A matchup where either player spent its budget or was cut off has no verdict, and the report says which player and how many more games it needs. Overall, the check moved if any matchup moved, converged only if all four converged, and is incomplete otherwise.
+
+**The difference** is there to read alongside. The report gives after minus before with Newcombe's hybrid score interval, as `cardswap` does. Overlap is the looser test of the two: 200 wins in 400 against 230 in 400 overlap, so the matchup converged, while the difference's interval, +0.6 to +14.3 points, leaves out 0. Two intervals of 5 points each overlap until the rates are about 10 points apart, and the difference flags a move from about 7. The verdict stays the overlap because that's the rule as written. Switching it to the difference is a one-line change in `Verdict.verdict`.
+
+**Reuse.** A matchup's folder is named for its player and decks, `runs\convergence\<player>\<deck A>--<deck B>\`. The generation loop checks gen 1 against gen 0, then gen 2 against gen 1, and the second check reuses gen 1's four matchups. A folder is reused only when its matchup ended, target met or budget spent, under the same settings: seed, workers, width, confidence, round size, budget, clock, search budget, records, honest play, turn cap, tripwire, and each side's deck, mode, evaluator and generation, with the model digest. Workers matter because they split the seeds. A folder with other settings is refused, with the settings that differ. A matchup that failed or was cut off by the hard stop is moved aside to `<deck A>--<deck B>-unfinished-N` and played again.
+
+`--start` and `--stop` give a window, as for `ladder`. After a matchup the hard stop cut off, the check plays no more, and the next start picks up from there. The command exits 0 when all four matchups have a verdict, converged or moved, and 1 otherwise. `convergence.json` is where a script reads which.
+
+```
+runs\convergence\                   the default folder
+    convergence.json                both players, the settings, and per slot both estimates, the verdict and the difference
+    report.txt                      the report
+    <player>\<deck A>--<deck B>\    one plain matchup folder per player and tracked matchup
+```
+
+In `convergence.json`, `status` is `converged`, `moved` or `incomplete`. Each entry of `matchups` has the slot, both deck ids, `verdict` (`converged`, `moved` or `no verdict`), `why`, and `before` and `after` with the status, interval, counts and whether the folder was reused. A rate appears only when its target was met, and never without its interval.
+
 ### Batch output folder
 
 Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.
