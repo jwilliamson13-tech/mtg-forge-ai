@@ -381,7 +381,7 @@ runs\ladder\                        the default ladder folder
 
 The report never prints a bare percentage. Each head-to-head rate carries its Wilson interval, and each rating its profile interval or the word anchor.
 
-#41's second criterion, that the rungs reproduce on the real sim-runner, needs a real run. The heuristic against full rung should agree with what #26 measures, once #26 has run.
+#41's second criterion, that the rungs reproduce on the real sim-runner, needs a real run. A 4-game smoke run on 2026-11-08, heuristic against full on one held-out deck pair (initiative-stompy-1 and oops-all-spells-3), 1 worker at below-normal priority, finished all four batches clean in 176 seconds with a tripwire count of 0. initiative-stompy-1 won all four games, whichever AI piloted it, so the split was 2 to 2. That checks the wiring and says nothing about strength. The heuristic against full rung should agree with what #26 measures, once #26 has run.
 
 ### Batch output folder
 

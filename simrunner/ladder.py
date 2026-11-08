@@ -563,7 +563,7 @@ def format_ladder_report(ladder: LadderResult) -> str:
         ("rating interval", f"profile likelihood, {config.confidence * 100:g}% confidence"),
         ("deck pairs", f"{len(ladder.deck_pairs)}, {split}, drawn with seed {config.base.batch_seed}"),
         ("games per player pair", f"{config.pair_games} per deck pair: each player on each deck, in each seat, "
-                                  f"{config.batch_games} games a batch"),
+                                  f"{config.batch_games} game{'s' if config.batch_games != 1 else ''} a batch"),
         ("batches", f"{len(ladder.finished_units)} of {len(ladder.units)} finished, {ladder.skipped} of them "
                     "before this start"),
         ("games finished", str(ladder.finished)),
