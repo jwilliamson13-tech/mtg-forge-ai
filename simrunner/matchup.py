@@ -280,9 +280,9 @@ def run_matchup(config: MatchupConfig) -> MatchupResult:
     return result
 
 
-def _side(seat: Seat) -> dict:
+def side_fields(seat: Seat) -> dict:
     return {"deck": seat.deck.stem, "file": str(seat.deck), "ai_profile": seat.ai_profile, "sim_mode": seat.sim_mode,
-            "evaluator": seat.evaluator}
+            "evaluator": seat.evaluator, "generation": seat.generation.fields() if seat.generation else None}
 
 
 def _tally_fields(tally: Tally) -> dict:
@@ -296,8 +296,8 @@ def result_fields(result: MatchupResult) -> dict:
     interval = result.interval if result.status == MET else None
     return {
         "status": result.status,
-        "side_a": _side(batch.seats[0]),
-        "side_b": _side(batch.seats[1]),
+        "side_a": side_fields(batch.seats[0]),
+        "side_b": side_fields(batch.seats[1]),
         "seed": batch.batch_seed,
         "workers": batch.workers,
         "width_points": config.width,

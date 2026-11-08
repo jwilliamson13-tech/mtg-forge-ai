@@ -18,3 +18,6 @@ runs/
 
 # Forge checkout lives beside this repo, not inside it
 /forge/
+
+# Model generations, one export bundle per folder. See "Seat configurations" in docs/forge-build.md.
+/models/

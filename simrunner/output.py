@@ -24,6 +24,9 @@ OUTCOME_WON_LINE = re.compile(r"^Game Outcome: Ai\(\d+\)-.* has won because all 
 HEADER_LINE = re.compile(r"^Ai\(1\)-.* vs Ai\(2\)-.* seed (\d+)$")
 SIM_MODE_TAG = re.compile(r"\[sim=(\w+)\]")
 EVALUATOR_TAG = re.compile(r"\[eval=(\w+)\]")
+# What Forge's ONNX evaluator writes to stderr (#35): a line per seat that takes the model, one at exit.
+ONNX_SEAT_LINE = re.compile(r"ONNX evaluator: seat (\d+) searches with (.+)$")
+ONNX_SUMMARY_LINE = re.compile(r"ONNX evaluator: \d+ calls, ")
 AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws"
                             r"(?:, (\d+) stops played, (\d+) stops passed, (\d+) stops with a land, "
                             r"(\d+) land drops missed)?$")
@@ -140,6 +143,21 @@ def printed_sim_modes(header: str) -> tuple[str, ...]:
 def printed_evaluators(header: str) -> tuple[str, ...]:
     """Return the evaluator per seat from a match header. Empty when Forge ran without `-eval`."""
     return tuple(EVALUATOR_TAG.findall(header))
+
+
+def printed_onnx_seats(lines: Iterable[str]) -> tuple[tuple[int, str], ...]:
+    """Each (seat, bundle) the ONNX evaluator said it took, in seat order. Empty when it took none."""
+    seats = {(int(match[1]), match[2].strip()) for line in lines if (match := ONNX_SEAT_LINE.match(line))}
+    return tuple(sorted(seats))
+
+
+def onnx_summary(lines: Iterable[str]) -> str | None:
+    """The ONNX evaluator's last line, with its call count and time per call."""
+    found = None
+    for line in lines:
+        if ONNX_SUMMARY_LINE.match(line):
+            found = line.removeprefix("ONNX evaluator: ").strip()
+    return found
 
 
 def count_stack_traces(lines: Iterable[str]) -> int:

@@ -129,7 +129,9 @@ def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     batch = config.batch
     # Only when set, so that a plan written before evaluators existed still matches on a restart.
     evaluators = [seat.evaluator for seat in batch.seats]
-    return {**({"evaluators": evaluators} if any(evaluators) else {}), "seed": batch.batch_seed, "games": batch.games, "chunk_games": config.chunk_games,
+    generations = [seat.generation.fields() if seat.generation else None for seat in batch.seats]
+    return {**({"evaluators": evaluators} if any(evaluators) else {}),
+            **({"generations": generations} if any(generations) else {}), "seed": batch.batch_seed, "games": batch.games, "chunk_games": config.chunk_games,
             "held_out_share": config.held_out_share, "ai": [seat.ai_profile for seat in batch.seats],
             "sim_modes": [seat.sim_mode for seat in batch.seats], "clock_s": batch.clock_s,
             "search_budget": batch.search_budget, "turn_cap": batch.records.turn_cap,
