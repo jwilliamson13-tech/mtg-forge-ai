@@ -119,4 +119,8 @@ A and T are about padding a card's inside, not the board. `truncation_rates` in 
 
 ## Runtime
 
-`export` checks the bundle under the Python `onnxruntime` named in `bundle.onnxruntime`. Pin ONNX Runtime Java to that version, or repeat the check under the Java version before trusting it. Nobody has tried the Java runtime yet. That belongs to Spec 3.
+`export` checks the bundle under the Python `onnxruntime` named in `bundle.onnxruntime`. Pin ONNX Runtime Java to that version, or repeat the check under the Java version before trusting it.
+
+The fork pins ONNX Runtime Java 1.31.1, the version the dry-run bundle names. `python -m setmodel parity` compares Forge's scores with PyTorch's on real game files, and `training.md` has the first result: 4,936 snapshots, largest difference 7.15e-07. Run it again for each new bundle.
+
+On Windows, ONNX Runtime 1.31 needs `msvcp140.dll` 14.40 or newer, and the JVM loads that file from its own `bin` folder. Oracle JDK 21.0.2 ships 14.31, and with it the JVM crashes inside ONNX Runtime as the evaluator starts. Forge's evaluator checks the file's version first and refuses with a message. `forge-build.md` says how to get a JVM that works.

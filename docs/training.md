@@ -39,6 +39,7 @@ python -m setmodel train PARQUET CARDS MANIFEST --out MODEL --generation 0
 python -m setmodel export MODEL PARQUET CARDS MANIFEST --out BUNDLE
 python -m setmodel ablate PARQUET CARDS MANIFEST --out ABLATION
 python -m setmodel pairtest MODEL CARDS [--fixture FILE]
+python -m setmodel parity MODEL PARQUET CARDS MANIFEST SCORES
 ```
 
 `join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
@@ -73,7 +74,7 @@ The model's inputs are the fields below, each from the row's own snapshot. `setm
 | `seat1_deck`, `seat2_deck` | The opponent's list is hidden, and a deck's name would let the model memorize matchups. They pick the split and nothing else. |
 | `side` | A seat number isn't a game state, and Forge has no reason to feed it. It makes `controller` relative and finds this side's deck for the report. |
 | `game_id`, `seed`, `game_number`, `batch_id` | Run identity. The code joins, splits and tags with these and never feeds them in. |
-| `snapshot_index` | A join key. Its gaps depend on the other side's dedupe, so it isn't safe as a number. |
+| `snapshot_index` | A join key. Its gaps depend on the other side's dedupe, so it isn't safe as a number. The corpus keeps it so that `parity` can find a row. |
 | `seat*_ai_profile`, `seat*_sim_mode`, `seat*_search_budget`, `honest_play` | Run settings, not game state. |
 | Card `id`, stack `id`, `attached_to`, `attacking_card`, `blocking` and `blocked_by` values, `targets` | Opaque ids. An id is only an order-of-first-sight number, and it means nothing to a model. So what a stack item targets isn't an input. |
 | The other side's snapshot, all of it | The rule above. |
@@ -155,6 +156,21 @@ The fixture is a JSON file. `setmodel/pair_fixture.json` holds Platinum Angel an
 `export` writes the bundle in `tensor-contract.md`, then runs held-out states through ONNX Runtime and PyTorch. It samples 300 of them from a fixed seed, and `--states` changes the count. It exits 1 if the largest difference passes the threshold, 1e-4 unless `--threshold` says otherwise. The check builds the ONNX inputs from the bundle's own card table and the PyTorch inputs from the corpus, so a table that disagrees with training fails too.
 
 Export uses the dynamo exporter. The older TorchScript exporter also runs, but its scatter-add drifted by 0.002 at 300 cards on the same model.
+
+## Parity with Forge
+
+`export` compares ONNX with PyTorch on inputs Python built. `parity` checks the other half, the inputs Forge builds in Java. The fork's `forge.view.OnnxScoreRecords` reads game files and builds each snapshot's inputs with the code Forge's ONNX evaluator uses in a game. It runs the bundle under ONNX Runtime for Java and writes a scores file. `parity` then scores the same snapshots from Parquet with the PyTorch model the bundle came from, and compares.
+
+```
+java -cp FORGE_JAR forge.view.OnnxScoreRecords BUNDLE scores.tsv GAME_FILE_OR_FOLDER...
+python -m setmodel parity MODEL PARQUET CARDS MANIFEST scores.tsv
+```
+
+The scores file is tab-separated, with the header `game_id`, `snapshot_index`, `probability`. `parity` exits 1 if the largest difference passes 1e-4, or `--threshold`, and also if no snapshot matched. A snapshot training dropped, such as one holding an unmatched effect card, has no PyTorch score. It is counted and left out.
+
+On 2026-11-07 it ran on 20 of the dry run's 676 game files, every 34th by name, with the dry-run model and bundle. They held 4,974 snapshots. 4,936 matched, with a largest difference of 7.15e-07 and a mean of 3.8e-08. The other 38 hold an effect card, such as `Tamiyo, Seasoned Scholar (51)'s Effect` or `The Monarch`, and training dropped them.
+
+The fork's Java tests run on a fixture that `tests/forge_fixture.py` builds: a smoke-model bundle, a game file with every kind of input the contract has, and PyTorch's score for each of its snapshots. `python -m tests.forge_fixture OUT` rebuilds it, and the fork keeps the result in `forge-gui-desktop/src/test/resources/onnx-fixture/`.
 
 ## First real files
 
