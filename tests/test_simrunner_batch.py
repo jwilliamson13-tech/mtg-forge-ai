@@ -1127,17 +1127,42 @@ def test_with_no_seat_searching_a_clean_tripwire_just_says_yes(config):
     assert "tripwire clean                    yes\n" in format_summary(batch)
 
 
-def test_a_searching_seat_is_clean_for_the_real_game_only(config):
+def test_a_searching_seat_whose_copies_were_checked_is_clean(config):
+    batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
+    assert batch.tripwire_clean
+    assert not batch.search_unchecked
+    assert batch.tripwire_copies == [40, 40]
+    assert "tripwire clean                    yes\n" in format_summary(batch)
+    assert "search copies checked             80 in 2 games\n" in format_summary(batch)
+
+
+def test_a_searching_seat_is_clean_for_the_real_game_only_on_a_jar_without_the_copy_check(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_copy_check_jar")
     batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
     assert batch.tripwire_clean
     assert batch.search_unchecked
-    assert "tripwire clean                    the real game is clean, search copies unchecked until #25\n" in format_summary(batch)
+    assert ("tripwire clean                    the real game is clean, search copies unchecked, "
+            "so the jar may be from before #25\n") in format_summary(batch)
+    assert "search copies checked" not in format_summary(batch)
 
 
-def test_a_searching_seat_with_hits_still_says_what_was_unchecked(config, monkeypatch):
+def test_a_searching_seat_with_hits_says_so(config, monkeypatch):
     monkeypatch.setenv("STUB_SCENARIO", "tripwire_hits")
     batch = run_batch(config(games=2, records=True, modes=("full", "heuristic")))
-    assert "no, 2 of 2 games had hits, search copies unchecked until #25\n" in format_summary(batch)
+    assert "tripwire clean                    no, 2 of 2 games had hits\n" in format_summary(batch)
+
+
+def test_heuristic_seats_print_no_copy_count(config):
+    batch = run_batch(config(games=2, records=True))
+    assert batch.tripwire_copies == []
+    assert "search copies checked" not in format_summary(batch)
+
+
+def test_the_prune_is_left_to_forge_unless_turned_off(config, tmp_path):
+    seats = config(modes=("full", "heuristic")).seats
+    assert "-prune" not in sim_args(seats, tmp_path, 1, 1, 60)
+    args = sim_args(seats, tmp_path, 1, 1, 60, prune=False)
+    assert args[args.index("-prune") + 1] == "off"
 
 
 def test_the_report_gives_max_and_mean_hits_per_game(config, monkeypatch):

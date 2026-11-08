@@ -111,6 +111,7 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-tripwire on|off` is on by default for every `forge sim` run, with or without `-record`, and off for any game outside `forge sim`. It reports in `Tripwire` lines before each result, and in the game record if there is one. It can't go with `-t`, and a tournament has none. See "Tripwire" below.
 - `-honest on|off` keeps the AI to what a person in its seat could know, and off is the default, so a plain `forge sim` is the stock AI with its peeks. It works without `-record`, but only `-record` keeps a reveal log, so the AI then goes by public cards alone. It can't go with `-t`. See `docs/peek-fixes.md`.
 - `-eval` is the evaluator per seat, in deck order, such as `-eval random forge`: what that seat's search scores game states with. The names are `forge`, `random` and `passthrough`, and `forge`, Forge's own evaluator, is the default for a seat left out. Any other name needs the seat to be `hybrid` or `full`, because a heuristic seat never scores a state, and Forge refuses it otherwise. With the flag, each player name ends in `[eval=name]` after its `[sim=mode]`. An unknown name prints the valid ones and stops, and so does `-eval` with `-t`. See "Evaluators" below.
+- `-prune on|off` decides what the copies a search plays on hold of the other players' hidden cards. On, a copy holds placeholders, plus what the searching seat was shown. It is on by default whenever `-sim` gives a seat `hybrid` or `full`, and off otherwise, where no seat searches. It can't go with `-t`. See "Pruned copies" below.
 - `-c` is the clock in seconds before the game is stopped, default 120.
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
@@ -146,7 +147,7 @@ python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_2
 
 Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--evaluator random forge` sets `-eval` per seat, in deck order, and leaving it out leaves the flag off. The runner refuses anything but `forge` on a heuristic seat before it launches. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` or `--evaluator` doesn't get those modes or evaluators back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. It also exits 1 if a game file and a result line disagree.
 
-`--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, with or without records. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
+`--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, with or without records. `--no-prune` passes `-prune off`. Without it the runner leaves the flag out, so Forge prunes a searching seat's copies. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
 
 ### What the report counts
 
@@ -162,7 +163,7 @@ Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Defa
 - **AI decision timeouts** counts the `AI eval thread at timeout:` lines, one narrow kind of expiry that the heuristic AI prints. **AI deadline expiries** counts every decision the clock cut short, and includes those. **AI search budget stops** counts the decisions the budget cut short. The last two come from the `AI limits:` lines and say `not reported` for a run without `-sim` or `-budget`.
 - **Game records written** counts this batch's files against the games finished, when records are on. A game that threw has no file, and neither does one the clock stopped before its first priority pass.
 - **Records against results** reads every finished game against its file, when records are on: winner and end reason. It leaves turns out: `GameLogFormatter` prints `Game Outcome: Turn` as the turn number halved and rounded up, so 20 in a file prints as 10, and Karn's restart would throw that off. It takes the metadata line of each file and leaves the snapshots alone, so a night of files costs seconds. `match` is games that agree. `no file by design` is clock and exception games with no file, the two kinds allowed to have none. `mismatches` is everything else: a file that disagrees, a game that should have a file and doesn't, an exception game with one, a file that can't be read, and a file with no result line. That last one isn't counted after a hard stop, which can land between the two. Any mismatch fails the batch, and the report lists the first 20.
-- **Tripwire hits per game** gives the max and mean over the games that reported. **Tripwire clean** is yes only when every finished game printed a count and every count is 0. A game that printed nothing means the jar has no tripwire. It fails the batch, and a jar like that never reads as a clean zero. With a `hybrid` or `full` seat a zero can't say yes. The row says `the real game is clean, search copies unchecked until #25`, because `GameCopier` is exempt and a copy has no watch, so the search can still see hidden cards. With `--no-tripwire` the row says `off`.
+- **Tripwire hits per game** gives the max and mean over the games that reported. **Tripwire clean** is yes only when every finished game printed a count and every count is 0. A game that printed nothing means the jar has no tripwire. It fails the batch, and a jar like that never reads as a clean zero. With a `hybrid` or `full` seat a zero says yes only when every game also printed its `Tripwire copies:` line, because a copy has no watch and only that check covers it. A jar from before #25 doesn't print it, and the row then says `the real game is clean, search copies unchecked, so the jar may be from before #25`. **Search copies checked** adds up those lines. With `--no-tripwire` the row says `off`.
 - **The signature table** after the worker table lists the top 20 signatures by hits across the batch, with the games each one showed up in.
 - **Result digest** is a hash of every game's seat, turn, draw cause and, when Forge prints it, random draws. It only says the runs ended alike. Winner and turn alone aren't enough: the two runs that opened issue #50 agreed on all ten winners. Random draws catch most of the rest, but an AI that chooses differently without drawing leaves them unchanged.
 - **Record digest** is the replay check, when records are on. It hashes every snapshot of every game file, plus the metadata less `batch_id`, `honest_play` and `tripwire`, which can differ between two runs of the same games. The same digest means the same games card by card. Record ids come from the seed, so they replay too. Digests in this file from before it existed are result digests.
@@ -505,7 +506,7 @@ Who asked is settled when the zone hands the cards over, from the first stack fr
 
 - The AI's own zones, and cards the rules let it see, by `CardView.canBeShownTo`. An empty zone gives nothing away.
 - Rules code running inside a decision: costs, legality, static abilities, `AbilityUtils.calculateAmount`. The first frame past the plumbing is forge-game, so the rules get the real list.
-- Copies. `HIDDEN_READ_WATCH` is never copied, so a copy has no watch. `GameCopier` reading the real game to make one is exempt by class, and it counts nowhere. A search can still see hidden cards on the copy. That is #25's job, and this tripwire says nothing about it.
+- Reads on a copy. `HIDDEN_READ_WATCH` is never copied, so a copy has no watch. `GameCopier` reading the real game to make one is exempt by class. What the copy holds is checked instead, under "Pruned copies" below.
 - `Game.getCardState`, which looks up a card the AI already holds, and `PlayerZone.getCardsPlayerCanActivate`, which returns only what that player may play or look at.
 
 **What it can't see:**
@@ -551,6 +552,68 @@ The signatures, by first frame, summed over both batches:
 None of them is the Fog hand read, which fits the reading of its call sites. `getBestNearTermDiscardThreat` and `orderMoveToZoneList` run inside controller calls that no `AITimeoutTracker` session opens, so real games exercised the new scope too, not only the tests.
 
 An early run on the same pair had 459 hits at `ChangeZoneAi.hiddenTriggerAI:528`. That was a count read, through the several-zones overload, and it's why that overload now builds a view. The hits are gone from the final jar.
+
+### Pruned copies
+
+Issue #25. The search plays each line it tries on a copy of the game that `GameCopier` makes. Before #25 a copy held every card as it really was, so a full-sim seat searched with the opponent's hand, library and face-down cards in view, however clean the tripwire read.
+
+`-prune on`, the default for a `hybrid` or `full` seat, sets `Game.AI_PRUNE_HIDDEN_INFO`. A copy made for a seat then holds this in place of each card of another player whose identity that seat can't see:
+
+- A card the seat may see right now, such as a library top it may look at, stays as it is, where it is.
+- In another player's hand and library, the cards on the seat's notepad (`Game.REVEAL_LOG`, see `docs/peek-fixes.md`) last seen in that zone fill the unseen slots from the top, in id order. The rest are placeholders: a card named `hidden`, an artifact with no mana cost, so nobody can cast it. Zone sizes and card ids stay the same.
+- A face-down card anywhere else is the card the notepad wrote down for that same card in that same zone. Otherwise it is a face-down placeholder, which plays as the usual nameless 2/2.
+
+The seat's own hand and library stay as they are, in order, as story 10 allows.
+
+The copy is built from what the seat knows, never from where the real cards are. A card seen in hand and then put back on the library unseen, as Brainstorm does, is still in the copy's hand, which is what a person would think. Library order means nothing once the identities are gone, and the search still sees the counts.
+
+The prune decides before any of the copier's paths runs, so the paper-card path, the fallback path that builds a card from its current state, and tokens all prune the same way. A snapshot copy (`EXPERIMENTAL_RESTORE_SNAPSHOT`) copies every card as it is, so the copier never makes one while pruning. A placeholder or a believed card takes nothing else from the real card it stands in for: no SVars, clone states or remembered objects. What left the battlefield or the graveyard this turn was public, so a card that has since gone into a hidden zone is rebuilt for revolt and morbid from its last known information.
+
+A pruned copy gets a reveal log of its own, with what the seat had written down plus what it may see right now, so honest play on the copy goes by the same cards as on the real game. The setting is copied too, so a copy of a copy stays pruned.
+
+**The tripwire checks copies.** Reads on a copy still don't count, because a copy has no watch. Instead `GameCopier` checks each copy it makes of the real game. Every hand, library and face-down card the seat can't know, going by the real game, has to be a placeholder in the copy or carry a name from the seat's notepad. Each kind of place that fails counts one hit per copy, as `copy: Hand`, `copy: Library` or `copy: face-down Battlefield`. A game with a searching seat prints `Tripwire copies: N checked` after its tripwire lines. The check looks only at what the copy ended up holding, so it also catches a copy made with `-prune off`. It shares the copier's test of what the seat may see, `canBeShownTo` and `canFaceDownBeShownTo`, so a mistake there would get past both.
+
+Checked on 2026-11-07 and 11-08 with 2 workers, below-normal priority, `--clock 2400`, budget 100, records and honest play on. The 647 Forge tests in the simulation, peek-fix, tripwire, reveal log, `SimulateMatch` and recorder classes pass, 16 of them new in `GameCopierPruneTest`.
+
+**Heuristic play didn't change.** Heuristic seats make no copies, print no `Tripwire copies:` line, and get no prune.
+
+| Batch | Old jar, `a5b2fc7` | This jar |
+|---|---|---|
+| Burn vs Merfolk (`GAL_`), 20 games, seed 1 | record `d60a45654629`, result `6f2c4c7c1863` | the same |
+| UR Tempo vs Dimir Tempo, 40 games, seed 2501 | result `29f389b4ee3b` in 3 runs, record `bee0c0cb5e54` twice and `100fceff1839` once | result `29f389b4ee3b` in 2 runs, record `c80e9e39ae4a` and `100fceff1839` |
+
+The UR Tempo record digest moves between runs of the same jar, and the old jar's third run matches this jar's second. Every difference is in one game, game 5 of the worker with seed 161326939506583. There two Dragon's Rage Channelers swap which one gets the pump and which one gets blocked, with the same random draws in all five runs. That race between two identical creatures was there before #25.
+
+**Full sim.** Boros Aggro full against Dimir Tempo heuristic, 50 games, seed 2510. With the prune on, all 50 finished. The tripwire checked 23,339 copies and found nothing in any game, and there were no stack traces. Seat 1 won 39, seat 2 won 8, and 3 games hit the clock, at turns 7, 8 and 20. Record digest `9e0d0fccac23`.
+
+The old jar's batch stopped after 26 games, so this table compares the same 26 places in the run: the first 12 games of worker 0 and the first 14 of worker 1. Each worker plays its games in one JVM, so a game only matches across jars until the first one that went differently. The first 4 of worker 0 and the first 3 of worker 1 had the same random draws on both jars.
+
+| Same 26 places | Old jar | Prune on |
+|---|---|---|
+| Wins, seat 1 and seat 2 | 22 and 2 | 19 and 4 |
+| Draws | 2, both by exception | 3, all by clock |
+| Budget stops | 276 | 430 |
+| Stops that played a line | 69 | 81 |
+| Stops that passed | 207 | 349 |
+| Game time, summed | 3,254 s | 11,719 s |
+
+The win split doesn't say whether the AI got weaker. 22 of 26 against 19 of 26 is inside the noise, and after the first few games the two columns aren't the same games. The stops did go up by about half. I think a search that can't see the opponent's answers has fewer clearly good lines, but I didn't check that decision by decision.
+
+The game time can't be compared. The prune-on batch ran beside the 4-worker gen-0 pool, and the old jar ran after the pool had stopped. Game 1 of worker 0 was the same game on both jars and took 51 s with the prune and 28 s without. Copying itself got cheaper: on a test game with 45-card libraries, a pruned copy took 2.8 ms and an unpruned one 3.3 ms, the copy check included. The three clock draws are a question I didn't settle. They could be load, or a pruned search spending more of each turn at its budget.
+
+The old jar threw `RuntimeException: -3` at `SpellAbilityChoicesIterator.advance:216` in game 8 of both workers, and this jar threw nothing in its 50 games. By game 8 those were different games, so this doesn't show the exception is gone.
+
+What wasn't run: a full-sim batch with `-prune off` against the old jar, which would show that turning the prune off gives back the old games exactly. `withThePruneOffACopyHoldsEveryCard` checks one copy, and the heuristic digests check everything outside the search.
+
+What this doesn't cover:
+
+- The notepad only learns what the rules reveal or let a seat look at. It misses public moves into a hidden zone, such as a creature bounced to its owner's hand or a revealed library top that then gets drawn. A person knows where those went and the copy doesn't: the bounced card is a placeholder, and the drawn card is still believed to be in the library. Fixing that is a change to `RevealLog`, and it would change honest heuristic play as well.
+- Believed library cards go on top. That is right for a top the seat saw and that stayed there, and wrong after a shuffle. The notepad keeps no order.
+- Nothing can cast a placeholder, so in a copy the opponent never answers the line being searched with a card from hand. Before, it could answer with the real one. Nothing samples a likely hand from the cards the opponent has shown.
+- The other seat's notepad isn't copied. Inside one seat's copy, the other seat's simulated decisions go by public cards under honest play, and by the copy's cards without it.
+- Deck lists still go into the copy, because the copy's players are built from the real ones. `-honest` closes the four known reads of them.
+- A copy made from a copy isn't checked. It is pruned, and it comes from a copy that was.
+- `-mc` makes copies for Flat Monte Carlo. A run with `-mc` and heuristic seats doesn't prune unless it passes `-prune on`, and with the tripwire on those copies count as hits.
 
 ### Why each worker has its own profile
 
@@ -619,7 +682,7 @@ What this doesn't cover:
 - Each leg killed its workers at the deadline, so 4 games per leg in progress at that moment aren't counted. The worst game could be longer than the table shows.
 - No game came near the clock or turn 50. These runs were before the turn cap, so that one was read from the `Turn` line.
 - Full on seat 1 won 65 of 147, and the same deck with the heuristic AI won 167 of 414. That is 44% against 41%, inside the noise, so these runs show no strength gain from full sim. They weren't built to measure one.
-- `PRUNE_HIDDEN_INFO` is still off, so the search sees the opponent's hand and library. The hook and tripwire weren't in yet either. "Game records" below has the hook's cost.
+- These runs came before #25, so the search saw the opponent's hand and library. The hook and tripwire weren't in yet either. "Game records" below has the hook's cost.
 
 Memory peaked at 5.2 GB across 4 JVMs. No run produced a stack trace.
 

@@ -166,17 +166,17 @@ def export_check(model: SetModel, corpus: Corpus, bundle: str | Path, *, states:
     wrapper = StateModel(model).eval()
     worst = 0.0
     for row in rows.tolist():
-        cards = slice(corpus.card_offsets[row], corpus.card_offsets[row + 1])
+        cards = np.arange(corpus.card_offsets[row], corpus.card_offsets[row + 1])
         features = corpus.card_feature[cards]
-        shared = {"scoreboard": corpus.scoreboard[row], "live": corpus.card_live[cards],
-                  "zone": corpus.card_zone[cards]}
+        live, zone = corpus.live(cards), corpus.card_zone[cards].astype(np.int64)
+        shared = {"scoreboard": corpus.scoreboard[row], "live": live, "zone": zone}
         from_table = densify([_lookup(entries, names, corpus.feature_keys[f]) for f in features.tolist()],
                              corpus.caps, model.config.key_count)
         onnx_inputs = {**shared, **dict(zip(("token_ids", "token_mask", "numbers", "number_mask"), from_table))}
         got = session.run(None, onnx_inputs)[0]
         torch_inputs = [torch.as_tensor(array) for array in (
             corpus.scoreboard[row], corpus.token_ids[features], corpus.token_mask[features], corpus.numbers[features],
-            corpus.number_mask[features], corpus.card_live[cards], corpus.card_zone[cards])]
+            corpus.number_mask[features], live, zone)]
         with torch.no_grad():
             expected = wrapper(*torch_inputs).numpy()
         worst = max(worst, float(np.abs(got - expected).max()))

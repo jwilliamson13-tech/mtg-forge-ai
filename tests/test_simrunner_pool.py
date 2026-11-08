@@ -165,3 +165,14 @@ def test_a_plan_names_evaluators_only_when_one_is_set(pool_manifest, forge, tmp_
     args = pool_args(pool_manifest, forge, searching) + ["--sim-mode", "full", "heuristic", "--evaluator", "random", "forge"]
     assert main(args) == 0
     assert json.loads((searching / "plan.json").read_text(encoding="utf-8"))["evaluators"] == ["random", "forge"]
+
+
+def test_the_plan_names_the_prune_only_when_it_is_off(pool_manifest, forge, tmp_path, capsys, launches):
+    run_dir = tmp_path / "run"
+    main(pool_args(pool_manifest, forge, run_dir))
+    # a plan written before the setting existed has no such field, and has to keep matching
+    assert "prune" not in json.loads((run_dir / "plan.json").read_text(encoding="utf-8"))
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        main(pool_args(pool_manifest, forge, run_dir) + ["--no-prune"])
+    assert "different plan, in: prune" in capsys.readouterr().err

@@ -7,6 +7,7 @@ to the other side's rows however it is written.
 import json
 
 import numpy as np
+import pyarrow as pa
 import pytest
 
 from gamerecord.convert import convert_folder
@@ -23,13 +24,18 @@ def corpus_of(games, root, **options):
     return load_corpus(write_parquet(games, root), card_table(), vocabulary(), manifest(), **options)
 
 
+def all_live(corpus):
+    """The float live rows of every card position, as the model gets them."""
+    return corpus.live(np.arange(len(corpus.card_feature)))
+
+
 def row_inputs(corpus, row):
     """Everything the model gets for a row, in a form two corpora can compare."""
     positions = range(corpus.card_offsets[row], corpus.card_offsets[row + 1])
     cards = []
     for position in positions:
         feature = corpus.card_feature[position]
-        cards.append((int(corpus.card_zone[position]), corpus.card_live[position].tolist(),
+        cards.append((int(corpus.card_zone[position]), corpus.live([position])[0].tolist(),
                       corpus.token_ids[feature].tolist(), corpus.token_mask[feature].tolist(),
                       corpus.numbers[feature].tolist(), corpus.number_mask[feature].tolist()))
     return corpus.scoreboard[row].tolist(), float(corpus.labels[row]), sorted(cards)
@@ -88,11 +94,11 @@ def test_changing_the_other_sides_snapshot_changes_nothing_on_this_sides_rows(tm
 
 def test_a_hidden_card_stays_nameless_though_the_other_side_names_it(tmp_path):
     corpus = corpus_of([game(1, morph_game())], tmp_path)
-    position = int(np.flatnonzero(corpus.card_live[:2, LIVE["hidden"]] == 1)[0])
+    position = int(np.flatnonzero(all_live(corpus)[:2, LIVE["hidden"]] == 1)[0])
     feature = corpus.card_feature[position]
     assert feature == 0
     assert not corpus.token_mask[feature].any() and not corpus.number_mask[feature].any()
-    live = corpus.card_live[position]
+    live = all_live(corpus)[position]
     assert (live[LIVE["power"]], live[LIVE["tapped"]], live[LIVE["face_down"]], live[LIVE["mine"]]) == (2, 1, 1, 0)
 
 
@@ -113,8 +119,8 @@ def test_the_two_seats_get_the_same_input_for_the_same_view(tmp_path):
     mine = lambda seat: card("Grizzly Bears", seat, power=2, toughness=2)  # noqa: E731
     corpus = corpus_of([game(1, [snapshot(1, battlefield=[mine(1)])], winner=1),
                         game(2, [snapshot(2, battlefield=[mine(2)])], winner=2)], tmp_path)
-    assert corpus.card_live[0].tolist() == corpus.card_live[1].tolist()
-    assert corpus.card_live[0][LIVE["mine"]] == 1
+    assert all_live(corpus)[0].tolist() == all_live(corpus)[1].tolist()
+    assert all_live(corpus)[0][LIVE["mine"]] == 1
 
 
 def test_a_snapshot_with_a_hidden_card_is_not_dropped_for_it(tmp_path):
@@ -144,8 +150,8 @@ def test_a_stack_item_joins_like_a_card_and_says_what_it_is(tmp_path):
     ability = {**item, "name": None, "face": None, "face_down": True, "kind": "ability"}
     corpus = corpus_of([game(1, [snapshot(1, stack=[item, ability])])], tmp_path)
     assert corpus.card_zone.tolist() == [ZONE_IDS["stack"]] * 2
-    assert corpus.card_live[:, LIVE["stack_ability"]].tolist() == [0, 1]
-    assert corpus.card_live[:, LIVE["hidden"]].tolist() == [0, 1]
+    assert all_live(corpus)[:, LIVE["stack_ability"]].tolist() == [0, 1]
+    assert all_live(corpus)[:, LIVE["hidden"]].tolist() == [0, 1]
     assert corpus.card_feature[1] == 0
 
 
@@ -154,10 +160,10 @@ def test_live_state_reads_counters_combat_and_attachment(tmp_path):
                blocked_by=[9], attached_to_seat=2)
     blocker = card("Grizzly Bears", 2, id=9, power=2, toughness=2, blocking=[1])
     corpus = corpus_of([game(1, [snapshot(1, battlefield=[row, blocker])])], tmp_path)
-    live = {name: corpus.card_live[0][index] for name, index in LIVE.items()}
+    live = {name: all_live(corpus)[0][index] for name, index in LIVE.items()}
     assert (live["power"], live["counters_p1p1"], live["counters_other"], live["damage"]) == (3, 1, 2, 1)
     assert (live["attacking"], live["blocked"], live["attached"], live["blocking"]) == (1, 1, 1, 0)
-    assert corpus.card_live[1][LIVE["blocking"]] == 1
+    assert all_live(corpus)[1][LIVE["blocking"]] == 1
 
 
 def test_no_held_out_decks_game_reaches_training_from_either_seat(tmp_path):
@@ -253,3 +259,41 @@ def test_snapshots_and_cards_stay_together_when_a_table_is_read_out_of_order(tmp
              for number in (3, 1, 2)]
     corpus = corpus_of(games, tmp_path)
     assert corpus.scoreboard[:, 0].tolist() == np.diff(corpus.card_offsets).tolist()
+
+
+def test_reading_the_card_tables_a_game_at_a_time_changes_nothing(tmp_path, monkeypatch):
+    """Each chunk is one game here, the games are out of order, and stack rows come after a row's cards."""
+    bears = card("Grizzly Bears", 1, power=2, toughness=2)
+    item = {"id": 7, "name": "Lightning Bolt", "face": "Original", "face_down": False, "controller": 2, "kind": "spell",
+            "targets": []}
+    games = [game(number, [snapshot(1, life=number, battlefield=[bears] * number, stack=[item]),
+                           snapshot(2, battlefield=[bears], hand=[card("No Such Card", 2)] if number == 2 else [])])
+             for number in (3, 1, 2)]
+    whole = corpus_of(games, tmp_path / "a")
+    monkeypatch.setattr(dataset, "CHUNK_ROWS", 1)
+    chunked = corpus_of(games, tmp_path / "b")
+    for name in ("card_offsets", "card_feature", "card_zone", "card_flags", "card_counts", "scoreboard", "labels",
+                 "weights", "game", "split"):
+        assert getattr(whole, name).tolist() == getattr(chunked, name).tolist(), name
+    assert whole.report.to_dict() == chunked.report.to_dict()
+    assert whole.report.snapshots_dropped == 1
+    last_cards = chunked.card_offsets[1:] - 1
+    assert (chunked.card_zone[last_cards] == ZONE_IDS["stack"]).tolist() == [True, False, True, True, False]
+
+
+def test_a_live_value_too_big_for_int16_is_kept_exactly(tmp_path):
+    big = card("Grizzly Bears", 1, power=100_000, toughness=2, counters={"P1P1": 70_000})
+    corpus = corpus_of([game(1, [snapshot(1, battlefield=[big])])], tmp_path)
+    live = all_live(corpus)[0]
+    assert (live[LIVE["power"]], live[LIVE["counters_p1p1"]]) == (100_000, 70_000)
+
+
+def test_chunks_give_the_rows_a_whole_read_gives_across_batches(tmp_path, monkeypatch):
+    games = smoke_games(4)
+    for later in games[2:]:
+        later[0]["batch_id"] = "another"
+    parquet = write_parquet(games, tmp_path)
+    monkeypatch.setattr(dataset, "CHUNK_ROWS", 1)
+    chunks = list(dataset._chunks(parquet / "cards", dataset.CARD_COLUMNS))
+    assert len(chunks) == 4  # a row group per game, in two files
+    assert pa.concat_tables(chunks).to_pylist() == dataset._read(parquet / "cards", dataset.CARD_COLUMNS).to_pylist()

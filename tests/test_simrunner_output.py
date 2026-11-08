@@ -231,3 +231,17 @@ def test_a_win_with_evaluators_in_the_names_still_names_the_seat():
 def test_an_evaluator_refusal_is_fatal():
     assert find_fatal(["Unknown evaluator - x. Available evaluators: forge, random, passthrough"])
     assert find_fatal(["-eval random needs a seat that searches, and seat 2 is heuristic"])
+
+
+def test_a_searching_game_says_how_many_copies_were_checked():
+    games = parse_games([
+        "Tripwire: 1 hits",
+        "Tripwire hit: 1 copy: Hand",
+        "Tripwire copies: 312 checked",
+        "Game Result: Game 1 ended in 2679 ms. Ai(1)-Burn has won!",
+        "Tripwire: 0 hits",
+        "Game Result: Game 2 ended in 2679 ms. Ai(2)-Merfolk has won!",
+    ])
+    assert games[0].tripwire_copies == 312
+    assert games[0].tripwire_signatures == (("copy: Hand", 1),)
+    assert games[1].tripwire_copies is None

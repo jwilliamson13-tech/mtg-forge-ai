@@ -90,7 +90,7 @@ def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, wi
         games=args.games, batch_seed=args.seed, workers=workers,
         forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
-        records=records, tripwire=not args.no_tripwire,
+        records=records, tripwire=not args.no_tripwire, prune=not args.no_prune,
     )
 
 
@@ -206,6 +206,9 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--no-honest", action="store_true",
                        help="with records, let the AI keep its peeks at hidden cards (default: honest play, "
                             "because records are for training)")
+    batch.add_argument("--no-prune", action="store_true",
+                       help="let a searching seat's copies of the game hold the hidden cards it can't know "
+                            "(default: Forge prunes them)")
 
 
 def build_parser() -> argparse.ArgumentParser:
