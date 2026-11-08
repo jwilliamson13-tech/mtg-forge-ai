@@ -286,6 +286,60 @@ runs\<matchup>\
 
 A batch's id is the run folder's name plus `-rNNN-ab` or `-rNNN-ba`, so the two orders of a round don't share game ids. A run folder that already holds a matchup is refused, and a matchup can't continue after a stop.
 
+### Seat configurations
+
+Each seat plays one of three AI configurations. `batch`, `nightly`, `pool`, `matchup` and `cardswap` all take them the same way, deck A's seat first where seats swap:
+
+| Configuration | Options for that seat |
+|---|---|
+| Stock heuristic | `--sim-mode heuristic`, the default |
+| Stock full sim, Forge's evaluator | `--sim-mode full` |
+| A model generation | `--sim-mode full --evaluator onnx:gen1` |
+
+`hybrid` works in place of `full` for the last two. The other evaluator values, `random` and `passthrough`, are the #23 test evaluators in "Evaluators".
+
+**A generation is a folder under `models/`.** `onnx:gen1` plays the bundle in `models/gen1/`, which is what `python -m setmodel export ... --out models/gen1` writes. `models/` is git-ignored. `--models DIR` points at another folder of generations. A value with a path separator in it is a bundle folder, so `onnx:runs\dryrun\bundle` plays the dry run's bundle without moving it. The runner checks the folder for `contract.json` and `model.onnx`, reads `bundle.generation` from the contract, and refuses `gen1` if the contract says another number. It also hashes `model.onnx`. The batch report, `matchup.json` and a pool's plan carry the generation's name, folder, number and that digest, so a result names the weights it came from.
+
+**How the runner tells Forge.** A generation seat becomes `-Dforge.onnx.bundle=<folder>` and `-Dforge.onnx.seats=<seat>` on the JVM command line, before `-jar`, and `-eval` stays off. In a matchup the seat number follows the deck: `ab` batches get `seats=1`, `ba` batches `seats=2`. Forge's stderr line for each seat it put on the model is the proof that it took effect. A batch whose workers don't report the seats asked for isn't clean. So the main clone's jar, which has no ONNX evaluator and would play stock under the generation's name, fails the batch. The report's ONNX worker rows give each JVM's call count and time per call. `--java` has to name the patched JDK while the installed one crashes ONNX Runtime.
+
+On 2026-11-08 a 2-game batch, boros-aggro-1 against dimir-tempo-1, seed 4001, 1 worker, `--forge ..orge-wt-35 --sim-mode full heuristic --evaluator onnx:<dry-run bundle> forge --records` with the patched JDK as `--java`, ran clean at below-normal priority. Both games finished, both to seat 2, with records matching results and a tripwire count of 0. Forge reported seat 1 on the bundle, and the evaluator made 2,993 calls at 3.2 ms each. The explicit `forge` for seat 2 left `-eval` off, as above. That checks the wiring and says nothing about the model, which is the throwaway dry run.
+
+Two seat pairings are refused until Forge changes:
+
+- Two different generations at one table. `OnnxSeats` loads one bundle per JVM. The same generation on both seats is fine, as `seats=1,2`.
+- A generation across from `random` or `passthrough`. No fork branch has both the ONNX properties and `-eval`.
+
+`evaluator_wiring` in `simrunner/worker.py` is the one place that knows this. The Forge change that removes both refusals is an `onnx:DIR` name in the fork's `Evaluators.scorer`, with one `OnnxEvaluator` per bundle folder kept in a cache, in place of `OnnxSeats` and its one bundle per JVM. Then a generation seat becomes `-eval onnx:<folder>`, the properties go, and so do the two refusals.
+
+### Card swaps
+
+`cardswap` answers "how much does this card change deck A's win rate against B". It runs two matchups: deck A as written, then deck A' with one swap made, against the same opponent, with the same seed and settings. It reports both rates with their intervals, and A' minus A with an interval of its own.
+
+```powershell
+python -m simrunner cardswap burn-1 merfolk-1 --swap "Lightning Bolt=Chain Lightning" --seed 1 --run-dir runs/burn-chain-lightning
+```
+
+`--swap OLD=NEW` swaps every copy of OLD in the main deck for NEW, and `--swap "1 OLD=NEW"` swaps that many. The sideboard and the deck's name stay as they were. When the main deck already holds NEW, the swapped copies join that line. The swap is refused if the main deck holds no OLD, or fewer copies than asked. With `data/cards.jsonl` at hand, NEW has to be a card the parser knows, and takes Forge's spelling. Without it, the runner says NEW is unchecked and goes on. `--cards` names another card list. Every other option is `matchup`'s. `--ai`, `--sim-mode` and `--evaluator` give deck A's setting first, and both arms use it.
+
+**Same seeds.** Each arm is a full matchup with the same seed, so round r of each arm plays the same worker seeds in the same seat orders. The games start alike and part once the swapped card matters.
+
+**Each arm stops on its own**, at the target width or at its budget, as a matchup does. The swapped arm runs only if the original met its target, because without both rates there's no difference to give. The report shows a difference only when both arms met theirs.
+
+**The difference interval** is Newcombe's hybrid score interval, method 10 of Newcombe, "Interval estimation for the difference between independent proportions: comparison of eleven methods" (Statistics in Medicine 17, 1998, 873-890). Each side of it combines the two Wilson intervals' reaches on that side in quadrature. The tests check it against seven of the paper's Table II examples, and against Fagerland, Lydersen and Laake (2015): 7/34 minus 1/34 gives 0.019 to 0.340. The method takes the two arms as independent. Shared seeds make the arms agree more often than independent samples would, which makes the interval wider than it has to be, never narrower.
+
+**Plan for the width.** Two arms at a half-width of 5 points each give a difference with a half-width of about 7 points, 5 times the square root of 2. A card worth 3 points needs arms at about 2 points each, about 2,400 decisive games per arm at even odds.
+
+The report prints each rate as a percentage with its interval, and the difference as signed points with its interval, and says whether that interval includes 0. It never prints a bare percentage. The command exits 0 when both arms met their target and 1 otherwise.
+
+```
+runs\<card swap>\
+    cardswap.json             the swap, both arms' matchup.json fields, and the difference when both met
+    report.txt                the report
+    swapped.dck               deck A', as the runner wrote it
+    original\                 deck A's matchup folder, batch ids <run>-original-rNNN-ab and -ba
+    swapped\                  deck A' matchup folder, batch ids <run>-swapped-rNNN-ab and -ba
+```
+
 ### Batch output folder
 
 Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.
@@ -667,13 +721,15 @@ What this doesn't cover: one matchup, one seed, 20 games. The passthrough runs t
 
 ### The ONNX evaluator
 
-Issue #35 lets a seat's search score states with an export bundle from `python -m setmodel export`, through the evaluator seam of #22. Until #23's evaluator flag lands, three system properties pick it:
+Issue #35 lets a seat's search score states with an export bundle from `python -m setmodel export`, through the evaluator seam of #22. #23's `-eval` doesn't name it, and no fork branch has both yet. Three system properties pick it:
 
 - `-Dforge.onnx.bundle=DIR` turns it on, with the bundle in `DIR`. Use an absolute path, because each worker runs in its own folder.
 - `-Dforge.onnx.seats=1` names the seats that use it, in deck order, comma-separated. Every seat if left out.
 - `-Dforge.onnx.threads=N` gives ONNX Runtime N threads. The default is 1, because workers already run in parallel.
 
-Only a `full` or `hybrid` seat searches, so the properties change nothing for a `heuristic` seat. Each JVM writes `ONNX evaluator: loaded ...` to stderr when it loads the bundle, one line per seat that uses it, and at exit one summary line with the call count and the time per call. The sim-runner has no option for JVM properties, so `--java` takes a wrapper script:
+Only a `full` or `hybrid` seat searches, so the properties change nothing for a `heuristic` seat. Each JVM writes `ONNX evaluator: loaded ...` to stderr when it loads the bundle, one line per seat that uses it, and at exit one summary line with the call count and the time per call.
+
+The sim-runner now sets the first two itself from `--evaluator onnx:GENERATION` (see "Seat configurations"), so `--java` only has to name the patched JDK below. The runs in this section came before that, and went through a wrapper script that added the properties:
 
 ```
 @echo off

@@ -28,6 +28,8 @@ python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
 
 `python -m simrunner matchup` plays two decks in seat-swapped rounds until the first deck's win rate has a 95% Wilson interval no wider than 5 points either side, or refuses when its game budget runs out. "Matchups" in `docs/forge-build.md` has the details.
 
+Each seat plays stock heuristic, stock full sim, or a model generation: `--sim-mode full --evaluator onnx:gen1` plays the export bundle in `models/gen1/`. `python -m simrunner cardswap DECK OPPONENT --swap OLD=NEW` runs deck A and deck A with the swap made as two matchups on the same seed, and reports both rates and the difference with its interval. "Seat configurations" and "Card swaps" in `docs/forge-build.md` have the details.
+
 ## Deck pool
 
 `deckpool` holds the real Legacy lists in `decks/` and splits them into training and held-out decks. `docs/deck-pool.md` has the commands and the near-copy rule. `simrunner` takes a deck id from `decks/manifest.json` in place of a file.
