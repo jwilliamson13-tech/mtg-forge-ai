@@ -8,7 +8,7 @@ Issue #21. The tripwire in `docs/forge-build.md` finds forge-ai reading hidden c
 
 `simrunner` passes `-honest on` whenever records are on, because records are training data. `--no-honest` leaves the flag out. Forge skips flags it doesn't know, so a stale jar would ignore `-honest`. Each game record says `honest_play`, and the runner fails a batch that asked for honest play and has a file that doesn't show it.
 
-`-honest` works without `-record`. There is no reveal log then, so the AI goes by public cards alone. It can't go with `-t`. `GameCopier` copies the flag, so the AI thinks the same way on a copy. A copy has no reveal log, so what the AI was shown is missing from a search.
+`-honest` works without `-record`. There is no reveal log then, so the AI goes by public cards alone. It can't go with `-t`. `GameCopier` copies the flag, so the AI thinks the same way on a copy. A pruned copy also gets a reveal log of its own, holding what the searching seat had written down, so honest play on a copy goes by the same cards. A copy made with `-prune off` has none. See "Pruned copies" in `docs/forge-build.md`.
 
 ## What an AI may know
 
@@ -96,7 +96,7 @@ Full sim, records on, clock 300:
 | Burn full, Merfolk heuristic | 12 | 0 |
 | Sneak Show full, Mono Black Devotion full | 8 | 0 |
 
-That zero covers the real game only. The search still plays on copies that hold the opponent's real hand and library. `GameCopier` reads the real game to make them, the tripwire exempts it by class, and no watch sits on a copy. That is #25's. Until then a full-sim seat can see hidden cards however clean this count reads.
+That zero covered the real game only. At the time the search played on copies that held the opponent's real hand and library. #25 prunes those copies and has the tripwire check each one. "Pruned copies" in `docs/forge-build.md` has the numbers.
 
 **The digests didn't move.** I expected them to differ, and they didn't. Every pair I compared has the same digest with `-honest` on and off, random draws included, while about 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`, with honest play on and with it off.
 
@@ -136,7 +136,7 @@ A zero says nothing about these. None of them counts as a hit, by design:
 - Anything read from a forge-game frame. Rules code running inside a decision gets the real list, so `sa.canPlay()` on an opponent's spell stays silent and the AI still learns the answer.
 - `Card.getZone`, and the like, on a card the AI already holds.
 - The order of the AI's own library, which story 10 exempts.
-- `GameCopier`, which is exempt by class. No watch sits on a copy either.
+- `GameCopier`, which is exempt by class. No watch sits on a copy either. The copy check covers what a copy holds, not what code reads from it.
 
 ## What this doesn't cover
 
