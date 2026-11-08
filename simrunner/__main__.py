@@ -3,7 +3,8 @@
 `nightly` takes the same arguments plus `--start` and `--stop`. `pool` takes those without
 the two decks, and draws its deck pairs from the manifest. `matchup` takes the two decks and
 plays seat-swapped rounds until the win rate's interval is narrow enough. `cardswap` runs two
-matchups, deck A and deck A with `--swap OLD=NEW` made, against the same opponent.
+matchups, deck A and deck A with `--swap OLD=NEW` made, against the same opponent. `ladder` rates
+AI configurations against each other over a sample of manifest deck pairs.
 """
 
 from __future__ import annotations
@@ -18,8 +19,11 @@ from pathlib import Path
 from simrunner.batch import BatchConfig, SetupError, run_batch
 from simrunner.cardswap import CardSwapConfig, Swap, format_cardswap_report, parse_swap, run_cardswap
 from simrunner.generations import DEFAULT_MODELS, ONNX, PREFIX, Generation, GenerationError, is_onnx, resolve
+from simrunner.ladder import (DEFAULT_DECK_PAIRS, DEFAULT_PAIR_GAMES, DEFAULT_SPLIT, SPLIT_CHOICES, LadderConfig,
+                              format_ladder_report, run_ladder)
 from simrunner.matchup import (DEFAULT_MAX_GAMES, DEFAULT_ROUND_GAMES, DEFAULT_WIDTH, MatchupConfig,
                                format_matchup_report, run_matchup)
+from simrunner.players import Player, PlayerError, parse_player
 from simrunner.pool import DEFAULT_CHUNK_GAMES, DEFAULT_HELD_OUT_SHARE, PoolConfig, format_pool_report, run_pool
 from simrunner.report import format_report
 from simrunner.window import Window, parse_clock, resolve_window
@@ -31,6 +35,7 @@ DEFAULT_FORGE = REPO_ROOT.parent / "forge"
 DEFAULT_RUNS = REPO_ROOT / "runs"
 DEFAULT_MANIFEST = REPO_ROOT / "decks" / "manifest.json"
 DEFAULT_CARDS = REPO_ROOT / "data" / "cards.jsonl"
+DEFAULT_LADDER = DEFAULT_RUNS / "ladder"
 
 
 def _cores_minus(reserve: int) -> int:
@@ -109,11 +114,15 @@ def _config(args: argparse.Namespace, decks: tuple[Path, Path], workers: int, wi
         records = RecordPlan(Path(args.records_dir) if args.records_dir else None, args.turn_cap, not args.no_honest)
     elif args.turn_cap is not None or args.no_honest:
         args.parser.error("--turn-cap and --no-honest need records")
+    seats = (Seat(decks[0], profiles[0], modes[0], *evaluators[0]), Seat(decks[1], profiles[1], modes[1], *evaluators[1]))
+    return _run_config(args, seats, workers, window, Path(run_dir), records)
+
+
+def _run_config(args: argparse.Namespace, seats: tuple[Seat, Seat], workers: int, window: Window | None,
+                run_dir: Path, records: RecordPlan | None) -> BatchConfig:
     return BatchConfig(
-        seats=(Seat(decks[0], profiles[0], modes[0], *evaluators[0]),
-               Seat(decks[1], profiles[1], modes[1], *evaluators[1])),
-        games=args.games, batch_seed=args.seed, workers=workers,
-        forge_root=Path(args.forge), run_dir=Path(run_dir), clock_s=args.clock, heap=args.heap,
+        seats=seats, games=getattr(args, "games", 0), batch_seed=args.seed, workers=workers,
+        forge_root=Path(args.forge), run_dir=run_dir, clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
         records=records, tripwire=not args.no_tripwire, prune=not args.no_prune,
     )
@@ -217,6 +226,49 @@ def _cardswap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _players(args: argparse.Namespace, names: list[str]) -> tuple[Player, ...]:
+    try:
+        return tuple(parse_player(name, Path(args.models)) for name in names)
+    except PlayerError as e:
+        args.parser.error(str(e))
+
+
+def _optional_window(args: argparse.Namespace) -> Window | None:
+    if (args.start is None) != (args.stop is None):
+        args.parser.error("--start and --stop go together")
+    if args.start is None:
+        return None
+    window = resolve_window(args.start, args.stop, datetime.now())
+    print(f"window {window.start} to {window.stop}", file=sys.stderr)
+    return window
+
+
+def _ladder(args: argparse.Namespace) -> int:
+    run_dir = Path(args.run_dir) if args.run_dir else DEFAULT_LADDER
+    records = RecordPlan(Path(run_dir) / "games", args.turn_cap, not args.no_honest)
+    base = _run_config(args, (Seat(Path()), Seat(Path())), args.workers, _optional_window(args), run_dir, records)
+    config = LadderConfig(base, _players(args, args.players), Path(args.manifest or DEFAULT_MANIFEST), args.deck_pairs,
+                          args.pair_games, args.split, args.anchor, args.anchor_rating)
+    try:
+        ladder = run_ladder(config)
+    except SetupError as e:
+        args.parser.error(str(e))
+    _write_report(run_dir, format_ladder_report(ladder))
+    if not ladder.complete or not ladder.fit.ratings:
+        print(f"ladder {ladder.status}, logs in {run_dir}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _add_optional_window(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start", type=_clock_time,
+                        help="local time to start, HH:MM or HH:MM:SS, with --stop; inside the window, it starts at "
+                             "once (default: now, with no hard stop)")
+    parser.add_argument("--stop", type=_clock_time,
+                        help="local time by which every worker is gone, with --start; at or before --start means "
+                             "the next day")
+
+
 def _add_matchup_arguments(parser: argparse.ArgumentParser) -> None:
     _add_batch_arguments(parser)
     parser.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
@@ -256,6 +308,12 @@ def _add_games_argument(batch: argparse.ArgumentParser) -> None:
 def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--manifest", help="deck manifest for looking up deck ids (default: decks/manifest.json)")
     batch.add_argument("--seed", type=int, required=True, help="batch seed; worker seeds derive from it")
+    _add_seat_arguments(batch)
+    _add_run_arguments(batch)
+    _add_record_arguments(batch)
+
+
+def _add_seat_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--ai", nargs=2, metavar=("SEAT1", "SEAT2"),
                        help="AI profile per seat, such as Default Reckless")
     batch.add_argument("--sim-mode", nargs=2, metavar=("SEAT1", "SEAT2"), choices=SIM_MODES,
@@ -264,6 +322,9 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
                        help="what each seat's search scores states with: forge, random, passthrough, or "
                             "onnx:GENERATION for a model generation, a folder under --models or a bundle path "
                             "(default: forge, with -eval left off the command); any but forge needs hybrid or full")
+
+
+def _add_run_arguments(batch: argparse.ArgumentParser, run_dir: str = "runs/<time>-seed<seed>") -> None:
     batch.add_argument("--models", default=str(DEFAULT_MODELS),
                        help="folder of generations, one export bundle per folder, named for its generation "
                             "(default: models)")
@@ -273,13 +334,10 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--clock", type=int, default=2400, help="seconds before Forge stops a game (default: 2400)")
     batch.add_argument("--heap", default="2048m", help="-Xmx per JVM (default: 2048m)")
     batch.add_argument("--forge", default=str(DEFAULT_FORGE), help="Forge clone (default: ../forge)")
-    batch.add_argument("--run-dir", help="folder for logs and the report (default: runs/<time>-seed<seed>)")
+    batch.add_argument("--run-dir", help=f"folder for logs and the report (default: {run_dir})")
     batch.add_argument("--java", nargs="+", default=["java"], help="command that starts Java (default: java)")
     batch.add_argument("--keep-profiles", action="store_true",
                        help="keep the throwaway worker folders for debugging")
-    batch.add_argument("--records", action="store_true", help="have Forge write one game record per game")
-    batch.add_argument("--records-dir", help="folder for game records, which turns them on "
-                                             "(default: games in the run folder)")
     batch.add_argument("--turn-cap", type=int, help="with records, the last turn a game may play before it "
                                                     "stops as a draw (default: Forge's 50)")
     batch.add_argument("--no-tripwire", action="store_true",
@@ -290,6 +348,12 @@ def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--no-prune", action="store_true",
                        help="let a searching seat's copies of the game hold the hidden cards it can't know "
                             "(default: Forge prunes them)")
+
+
+def _add_record_arguments(batch: argparse.ArgumentParser) -> None:
+    batch.add_argument("--records", action="store_true", help="have Forge write one game record per game")
+    batch.add_argument("--records-dir", help="folder for game records, which turns them on "
+                                             "(default: games in the run folder)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -343,6 +407,35 @@ def build_parser() -> argparse.ArgumentParser:
                           help="card list from the sweep, to check NEW's spelling (default: data/cards.jsonl)")
     _add_matchup_arguments(cardswap)
     cardswap.set_defaults(handler=_cardswap, parser=cardswap)
+
+    ladder = commands.add_parser("ladder", help="rate AI configurations against each other: every pair of players "
+                                                "over a fixed sample of deck pairs, each player on each deck in "
+                                                "each seat",
+                                 description="A player is heuristic, full, hybrid, MODE:EVALUATOR such as "
+                                             "full:random, or onnx:GENERATION, which plays full sim with that "
+                                             "generation. The ladder folder keeps every batch, so a later run with "
+                                             "another generation plays only that generation's games and refits.")
+    ladder.add_argument("--players", nargs="+", required=True, metavar="PLAYER",
+                        help="the players to rate, such as heuristic full onnx:gen0")
+    ladder.add_argument("--manifest", help="deck manifest to draw deck pairs from (default: decks/manifest.json)")
+    ladder.add_argument("--seed", type=int, required=True,
+                        help="the ladder's seed: it draws the deck pairs and every batch's seed derives from it")
+    ladder.add_argument("--deck-pairs", type=int, default=DEFAULT_DECK_PAIRS,
+                        help=f"deck pairs to play, no deck in two of them (default: {DEFAULT_DECK_PAIRS})")
+    ladder.add_argument("--split", choices=SPLIT_CHOICES, default=DEFAULT_SPLIT,
+                        help=f"which manifest decks the pairs come from (default: {DEFAULT_SPLIT})")
+    ladder.add_argument("--pair-games", type=int, default=DEFAULT_PAIR_GAMES,
+                        help="games per pair of players per deck pair, a multiple of 4: a batch for each player on "
+                             f"each deck in each seat (default: {DEFAULT_PAIR_GAMES})")
+    ladder.add_argument("--anchor", help="the player held at --anchor-rating (default: heuristic if it plays, "
+                                         "otherwise the first player)")
+    ladder.add_argument("--anchor-rating", type=float, default=0.0,
+                        help="the anchor's rating, so the others read as points above or below it (default: 0)")
+    ladder.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
+                        help="batches at once, one JVM each (default: logical cores minus 2)")
+    _add_run_arguments(ladder, "runs/ladder")
+    _add_optional_window(ladder)
+    ladder.set_defaults(handler=_ladder, parser=ladder)
     return parser
 
 
