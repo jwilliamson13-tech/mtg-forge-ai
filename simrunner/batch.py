@@ -19,7 +19,7 @@ from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
 from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_SIM_MODE, JVM_PROPERTIES, GameFile, RecordPlan, Seat,
                               WorkerPlan, WorkerResult, any_seat_searches, evaluator_wiring, kill_tree, onnx_problem,
-                              prepare_folder, remove_folder, requested_evaluators, requested_sim_modes,
+                              prepare_folder, remove_folder, expected_printed_evaluators, requested_sim_modes,
                               resolve_search_budget, run_worker, seat_searches, sim_args)
 
 JAR_PATTERN = "forge-gui-desktop-*-jar-with-dependencies.jar"
@@ -261,7 +261,7 @@ class BatchResult:
             ignored.append("a game record that doesn't show honest play")
         if self.tripwire_on and not all(game.tripwire_hits is not None for game in worker.games):
             ignored.append("a game with no tripwire count")
-        if worker.ready_s is not None and worker.evaluators != requested_evaluators(self.config.seats):
+        if worker.ready_s is not None and worker.evaluators != expected_printed_evaluators(self.config.seats):
             ignored.append("Forge did not name the evaluators asked for")
         if worker.ready_s is not None and worker.onnx_seats != evaluator_wiring(self.config.seats).onnx_seats:
             ignored.append("Forge did not put the ONNX evaluator on the seats asked for")
@@ -447,7 +447,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
             folders.append(folder)
             deck_dir = prepare_folder(folder, forge_gui, config.seats)
             command = [*config.java, f"-Xmx{config.heap}", *JVM_PROPERTIES,
-                       *evaluator_wiring(config.seats).jvm_properties, "-jar", str(jar),
+                       "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
                                  resolve_search_budget(config.seats, config.search_budget), records, config.batch_id,
                                  config.tripwire, config.prune)]
