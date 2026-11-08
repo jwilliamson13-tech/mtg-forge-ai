@@ -340,6 +340,49 @@ runs\<card swap>\
     swapped\                  deck A' matchup folder, batch ids <run>-swapped-rNNN-ab and -ba
 ```
 
+### Elo ladder
+
+`ladder` gives each AI configuration one strength number. It plays every pair of players over a fixed sample of deck pairs from the manifest, then fits Elo ratings to the decisive games.
+
+```powershell
+python -m simrunner ladder --players heuristic full onnx:gen0 --seed 41
+```
+
+**A player** is an AI configuration in one word. `heuristic`, `full` and `hybrid` are the stock modes with Forge's evaluator. `full:random` and `hybrid:passthrough` put a #23 test evaluator on a searching seat. `onnx:gen0` is full sim with generation `gen0` from `models/`, and `hybrid:onnx:gen0` the same in hybrid. `simrunner/players.py` reads the names. A player has no AI profile of its own and plays Forge's `Default`.
+
+**What gets played.** For each pair of players and each deck pair there are four batches: the first player on the pair's first deck, then on its second, each with the first player in seat 1 and then in seat 2. Neither the decks nor the seats can favor a player. `--pair-games` is the games per pair of players per deck pair, 40 by default, so each batch plays 10. `--deck-pairs` is 6 by default, so a pair of players meets over 240 games. Each batch is one JVM, and `--workers` of them run at once.
+
+**Which decks.** `--split held_out`, the default, draws the deck pairs from the held-out decks, so no deck in the ladder is one a generation trained on. That is the case the harness is for, an unseen list. `--split train` and `--split both` are there for comparison. The seed draws the pairs, and no deck is in two of them. Every pair of players gets the same seed for the same deck pair and deck assignment, so all of them face the same shuffles. The two seat orders of an assignment share a seed, as a matchup round's two halves do.
+
+**The ratings** are a Bradley-Terry fit, by maximum likelihood, on the Elo curve: a player rated 100 points above another is expected to win 64% of their games, 200 points 76%. Draws leave the fit, as they leave a matchup's rate, and the report counts them beside it. One player, the anchor, is held at `--anchor-rating`, 0 by default, so every other rating reads as points above or below it. `--anchor` picks it and defaults to `heuristic` when it plays, otherwise the first player.
+
+**The interval** on each rating is the profile-likelihood interval at 95%. It holds every rating at which the best fit of the other players loses no more than 1.92 of log-likelihood against the overall best, half the chi-squared cut-off of 3.84. With two players that is the likelihood-ratio interval for a binomial share, which the tests check against a separate bisection. It is lopsided where the data are lopsided. Each interval is a difference from the anchor, so the anchor has none. The tests also check coverage. Over 300 simulated three-player ladders of 60 games a pair, the 95% intervals held the true rating 573 times in 600, 95.5%.
+
+**No finite ratings.** If some group of players never lost a game to the rest, the fit has no maximum and the ratings would grow without limit. The ladder then gives no ratings at all, says which group, and still prints every head-to-head rate. So does a player with no decisive games.
+
+**Plan for the precision.** At even odds, 240 decisive games between two players pin their gap to about 45 Elo points either side. Ratings linked through several opponents come out tighter.
+
+**Adding a generation.** The ladder folder keeps every batch. A later run with a new player plays only the new player's batches against the others, then refits over everything among the players named. A batch that finished is never replayed. One that failed or was cut off by the hard stop plays again on the next run. Naming fewer players rates only them, from the games already played. The first run writes `plan.json`, with the seed, split, deck pairs, games per pair, clock, search budget, turn cap, honest play and tripwire setting, and a later run with any of those changed is refused. `plan.json` also keeps each player's settings, and a generation's model digest with them. A run that names `onnx:gen0` after `models/gen0/` was re-exported with other weights is refused, because the old games were played by another model.
+
+**Two generations at one table** can't play yet, because Forge loads one ONNX bundle per JVM (see "Seat configurations"). The ladder plans those batches anyway, lists them as not played with the reason, and rates from the rest. Every generation still meets `heuristic` and `full`, which connects the fit. Once `evaluator_wiring` takes `-eval onnx:DIR`, the next run plays the missing batches and nothing else.
+
+`--start` and `--stop` give the ladder a window with a hard stop, as `nightly` does. Without them it starts now. Records are always on, for honest play and the check of each game file against its result line, and they go to the ladder folder's `games\`. The command exits 0 when every batch Forge can seat has finished and the fit has ratings, and 1 otherwise.
+
+```
+runs\ladder\                        the default ladder folder
+    plan.json                       the settings that decide the games, and every player the ladder has seen
+    ladder.json                     the ratings with their intervals, each pair's record, and the batches left
+    report.txt                      the report
+    games\                          every batch's game records
+    batches\<first>--<second>\pair-NN-x1-ab\   one plain batch folder and its result.json
+```
+
+`x1` has the first player, in label order, on the deck pair's first deck, and `x2` on its second. `ab` has the first player in seat 1, `ba` in seat 2. In `ladder.json`, `players` lists each player with its settings, rank, `rating`, `low`, `high`, decisive games, wins, losses and draws, best first. `pairs` gives each pair of players' record with its Wilson interval, and `ratings_problem` says why there are no ratings when there are none.
+
+The report never prints a bare percentage. Each head-to-head rate carries its Wilson interval, and each rating its profile interval or the word anchor.
+
+#41's second criterion, that the rungs reproduce on the real sim-runner, needs a real run. The heuristic against full rung should agree with what #26 measures, once #26 has run.
+
 ### Batch output folder
 
 Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.

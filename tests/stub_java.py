@@ -32,8 +32,10 @@ STUB_PATTERN fixes the outcomes instead of drawing them from the seed. `Burn:WWL
 over each JVM's game numbers from Burn's side, whichever seat Burn sits in: W a win, L a
 loss, D a draw by the rules, T a draw at the turn cap. `seat1:WL` does the same for
 whoever sits in seat 1. A subject of `has=CARD` is a deck whose main deck holds CARD, so a
-card-swap arm can play differently from the original. Patterns separated by `;` are tried in
-order, and the first whose subject sits at the table decides each game.
+card-swap arm can play differently from the original. A subject of `sim=MODE` or `eval=NAME` is
+the seat with that `-sim` or `-eval` value, so an AI configuration wins at a fixed rate whatever
+deck it plays. Patterns separated by `;` are tried in order, and the first whose subject sits at
+the table decides each game. With both seats matching, seat 1 is the subject.
 """
 
 import gzip
@@ -163,19 +165,22 @@ def play_turn_cap(n: int, players: list[str]) -> dict:
     return {"winner": None, "end_reason": "draw_turn_cap", "final_turn": 51}
 
 
-def pattern_seat(subject: str, names: list[str], cards: list[set[str]]) -> int | None:
+def pattern_seat(subject: str, names: list[str], cards: list[set[str]], players: list[str]) -> int | None:
     if subject == "seat1":
         return 0
     if subject.startswith("has="):
         held = [seat for seat, deck in enumerate(cards) if subject.removeprefix("has=") in deck]
         return held[0] if held else None
+    if subject.startswith(("sim=", "eval=")):
+        tagged = [seat for seat, player in enumerate(players) if f"[{subject}]" in player]
+        return tagged[0] if tagged else None
     return names.index(subject) if subject in names else None
 
 
 def play_pattern(n: int, players: list[str], names: list[str], cards: list[set[str]], rng: random.Random) -> dict:
     for entry in os.environ["STUB_PATTERN"].split(";"):
         subject, letters = entry.rsplit(":", 1)
-        seat = pattern_seat(subject, names, cards)
+        seat = pattern_seat(subject, names, cards, players)
         if seat is not None:
             break
     else:
