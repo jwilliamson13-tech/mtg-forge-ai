@@ -250,6 +250,41 @@ What that run doesn't cover:
 - Ctrl-C has only run as a simulated interrupt in the runner. I expect the JVMs in the same console to take it too, and haven't seen that.
 - 4 workers and 50-game chunks are untested.
 
+### Matchups
+
+`matchup` answers "how does deck A do against deck B". It plays the two decks in rounds until deck A's win rate has a narrow enough interval, then prints the rate with that interval. If the game budget runs out first, it prints no rate. It says how many more games the current estimate needs instead.
+
+```powershell
+python -m simrunner matchup hogaak-1 ur-tempo-1 --seed 1 --run-dir runs/hogaak-vs-ur-tempo
+```
+
+It takes `batch`'s options except `--games`, plus three of its own. `--width` is the target, 5 points by default. `--round-games` is the games per round, 100 by default, and has to be even. `--max-games` is the budget, 1000 by default. As with `pool`, both seats default to `heuristic` and records are on. Records are on so that the AI plays honestly, because the runner only passes `-honest on` with records, and so that each game's file is checked against its result line. They also bring Forge's turn cap of 50. `--ai` and `--sim-mode` take deck A's setting first, and each setting moves with its deck when the seats swap.
+
+**Width means half-width.** The target is how far the interval reaches on each side of the rate, averaged over the two sides because Wilson is lopsided away from 50%. That's the only reading under which HANDOFF.md's figures work out: a half-width of 5 points takes 381 decisive games at even odds, and 2 points takes 2,398. The full width of the interval is twice the target.
+
+**The interval** is the Wilson score interval at 95% confidence, over decisive games. `simrunner.interval` has it, and the tests check it against Newcombe's published values (Statistics in Medicine 17, 1998, Table I).
+
+**Draws leave the rate.** Deck A's win rate is its wins over decisive games, and the report counts the draws beside it, by cause. A win rate is a share of games someone won, and a Wilson interval needs every game to be a win or a loss. Counting a draw as half a win would break that. Clock and exception draws aren't results of the matchup at all, and this is how training already treats every draw. A deck that stalls into the turn cap gets no credit for it, and the draw count in the report is where that shows.
+
+**A round** is two batches with the same seed and the same game count: deck A in seat 1, then deck A in seat 2. With the same seed and worker count, both batches get the same worker seeds, so the two halves draw from the same random streams. Seats can't alternate game by game, because one JVM keeps its seats for its whole run. Each round's seed is a hash of `--seed` and the round number. The last round shrinks to what the budget has left, rounded down to an even count.
+
+**The stopping rule.** After each round, the runner puts an interval on every decisive game so far. At or under the target, the run stops and reports. If the budget can't fit another round, it refuses. The games still needed come from the current rate: the fewest decisive games whose interval at that rate meets the target, less those already played, scaled up so that draws keep the share of games they have had so far.
+
+**A failed batch ends the run.** A batch that isn't clean, by the same test `batch` uses, stops the matchup with no rate, and the report names the round, the seat order and why. So does the hard stop, when a caller of `run_matchup` gives the batch a window. The command has no `--start` and `--stop` yet. A dirty tripwire doesn't stop the run. The report shows it as `batch` does.
+
+The report never prints a bare percentage. A rate always comes with its interval, and the only other percentage is the confidence level. When the target is met, it also gives deck A's rate in each seat, which is where a seat edge would show. The command exits 0 when the target was met and 1 otherwise.
+
+```
+runs\<matchup>\
+    matchup.json              settings, counts per round and seat order, seeds, digests, and the interval when met
+    report.txt                the report
+    games\                    every batch's game records
+    rounds\round-NNN-ab\      one plain batch folder, deck A in seat 1
+    rounds\round-NNN-ba\      the same seed, deck A in seat 2
+```
+
+A batch's id is the run folder's name plus `-rNNN-ab` or `-rNNN-ba`, so the two orders of a round don't share game ids. A run folder that already holds a matchup is refused, and a matchup can't continue after a stop.
+
 ### Batch output folder
 
 Every batch, nightly or not, writes this layout. `<batch>` is the folder name, which `--run-dir` sets and which defaults to `<time>-seed<seed>`. It doubles as the batch id.

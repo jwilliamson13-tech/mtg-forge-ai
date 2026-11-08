@@ -19,7 +19,7 @@ def table(rows: list[tuple[str, ...]]) -> str:
                      for row in rows) + "\n"
 
 
-def _seat(seat: Seat) -> str:
+def describe_seat(seat: Seat) -> str:
     return f"{seat.deck.stem} (AI {seat.ai_profile or 'default'}, sim {seat.sim_mode or DEFAULT_SIM_MODE})"
 
 
@@ -69,8 +69,8 @@ def format_summary(batch: BatchResult) -> str:
         window = [("window", f"{config.window.start} to {config.window.stop}"), ("status", _status(batch))]
     rows = [
         *window,
-        ("seat 1", _seat(config.seats[0])),
-        ("seat 2", _seat(config.seats[1])),
+        ("seat 1", describe_seat(config.seats[0])),
+        ("seat 2", describe_seat(config.seats[1])),
         ("batch seed", str(config.batch_seed)),
         ("workers", str(len(batch.workers))),
         ("clock", f"{config.clock_s} s"),

@@ -6,7 +6,8 @@ plus the `-sim` flag, and exits 0 whatever happened, as Forge does. Like Forge, 
 folder, and refuses a deck file that won't load.
 
 STUB_SCENARIO picks what the games do. STUB_RECORD_DIR, when set, receives one JSON
-file per run with the arguments and surroundings the stub saw.
+file per run with the arguments and surroundings the stub saw, named by its seed, with
+`-2` added for the second run with that seed.
 
 With `-record` it writes one game file per game, named as Forge names them, except for
 what Forge would skip: a game that threw, and a game the clock stopped before its first
@@ -20,6 +21,11 @@ writes files without saying it played honestly.
 A game file's metadata says what the game printed, as Forge's does. These scenarios break
 that: `file_names_other_winner`, `file_says_clock`, `exception_with_file`, and `extra_file`,
 which leaves a file for a game that printed no result.
+
+STUB_PATTERN fixes the outcomes instead of drawing them from the seed. `Burn:WWL` cycles
+over each JVM's game numbers from Burn's side, whichever seat Burn sits in: W a win, L a
+loss, D a draw by the rules, T a draw at the turn cap. `seat1:WL` does the same for
+whoever sits in seat 1.
 """
 
 import gzip
@@ -62,7 +68,12 @@ def record(argv: list[str]) -> None:
     folder = os.environ.get("STUB_RECORD_DIR")
     if folder:
         seed = option(argv, "-s")[0]
-        Path(folder, f"{seed}.json").write_text(json.dumps({
+        path = Path(folder, f"{seed}.json")
+        runs = 1
+        while path.exists():  # a matchup plays each seed twice, once per seat order
+            runs += 1
+            path = Path(folder, f"{seed}-{runs}.json")
+        path.write_text(json.dumps({
             "argv": argv,
             "cwd": os.getcwd(),
             "appdata": os.environ.get("APPDATA"),
@@ -103,8 +114,9 @@ def print_tripwire(argv: list[str], scenario: str, n: int) -> None:
         print("Tripwire: 0 hits")
 
 
-def play_win(n: int, players: list[str], rng: random.Random) -> dict:
-    winner = rng.randrange(2)
+def play_win(n: int, players: list[str], rng: random.Random, winner: int | None = None) -> dict:
+    if winner is None:
+        winner = rng.randrange(2)
     won = f"{players[winner]} {WON}"
     lost = f"{players[1 - winner]} has lost because life total reached 0"
     turn = rng.randint(4, 12)
@@ -131,6 +143,17 @@ def play_turn_cap(n: int, players: list[str]) -> dict:
     outcome_lines(51, f"{players[0]} has drawn", f"{players[1]} has drawn")
     print(DRAW_RESULT.format(n=n))
     return {"winner": None, "end_reason": "draw_turn_cap", "final_turn": 51}
+
+
+def play_pattern(n: int, players: list[str], names: list[str], rng: random.Random) -> dict:
+    subject, letters = os.environ["STUB_PATTERN"].split(":")
+    letter = letters[(n - 1) % len(letters)]
+    seat = 0 if subject == "seat1" else names.index(subject)
+    if letter == "D":
+        return play_rules_draw(n, players)
+    if letter == "T":
+        return play_turn_cap(n, players)
+    return play_win(n, players, rng, seat if letter == "W" else 1 - seat)
 
 
 def broken_ending(ending: dict, scenario: str) -> dict:
@@ -231,6 +254,8 @@ def main() -> int:
             ending = play_rules_draw(n, players)
         elif scenario == "turn_cap":
             ending = play_turn_cap(n, players)
+        elif os.environ.get("STUB_PATTERN"):
+            ending = play_pattern(n, players, names, rng)
         else:
             ending = play_win(n, players, rng)
         write_game_file(argv, n, scenario, ending)

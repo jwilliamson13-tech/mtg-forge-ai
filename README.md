@@ -26,6 +26,8 @@ python -m cardscript sweep path/to/cardsfolder path/to/tokenscripts --out cards.
 python -m simrunner batch deck1.dck deck2.dck --games 50 --seed 1
 ```
 
+`python -m simrunner matchup` plays two decks in seat-swapped rounds until the first deck's win rate has a 95% Wilson interval no wider than 5 points either side, or refuses when its game budget runs out. "Matchups" in `docs/forge-build.md` has the details.
+
 ## Deck pool
 
 `deckpool` holds the real Legacy lists in `decks/` and splits them into training and held-out decks. `docs/deck-pool.md` has the commands and the near-copy rule. `simrunner` takes a deck id from `decks/manifest.json` in place of a file.

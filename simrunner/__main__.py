@@ -1,7 +1,8 @@
 """Command line: `python -m simrunner batch DECK1 DECK2 --games N --seed S`.
 
 `nightly` takes the same arguments plus `--start` and `--stop`. `pool` takes those without
-the two decks, and draws its deck pairs from the manifest.
+the two decks, and draws its deck pairs from the manifest. `matchup` takes the two decks and
+plays seat-swapped rounds until the win rate's interval is narrow enough.
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 
 from simrunner.batch import BatchConfig, SetupError, run_batch
+from simrunner.matchup import (DEFAULT_MAX_GAMES, DEFAULT_ROUND_GAMES, DEFAULT_WIDTH, MatchupConfig,
+                               format_matchup_report, run_matchup)
 from simrunner.pool import DEFAULT_CHUNK_GAMES, DEFAULT_HELD_OUT_SHARE, PoolConfig, format_pool_report, run_pool
 from simrunner.report import format_report
 from simrunner.window import Window, parse_clock, resolve_window
@@ -137,9 +140,23 @@ def _pool(args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_deck_arguments(batch: argparse.ArgumentParser) -> None:
-    batch.add_argument("deck1", help="path to the .dck file for seat 1, or a deck id from the manifest")
-    batch.add_argument("deck2", help="path to the .dck file for seat 2, or a deck id from the manifest")
+def _matchup(args: argparse.Namespace) -> int:
+    decks = (_deck_path(args.deck1, args.manifest, args.parser), _deck_path(args.deck2, args.manifest, args.parser))
+    config = MatchupConfig(_config(args, decks, args.workers, None), args.width, args.round_games, args.max_games)
+    try:
+        matchup = run_matchup(config)
+    except SetupError as e:
+        args.parser.error(str(e))
+    _write_report(config.batch.run_dir, format_matchup_report(matchup))
+    if not matchup.met:
+        print(f"no win rate ({matchup.status}), logs in {config.batch.run_dir}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _add_deck_arguments(batch: argparse.ArgumentParser, first: str = "seat 1", second: str = "seat 2") -> None:
+    batch.add_argument("deck1", help=f"path to the .dck file for {first}, or a deck id from the manifest")
+    batch.add_argument("deck2", help=f"path to the .dck file for {second}, or a deck id from the manifest")
 
 
 def _add_window_arguments(parser: argparse.ArgumentParser) -> None:
@@ -153,9 +170,12 @@ def _add_window_arguments(parser: argparse.ArgumentParser) -> None:
     count.add_argument("--workers", type=int, help="parallel JVMs, in place of --reserve")
 
 
+def _add_games_argument(batch: argparse.ArgumentParser) -> None:
+    batch.add_argument("--games", type=int, required=True, help="total games in the batch")
+
+
 def _add_batch_arguments(batch: argparse.ArgumentParser) -> None:
     batch.add_argument("--manifest", help="deck manifest for looking up deck ids (default: decks/manifest.json)")
-    batch.add_argument("--games", type=int, required=True, help="total games in the batch")
     batch.add_argument("--seed", type=int, required=True, help="batch seed; worker seeds derive from it")
     batch.add_argument("--ai", nargs=2, metavar=("SEAT1", "SEAT2"),
                        help="AI profile per seat, such as Default Reckless")
@@ -189,6 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     batch = commands.add_parser("batch", help="run headless forge sim games in parallel and report throughput")
     _add_deck_arguments(batch)
+    _add_games_argument(batch)
     _add_batch_arguments(batch)
     batch.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
                        help="parallel JVMs (default: logical cores minus 2)")
@@ -196,12 +217,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     nightly = commands.add_parser("nightly", help="run a batch inside a time window, with a hard stop at its end")
     _add_deck_arguments(nightly)
+    _add_games_argument(nightly)
     _add_batch_arguments(nightly)
     _add_window_arguments(nightly)
     nightly.set_defaults(handler=_nightly, parser=nightly)
 
     pool = commands.add_parser("pool", help="spread a windowed batch over many deck pairs from the manifest, "
                                             "in chunks that a restart can skip")
+    _add_games_argument(pool)
     _add_batch_arguments(pool)
     _add_window_arguments(pool)
     pool.add_argument("--chunk-games", type=int, default=DEFAULT_CHUNK_GAMES,
@@ -210,6 +233,25 @@ def build_parser() -> argparse.ArgumentParser:
                       help="share of the games played held-out deck against held-out deck "
                            f"(default: {DEFAULT_HELD_OUT_SHARE})")
     pool.set_defaults(handler=_pool, parser=pool, sim_mode=["heuristic", "heuristic"], records=True)
+
+    matchup = commands.add_parser("matchup", help="play two decks in seat-swapped rounds until deck A's win rate "
+                                                  "has a narrow enough interval",
+                                  description="--ai and --sim-mode name deck A's setting first, and each setting "
+                                              "moves with its deck when the seats swap.")
+    _add_deck_arguments(matchup, "deck A, whose win rate is reported", "deck B")
+    _add_batch_arguments(matchup)
+    matchup.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
+                         help="parallel JVMs per batch (default: logical cores minus 2)")
+    matchup.add_argument("--width", type=float, default=DEFAULT_WIDTH,
+                         help="stop once the 95%% interval reaches no more than this many points either side of "
+                              f"the rate (default: {DEFAULT_WIDTH:g})")
+    matchup.add_argument("--round-games", type=int, default=DEFAULT_ROUND_GAMES,
+                         help="games per round, an even number, half with each deck in seat 1 "
+                              f"(default: {DEFAULT_ROUND_GAMES})")
+    matchup.add_argument("--max-games", type=int, default=DEFAULT_MAX_GAMES,
+                         help=f"the game budget; past it the matchup refuses to give a rate (default: {DEFAULT_MAX_GAMES})")
+    # The base batch's game count is unused: each round sets its own.
+    matchup.set_defaults(handler=_matchup, parser=matchup, sim_mode=["heuristic", "heuristic"], records=True, games=0)
     return parser
 
 
