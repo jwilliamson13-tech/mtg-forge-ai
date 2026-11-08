@@ -211,6 +211,23 @@ def test_settings_travel_with_their_deck_when_seats_swap(matchup, monkeypatch, d
     assert saved["side_a"]["ai_profile"] == "Reckless" and saved["side_b"]["sim_mode"] == "heuristic"
 
 
+def test_an_evaluator_travels_with_its_deck_when_seats_swap(matchup, monkeypatch, decks, tmp_path):
+    pattern(monkeypatch, "Burn:WL")
+    launches = tmp_path / "launches"
+    launches.mkdir()
+    monkeypatch.setenv("STUB_RECORD_DIR", str(launches))
+    seats = (Seat(decks[0], None, "full", "passthrough"), Seat(decks[1], None, "full", None))
+    run_matchup(matchup(width=10, seats=seats))
+    seen = {}
+    for path in launches.glob("*.json"):
+        launch = json.loads(path.read_text(encoding="utf-8"))
+        argv = launch["argv"]
+        seen[Path(launch["cwd"]).parent.name] = argv[argv.index("-eval") + 1:argv.index("-eval") + 3]
+    assert seen == {"round-001-ab": ["passthrough", "forge"], "round-001-ba": ["forge", "passthrough"]}
+    saved = json.loads((tmp_path / "run" / "matchup.json").read_text(encoding="utf-8"))
+    assert saved["side_a"]["evaluator"] == "passthrough" and saved["side_b"]["evaluator"] is None
+
+
 def test_a_spent_budget_refuses_and_names_the_games_still_needed(matchup, monkeypatch, tmp_path, capsys):
     pattern(monkeypatch, "Burn:WL")
     result = run_matchup(matchup(max_games=200))

@@ -127,7 +127,9 @@ def plan_pool(splits: dict[str, str], games: int, seed: int, chunk_games: int = 
 def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     """Everything that decides which games a run folder holds. Workers and the window don't."""
     batch = config.batch
-    return {"seed": batch.batch_seed, "games": batch.games, "chunk_games": config.chunk_games,
+    # Only when set, so that a plan written before evaluators existed still matches on a restart.
+    evaluators = [seat.evaluator for seat in batch.seats]
+    return {**({"evaluators": evaluators} if any(evaluators) else {}), "seed": batch.batch_seed, "games": batch.games, "chunk_games": config.chunk_games,
             "held_out_share": config.held_out_share, "ai": [seat.ai_profile for seat in batch.seats],
             "sim_modes": [seat.sim_mode for seat in batch.seats], "clock_s": batch.clock_s,
             "search_budget": batch.search_budget, "turn_cap": batch.records.turn_cap,

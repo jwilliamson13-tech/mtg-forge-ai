@@ -16,7 +16,8 @@ priority pass. The `stale_jar` scenario ignores the flag, as a jar from before i
 It prints a game's tripwire lines, unless `-tripwire off` says not to.
 The `no_tripwire_jar` scenario is a jar from before them, and `tripwire_hits` gives every
 game hits, more of them in odd games. The `no_honest_jar` scenario ignores `-honest`, and
-writes files without saying it played honestly.
+writes files without saying it played honestly. The `no_eval_jar` scenario ignores `-eval`, as a
+jar from before issue #23 would, and `stale_jar` ignores it too.
 
 A game file's metadata says what the game printed, as Forge's does. These scenarios break
 that: `file_names_other_winner`, `file_says_clock`, `exception_with_file`, and `extra_file`,
@@ -210,11 +211,20 @@ def main() -> int:
             print("Unknown simulation mode - Bogus. Available modes: heuristic, hybrid, full")
             return 0
 
+    evaluators = None
+    if "-eval" in argv and scenario not in ("stale_jar", "no_eval_jar"):
+        evaluators = option(argv, "-eval", 2)
+        if "Bogus" in evaluators:
+            print("Unknown evaluator - Bogus. Available evaluators: forge, random, passthrough")
+            return 0
+
     games = int(option(argv, "-n")[0])
     seed = int(option(argv, "-s")[0])
     players = [f"Ai({seat})-{name}" for seat, name in enumerate(names, 1)]
     if modes:
         players = [f"{player} [sim={mode}]" for player, mode in zip(players, modes)]
+    if evaluators:
+        players = [f"{player} [eval={evaluator}]" for player, evaluator in zip(players, evaluators)]
     print(f"{players[0]} vs {players[1]} - {games} games of Constructed seed {seed}", flush=True)
 
     rng = random.Random(seed)

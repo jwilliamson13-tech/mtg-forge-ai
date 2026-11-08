@@ -20,7 +20,8 @@ def table(rows: list[tuple[str, ...]]) -> str:
 
 
 def describe_seat(seat: Seat) -> str:
-    return f"{seat.deck.stem} (AI {seat.ai_profile or 'default'}, sim {seat.sim_mode or DEFAULT_SIM_MODE})"
+    evaluator = f", eval {seat.evaluator}" if seat.evaluator else ""
+    return f"{seat.deck.stem} (AI {seat.ai_profile or 'default'}, sim {seat.sim_mode or DEFAULT_SIM_MODE}{evaluator})"
 
 
 def _count(value: int | None) -> str:

@@ -152,3 +152,16 @@ def test_a_restart_plays_only_what_did_not_finish(pool_manifest, forge, tmp_path
     with pytest.raises(SystemExit):
         main(pool_args(pool_manifest, forge, run_dir, seed="6"))
     assert "different plan" in capsys.readouterr().err
+
+
+def test_a_plan_names_evaluators_only_when_one_is_set(pool_manifest, forge, tmp_path, launches):
+    # A plan written before evaluators existed has no such key, and its restart has to match it.
+    plain = tmp_path / "plain"
+    assert main(pool_args(pool_manifest, forge, plain)) == 0
+    assert "evaluators" not in json.loads((plain / "plan.json").read_text(encoding="utf-8"))
+    assert all("-eval" not in argv for argv in launches().values())
+
+    searching = tmp_path / "searching"
+    args = pool_args(pool_manifest, forge, searching) + ["--sim-mode", "full", "heuristic", "--evaluator", "random", "forge"]
+    assert main(args) == 0
+    assert json.loads((searching / "plan.json").read_text(encoding="utf-8"))["evaluators"] == ["random", "forge"]
