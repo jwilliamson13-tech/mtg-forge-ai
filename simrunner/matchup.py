@@ -99,6 +99,7 @@ class OrderResult:
     record_digest: str | None
     tripwire_hits: tuple[int, ...]
     wall_s: float
+    tripwire_copies: tuple[int, ...] = ()  # search copies checked, per game that said
 
 
 @dataclass(frozen=True)
@@ -153,7 +154,8 @@ def _order_result(order: str, batch: BatchResult) -> OrderResult:
     notes = [] if batch.complete else [f"{batch.finished} of {batch.attempted} games finished"]
     notes += [note for worker in batch.workers if (note := worker_note(batch, worker))]
     return OrderResult(a_seat, batch.config.batch_id, tally_of(batch, a_seat), batch.clean, batch.stopped,
-                       "; ".join(notes), batch.digest, batch.record_digest, tuple(batch.tripwire_hits), batch.wall_s)
+                       "; ".join(notes), batch.digest, batch.record_digest, tuple(batch.tripwire_hits), batch.wall_s,
+                       tuple(batch.tripwire_copies))
 
 
 def play_round(config: MatchupConfig, index: int, games: int) -> RoundResult:
@@ -236,8 +238,14 @@ class MatchupResult:
                 and not any(self.tripwire_hits))
 
     @property
+    def tripwire_copies(self) -> list[int]:
+        return [copies for rnd in self.rounds for order in rnd.orders for copies in order.tripwire_copies]
+
+    @property
     def search_unchecked(self) -> bool:
-        return self.tripwire_on and any_seat_searches(self.config.batch.seats)
+        """As for a batch: a seat searches and some game didn't say its search copies were checked."""
+        return (self.tripwire_on and any_seat_searches(self.config.batch.seats)
+                and len(self.tripwire_copies) < self.finished)
 
 
 def check_matchup(config: MatchupConfig) -> None:
