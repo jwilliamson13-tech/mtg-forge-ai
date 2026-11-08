@@ -32,6 +32,8 @@ Each seat plays stock heuristic, stock full sim, or a model generation: `--sim-m
 
 `python -m simrunner ladder --players heuristic full onnx:gen0 --seed S` rates AI configurations against each other over a fixed sample of held-out deck pairs, each player on each deck in each seat. It fits Elo ratings with profile-likelihood intervals, and a later run with a new generation plays only that generation's games. "Elo ladder" in `docs/forge-build.md` has the details.
 
+`python -m simrunner converge onnx:gen0 onnx:gen1 --seed S` runs the four tracked matchups under both generations to the same width and gives each a verdict: converged when the two intervals overlap, moved when they don't. "Convergence" in `docs/forge-build.md` has the details.
+
 ## Deck pool
 
 `deckpool` holds the real Legacy lists in `decks/` and splits them into training and held-out decks. `docs/deck-pool.md` has the commands and the near-copy rule. `simrunner` takes a deck id from `decks/manifest.json` in place of a file.

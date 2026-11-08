@@ -4,7 +4,8 @@
 the two decks, and draws its deck pairs from the manifest. `matchup` takes the two decks and
 plays seat-swapped rounds until the win rate's interval is narrow enough. `cardswap` runs two
 matchups, deck A and deck A with `--swap OLD=NEW` made, against the same opponent. `ladder` rates
-AI configurations against each other over a sample of manifest deck pairs.
+AI configurations against each other over a sample of manifest deck pairs. `converge` runs the
+four tracked matchups under two of them and says whether each win rate moved.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pathlib import Path
 
 from simrunner.batch import BatchConfig, SetupError, run_batch
 from simrunner.cardswap import CardSwapConfig, Swap, format_cardswap_report, parse_swap, run_cardswap
+from simrunner.converge import ConvergeConfig, format_converge_report, run_converge
 from simrunner.generations import DEFAULT_MODELS, ONNX, PREFIX, Generation, GenerationError, is_onnx, resolve
 from simrunner.ladder import (DEFAULT_DECK_PAIRS, DEFAULT_PAIR_GAMES, DEFAULT_SPLIT, SPLIT_CHOICES, LadderConfig,
                               format_ladder_report, run_ladder)
@@ -36,6 +38,7 @@ DEFAULT_RUNS = REPO_ROOT / "runs"
 DEFAULT_MANIFEST = REPO_ROOT / "decks" / "manifest.json"
 DEFAULT_CARDS = REPO_ROOT / "data" / "cards.jsonl"
 DEFAULT_LADDER = DEFAULT_RUNS / "ladder"
+DEFAULT_CONVERGENCE = DEFAULT_RUNS / "convergence"
 
 
 def _cores_minus(reserve: int) -> int:
@@ -260,6 +263,25 @@ def _ladder(args: argparse.Namespace) -> int:
     return 0
 
 
+def _converge(args: argparse.Namespace) -> int:
+    run_dir = Path(args.run_dir) if args.run_dir else DEFAULT_CONVERGENCE
+    records = RecordPlan(None, args.turn_cap, not args.no_honest)
+    base = _run_config(args, (Seat(Path()), Seat(Path())), args.workers, _optional_window(args), run_dir, records)
+    before, after = _players(args, [args.before, args.after])
+    config = ConvergeConfig(MatchupConfig(base, args.width, args.round_games, args.max_games), before, after,
+                            Path(args.manifest or DEFAULT_MANIFEST))
+    try:
+        result = run_converge(config)
+    except SetupError as e:
+        args.parser.error(str(e))
+    _write_report(run_dir, format_converge_report(result))
+    if result.counts["no verdict"]:
+        print(f"convergence {result.status}: {result.counts['no verdict']} matchups with no verdict, logs in {run_dir}",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
 def _add_optional_window(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--start", type=_clock_time,
                         help="local time to start, HH:MM or HH:MM:SS, with --stop; inside the window, it starts at "
@@ -269,8 +291,11 @@ def _add_optional_window(parser: argparse.ArgumentParser) -> None:
                              "the next day")
 
 
-def _add_matchup_arguments(parser: argparse.ArgumentParser) -> None:
-    _add_batch_arguments(parser)
+def _add_matchup_arguments(parser: argparse.ArgumentParser, deck_arguments: bool = True) -> None:
+    if deck_arguments:
+        _add_batch_arguments(parser)
+    else:
+        _add_run_arguments(parser, "runs/convergence")
     parser.add_argument("--workers", type=int, default=_cores_minus(CORES_RESERVED),
                         help="parallel JVMs per batch (default: logical cores minus 2)")
     parser.add_argument("--width", type=float, default=DEFAULT_WIDTH,
@@ -436,6 +461,20 @@ def build_parser() -> argparse.ArgumentParser:
     _add_run_arguments(ladder, "runs/ladder")
     _add_optional_window(ladder)
     ladder.set_defaults(handler=_ladder, parser=ladder)
+
+    converge = commands.add_parser("converge", help="run the manifest's four tracked matchups under two players to "
+                                                    "the same width, and say for each whether the win rate moved",
+                                   description="Each matchup puts one player in both seats. A matchup converged when "
+                                               "the two Wilson intervals overlap. Players are named as for ladder. "
+                                               "A matchup already in the folder under the same settings is reused, "
+                                               "so the next generation's check plays only the new player.")
+    converge.add_argument("before", metavar="BEFORE", help="the player before, such as onnx:gen0")
+    converge.add_argument("after", metavar="AFTER", help="the player after, such as onnx:gen1")
+    converge.add_argument("--manifest", help="deck manifest with the tracked matchups (default: decks/manifest.json)")
+    converge.add_argument("--seed", type=int, required=True, help="every matchup's seed, the same for both players")
+    _add_matchup_arguments(converge, deck_arguments=False)
+    _add_optional_window(converge)
+    converge.set_defaults(handler=_converge, parser=converge)
     return parser
 
 

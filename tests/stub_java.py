@@ -36,8 +36,10 @@ loss, D a draw by the rules, T a draw at the turn cap. `seat1:WL` does the same 
 whoever sits in seat 1. A subject of `has=CARD` is a deck whose main deck holds CARD, so a
 card-swap arm can play differently from the original. A subject of `sim=MODE` or `eval=NAME` is
 the seat with that `-sim` or `-eval` value, so an AI configuration wins at a fixed rate whatever
-deck it plays. Patterns separated by `;` are tried in order, and the first whose subject sits at
-the table decides each game. With both seats matching, seat 1 is the subject.
+deck it plays. Subjects joined by `&` name a seat that is all of them: `Burn&eval=random` is
+Burn played with the random evaluator. Patterns separated by `;` are tried in order, and the
+first whose subject sits at the table decides each game. With both seats matching, seat 1 is the
+subject.
 """
 
 import gzip
@@ -169,16 +171,19 @@ def play_turn_cap(n: int, players: list[str]) -> dict:
     return {"winner": None, "end_reason": "draw_turn_cap", "final_turn": 51}
 
 
-def pattern_seat(subject: str, names: list[str], cards: list[set[str]], players: list[str]) -> int | None:
+def matching_seats(subject: str, names: list[str], cards: list[set[str]], players: list[str]) -> set[int]:
     if subject == "seat1":
-        return 0
+        return {0}
     if subject.startswith("has="):
-        held = [seat for seat, deck in enumerate(cards) if subject.removeprefix("has=") in deck]
-        return held[0] if held else None
+        return {seat for seat, deck in enumerate(cards) if subject.removeprefix("has=") in deck}
     if subject.startswith(("sim=", "eval=")):
-        tagged = [seat for seat, player in enumerate(players) if f"[{subject}]" in player]
-        return tagged[0] if tagged else None
-    return names.index(subject) if subject in names else None
+        return {seat for seat, player in enumerate(players) if f"[{subject}]" in player}
+    return {seat for seat, name in enumerate(names) if name == subject}
+
+
+def pattern_seat(subject: str, names: list[str], cards: list[set[str]], players: list[str]) -> int | None:
+    seats = set.intersection(*(matching_seats(part, names, cards, players) for part in subject.split("&")))
+    return min(seats) if seats else None
 
 
 def play_pattern(n: int, players: list[str], names: list[str], cards: list[set[str]], rng: random.Random) -> dict:
