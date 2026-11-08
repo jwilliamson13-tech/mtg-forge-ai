@@ -10,8 +10,9 @@ import torch
 
 from setmodel import train as training
 from setmodel.__main__ import main
-from setmodel.dataset import HELD_OUT_DECKS, TRAIN, load_corpus
-from setmodel.train import METRICS_FILE, MODEL_FILE, NO_CARDS, TrainConfig, ablated, load_model, probabilities, report, train
+from setmodel.dataset import HELD_OUT_DECKS, TRAIN, ZONE_IDS, load_corpus
+from setmodel.train import (GRAVEYARD_EXILE, METRICS_FILE, MODEL_FILE, NO_CARDS, NO_GRAVEYARD_EXILE, NO_LIVE_STATE,
+                            TrainConfig, ablated, load_model, probabilities, report, train)
 from tests.setmodel_corpus import (BATCH, HELD_OUT_DECK, card_table, manifest, smoke_games, vocabulary, write_dump,
                                    write_manifest, write_parquet)
 
@@ -113,4 +114,17 @@ def test_a_short_last_batch_gives_each_row_the_same_gradient_scale_as_a_full_bat
 def test_ablating_all_cards_leaves_the_rows_and_empties_every_board(tmp_path):
     corpus = load_corpus(write_parquet(smoke_games(4), tmp_path), card_table(), vocabulary(), manifest())
     bare = ablated(corpus, NO_CARDS, corpus.key_scales())
-    assert len(bare.labels) == len(corpus.labels) and bare.card_offsets[-1] == 0
+    assert len(bare.labels) == len(corpus.labels) and corpus.card_offsets[-1] > 0
+    assert len(bare.cards_of(np.arange(len(bare.labels)))[0]) == 0
+
+
+def test_the_zone_and_live_state_ablations_take_away_only_what_they_name(tmp_path):
+    corpus = load_corpus(write_parquet(smoke_games(4), tmp_path), card_table(), vocabulary(), manifest())
+    rows = np.arange(len(corpus.labels))
+    positions, owner = corpus.cards_of(rows)
+    gone = np.isin(corpus.card_zone[positions], [ZONE_IDS[zone] for zone in GRAVEYARD_EXILE])
+    kept, kept_owner = ablated(corpus, NO_GRAVEYARD_EXILE, corpus.key_scales()).cards_of(rows)
+    assert gone.any() and not gone.all()
+    assert kept.tolist() == positions[~gone].tolist() and kept_owner.tolist() == owner[~gone].tolist()
+    blank = ablated(corpus, NO_LIVE_STATE, corpus.key_scales())
+    assert corpus.live(positions).any() and not blank.live(positions).any()
