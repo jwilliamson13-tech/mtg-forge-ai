@@ -75,6 +75,10 @@ def jvm_part(argv):
     return argv[:argv.index("-jar")]
 
 
+def eval_part(argv):
+    return argv[argv.index("-eval") + 1:argv.index("-eval") + 3]
+
+
 def test_a_generation_name_is_a_bundle_folder_under_models(models):
     generation = resolve("gen1", models)
     assert generation.bundle == (models / "gen1").resolve()
@@ -102,16 +106,16 @@ def test_a_numbered_name_has_to_hold_that_generation(models):
         resolve("gen3", models)
 
 
-def test_a_generation_goes_to_forge_as_jvm_properties_and_leaves_eval_off(config, launches):
+def test_a_generation_goes_to_forge_as_an_onnx_eval_name(config, launches):
     batch = run_batch(config())
     bundle = str(batch.config.seats[0].generation.bundle)
     for launch in launches():
         argv = launch["argv"]
-        assert f"-Dforge.onnx.bundle={bundle}" in jvm_part(argv)
-        assert "-Dforge.onnx.seats=1" in jvm_part(argv)
-        assert "-eval" not in argv
+        assert eval_part(argv) == [f"onnx:{bundle}", "forge"]
+        assert not any(arg.startswith("-Dforge.onnx") for arg in jvm_part(argv))
         assert argv[argv.index("-sim") + 1:argv.index("-sim") + 3] == ["full", "heuristic"]
     assert batch.clean
+    assert all(worker.evaluators == ("onnx", "forge") for worker in batch.workers)
     assert all(worker.onnx_seats == ((1, bundle),) for worker in batch.workers)
 
 
@@ -127,17 +131,52 @@ def test_the_report_names_the_generation_and_what_the_evaluator_did(config):
 
 def test_the_same_generation_on_both_seats_names_both(config, launches):
     batch = run_batch(config(second=("full", ONNX, "gen1")))
-    assert all("-Dforge.onnx.seats=1,2" in jvm_part(launch["argv"]) for launch in launches())
+    bundle = str(batch.config.seats[0].generation.bundle)
+    assert all(eval_part(launch["argv"]) == [f"onnx:{bundle}"] * 2 for launch in launches())
     assert batch.clean
+    assert all(worker.onnx_seats == ((1, bundle), (2, bundle)) for worker in batch.workers)
 
 
-def test_a_jar_without_the_onnx_evaluator_fails_the_batch(config, monkeypatch):
-    # It would play Forge's evaluator under the generation's name, and say nothing.
+def test_two_generations_sit_at_one_table(config, launches):
+    batch = run_batch(config(second=("full", ONNX, "gen2")))
+    first, second = (str(seat.generation.bundle) for seat in batch.config.seats)
+    assert first != second
+    assert all(eval_part(launch["argv"]) == [f"onnx:{first}", f"onnx:{second}"] for launch in launches())
+    assert batch.clean
+    assert all(worker.onnx_seats == ((1, first), (2, second)) for worker in batch.workers)
+    # one summary line per bundle, and the report keeps both
+    assert all(worker.onnx_summary.count("calls, 5.000 ms per call") == 2 for worker in batch.workers)
+    report = format_summary(batch)
+    assert "onnx:gen1, bundle" in report and "onnx:gen2, bundle" in report
+
+
+@pytest.mark.parametrize("other", ["random", "passthrough"])
+def test_a_generation_sits_across_from_the_test_evaluators(config, launches, other):
+    batch = run_batch(config(second=("full", other, None)))
+    bundle = str(batch.config.seats[0].generation.bundle)
+    assert all(eval_part(launch["argv"]) == [f"onnx:{bundle}", other] for launch in launches())
+    assert batch.clean
+    assert all(worker.evaluators == ("onnx", other) for worker in batch.workers)
+
+
+def test_a_jar_without_the_onnx_name_finishes_nothing(config, monkeypatch):
+    # A jar with #23 alone knows -eval but not onnx:DIR, and says so before any game.
     monkeypatch.setenv("STUB_SCENARIO", "no_onnx_jar")
+    batch = run_batch(config())
+    assert batch.finished == 0
+    assert not batch.clean
+    assert all(worker.fatal and worker.fatal.startswith("Unknown evaluator - onnx:") for worker in batch.workers)
+
+
+def test_a_jar_that_ignores_eval_fails_the_batch(config, monkeypatch):
+    # It would play Forge's evaluator under the generation's name, and say nothing.
+    monkeypatch.setenv("STUB_SCENARIO", "no_eval_jar")
     batch = run_batch(config())
     assert batch.finished == 4
     assert not batch.clean
-    assert "Forge did not put the ONNX evaluator on the seats asked for, so the jar may be stale" in format_workers(batch)
+    workers = format_workers(batch)
+    assert "Forge did not name the evaluators asked for" in workers
+    assert "Forge did not put the ONNX evaluator on the seats asked for" in workers
 
 
 def test_a_bundle_that_wont_load_finishes_nothing(config):
@@ -145,13 +184,12 @@ def test_a_bundle_that_wont_load_finishes_nothing(config):
     (built.seats[0].generation.bundle / "contract.json").unlink()  # gone between resolving and the JVM
     batch = run_batch(built)
     assert batch.finished == 0 and not batch.clean
-    assert sum(worker.stderr_traces for worker in batch.workers) == 2
+    assert all(worker.fatal and worker.fatal.startswith("-eval onnx:") and "can't load the ONNX bundle" in worker.fatal
+               for worker in batch.workers)
 
 
 @pytest.mark.parametrize("first, second, message", [
     (("heuristic", ONNX, "gen1"), ("full", None, None), "the onnx:gen1 evaluator needs a seat that searches, and seat 1 is heuristic"),
-    (("full", ONNX, "gen1"), ("full", ONNX, "gen2"), "both seats name a generation, and they differ"),
-    (("full", ONNX, "gen1"), ("full", "random", None), "can't sit across from the random evaluator yet"),
     (("full", ONNX, None), ("full", None, None), "seat 1 asks for the ONNX evaluator with no generation"),
 ])
 def test_seat_configurations_forge_cant_play_are_refused(config, first, second, message, tmp_path):
@@ -163,8 +201,18 @@ def test_seat_configurations_forge_cant_play_are_refused(config, first, second, 
 def test_without_a_generation_the_wiring_is_the_eval_flag():
     seats = (Seat(Path("a.dck"), None, "full", "random"), Seat(Path("b.dck"), None, "full"))
     assert evaluator_wiring(seats).eval_values == ("random", "forge")
-    assert evaluator_wiring(seats).jvm_properties == ()
+    assert evaluator_wiring(seats).printed == ("random", "forge")
+    assert evaluator_wiring(seats).onnx_seats == ()
     assert evaluator_wiring((Seat(Path("a.dck")), Seat(Path("b.dck")))).eval_values == ()
+
+
+def test_a_generation_is_wired_by_its_bundle_folder(models):
+    gen1, gen2 = resolve("gen1", models), resolve("gen2", models)
+    wiring = evaluator_wiring((Seat(Path("a.dck"), None, "full", ONNX, gen1),
+                               Seat(Path("b.dck"), None, "full", ONNX, gen2)))
+    assert wiring.eval_values == (f"onnx:{gen1.bundle}", f"onnx:{gen2.bundle}")
+    assert wiring.printed == ("onnx", "onnx")
+    assert wiring.onnx_seats == ((1, str(gen1.bundle)), (2, str(gen2.bundle)))
 
 
 def test_the_onnx_seat_moves_with_its_deck_when_a_matchup_swaps_seats(config, launches, monkeypatch, tmp_path):
@@ -172,9 +220,9 @@ def test_the_onnx_seat_moves_with_its_deck_when_a_matchup_swaps_seats(config, la
     base = config(games=0, workers=1, records=RecordPlan())
     result = run_matchup(MatchupConfig(base, width=10, round_games=100, max_games=100))
     assert result.met
-    seats = {Path(launch["cwd"]).parent.name: [arg for arg in jvm_part(launch["argv"]) if "onnx.seats" in arg]
-             for launch in launches()}
-    assert seats == {"round-001-ab": ["-Dforge.onnx.seats=1"], "round-001-ba": ["-Dforge.onnx.seats=2"]}
+    bundle = f"onnx:{base.seats[0].generation.bundle}"
+    seats = {Path(launch["cwd"]).parent.name: eval_part(launch["argv"]) for launch in launches()}
+    assert seats == {"round-001-ab": [bundle, "forge"], "round-001-ba": ["forge", bundle]}
     saved = json.loads((tmp_path / "run" / "matchup.json").read_text(encoding="utf-8"))
     assert saved["side_a"]["evaluator"] == "onnx"
     assert saved["side_a"]["generation"]["name"] == "gen1" and saved["side_a"]["generation"]["generation"] == 1
@@ -191,8 +239,7 @@ def test_the_evaluator_flag_takes_a_generation(decks, forge, models, tmp_path, l
                     "--evaluator", "forge", "onnx:gen2", "--models", str(models))
     assert main(args) == 0
     for launch in launches():
-        assert f"-Dforge.onnx.bundle={(models / 'gen2').resolve()}" in launch["argv"]
-        assert "-Dforge.onnx.seats=2" in launch["argv"]
+        assert eval_part(launch["argv"]) == ["forge", f"onnx:{(models / 'gen2').resolve()}"]
     assert "eval onnx:gen2" in (tmp_path / "run" / "report.txt").read_text(encoding="utf-8")
 
 
