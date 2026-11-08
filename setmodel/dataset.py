@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,6 +28,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
 from cardscript.vocab import Vocabulary, build_vocabulary
 from gamerecord.record import SCOREBOARD, ZONES
@@ -54,6 +56,18 @@ LIVE_FIELDS = ("power", "toughness", "is_creature", "tapped", "summoning_sick", 
                "counters_other", "stack_ability")
 LIVE = {name: index for index, name in enumerate(LIVE_FIELDS)}
 NAMED_COUNTERS = {"P1P1": "counters_p1p1", "M1M1": "counters_m1m1", "LOYALTY": "counters_loyalty"}
+
+# How the corpus stores live state: the numbers as small ints, the yes-or-no fields as bits.
+COUNT_FIELDS = ("power", "toughness", "damage", "counters_p1p1", "counters_m1m1", "counters_loyalty", "counters_other")
+FLAG_FIELDS = tuple(name for name in LIVE_FIELDS if name not in COUNT_FIELDS)
+COUNT = {name: index for index, name in enumerate(COUNT_FIELDS)}
+FLAG_BIT = {name: bit for bit, name in enumerate(FLAG_FIELDS)}
+COUNT_COLUMNS = [LIVE[name] for name in COUNT_FIELDS]
+FLAG_COLUMNS = [LIVE[name] for name in FLAG_FIELDS]
+WIDER = {np.dtype(np.int16): np.int32, np.dtype(np.int32): np.int64}
+
+CHUNK_ROWS = 250_000  # card or stack rows read at a time
+COUNT_SLICE_ROWS = 100_000  # snapshots per slice when counting a split's cards
 
 # Every column read. Decks only pick the split. `batch_id` only tags the model.
 SNAPSHOT_COLUMNS = ("batch_id", "game_id", "snapshot_index", "side", "won", "seat1_deck", "seat2_deck",
@@ -130,7 +144,12 @@ class JoinReport:
 
 @dataclass
 class Corpus:
-    """Rows as flat arrays. Row r's cards are `card_*[card_offsets[r]:card_offsets[r + 1]]`."""
+    """Rows as flat arrays. Row r's cards are `card_*[card_offsets[r]:card_offsets[r + 1]]`.
+
+    The card arrays hold small integer types, and `live` turns positions into the contract's
+    float `live` rows. 10,000 games make about 73 million card rows, so each byte a card row
+    takes is 73 MB.
+    """
 
     scoreboard: np.ndarray  # [R, S], raw values
     labels: np.ndarray  # [R]
@@ -146,7 +165,8 @@ class Corpus:
     card_offsets: np.ndarray  # [R + 1]
     card_feature: np.ndarray  # [M], index into the feature arrays. 0 is the empty card.
     card_zone: np.ndarray  # [M]
-    card_live: np.ndarray  # [M, L], raw values
+    card_flags: np.ndarray  # [M], bit n is FLAG_FIELDS[n]
+    card_counts: np.ndarray  # [M, len(COUNT_FIELDS)], raw values
     feature_keys: list[tuple[str, str] | None]  # (name, slot) per feature, None for the empty card
     encoded: list[Encoded]
     token_ids: np.ndarray  # [C, A, T]
@@ -155,6 +175,7 @@ class Corpus:
     number_mask: np.ndarray
     report: JoinReport
     caps: Caps
+    dropped_zones: tuple[int, ...] = ()  # zone ids whose cards `cards_of` leaves out, for an ablation
 
     def rows(self, *splits: str) -> np.ndarray:
         return np.flatnonzero(np.isin(self.split, [SPLITS.index(split) for split in splits]))
@@ -164,18 +185,44 @@ class Corpus:
         starts, lengths = self.card_offsets[rows], self.card_offsets[rows + 1] - self.card_offsets[rows]
         first = np.cumsum(lengths) - lengths
         positions = np.arange(lengths.sum()) + np.repeat(starts - first, lengths)
-        return positions, np.repeat(np.arange(len(rows)), lengths)
+        owner = np.repeat(np.arange(len(rows)), lengths)
+        if self.dropped_zones:
+            kept = ~np.isin(self.card_zone[positions], self.dropped_zones)
+            positions, owner = positions[kept], owner[kept]
+        return positions, owner
+
+    def live(self, positions: np.ndarray) -> np.ndarray:
+        """The contract's `live` rows, [N, L] float32, for these card positions."""
+        live = np.zeros((len(positions), len(LIVE_FIELDS)), dtype=np.float32)
+        live[:, COUNT_COLUMNS] = self.card_counts[positions]
+        flags = self.card_flags[positions]
+        for bit, column in enumerate(FLAG_COLUMNS):
+            live[:, column] = (flags >> bit) & 1
+        return live
+
+    def feature_counts(self, rows: np.ndarray) -> np.ndarray:
+        """How many card rows of these rows show each feature, counted a slice of rows at a time."""
+        chosen = np.zeros(len(self.labels), dtype=bool)
+        chosen[rows] = True
+        lengths = np.diff(self.card_offsets)
+        counts = np.zeros(len(self.encoded), dtype=np.int64)
+        for start in range(0, len(lengths), COUNT_SLICE_ROWS):
+            stop = min(start + COUNT_SLICE_ROWS, len(lengths))
+            cards = slice(self.card_offsets[start], self.card_offsets[stop])
+            mask = np.repeat(chosen[start:stop], lengths[start:stop])
+            if self.dropped_zones:
+                mask &= ~np.isin(self.card_zone[cards], self.dropped_zones)
+            counts += np.bincount(self.card_feature[cards][mask], minlength=len(self.encoded))
+        return counts
 
     def key_scales(self) -> np.ndarray:
         """Per-key constants from the distinct cards in the training rows."""
-        positions, _ = self.cards_of(self.rows(TRAIN))
-        used = np.unique(self.card_feature[positions])
+        used = np.flatnonzero(self.feature_counts(self.rows(TRAIN)))
         return key_scales(self.numbers[used], self.number_mask[used])
 
     def truncation(self) -> dict[str, float | int]:
         """How often each cap bit, over the card rows of the training split. A card past the K cap shares `<unk>`."""
-        positions, _ = self.cards_of(self.rows(TRAIN))
-        seen = np.bincount(self.card_feature[positions], minlength=len(self.encoded))
+        seen = self.feature_counts(self.rows(TRAIN))
         named = [(int(n), card) for n, card in zip(seen, self.encoded) if n and card.rows_before_cap]
         cards = sum(n for n, _ in named)
         rows = sum(n * card.rows_before_cap for n, card in named)
@@ -190,9 +237,30 @@ def _rate(part: int, whole: int) -> float:
     return part / whole if whole else 0.0
 
 
+def _dataset(folder: Path) -> ds.Dataset:
+    return ds.dataset(folder, format="parquet", partitioning=BATCH_PARTITION)
+
+
 def _read(folder: Path, columns: tuple[str, ...]) -> pa.Table:
-    dataset = ds.dataset(folder, format="parquet", partitioning=BATCH_PARTITION)
-    return dataset.to_table(columns=list(columns)).combine_chunks()
+    return _dataset(folder).to_table(columns=list(columns)).combine_chunks()
+
+
+def _chunks(folder: Path, columns: tuple[str, ...]) -> Iterator[pa.Table]:
+    """The table a few row groups at a time, about CHUNK_ROWS rows each, in the row order `_read` gives.
+
+    `gamerecord convert` writes a row group per game, so a chunk is a run of whole games.
+    """
+    dataset = _dataset(folder)
+    for path in dataset.files:
+        with dataset.filesystem.open_input_file(path) as source:
+            file = pq.ParquetFile(source)
+            groups, rows = [], 0
+            for group in range(file.num_row_groups):
+                groups.append(group)
+                rows += file.metadata.row_group(group).num_rows
+                if rows >= CHUNK_ROWS or group == file.num_row_groups - 1:
+                    yield file.read_row_groups(groups, columns=list(columns)).combine_chunks()
+                    groups, rows = [], 0
 
 
 def _array(table: pa.Table, column: str) -> pa.Array:
@@ -203,60 +271,79 @@ def _numpy(array: pa.Array) -> np.ndarray:
     return array.to_numpy(zero_copy_only=False)
 
 
-def _numbers(table: pa.Table, column: str) -> np.ndarray:
-    return _numpy(pc.fill_null(_array(table, column), 0)).astype(np.float32)
+def _ints(table: pa.Table, column: str) -> np.ndarray:
+    return _numpy(pc.fill_null(_array(table, column), 0)).astype(np.int64)
 
 
 def _flag(table: pa.Table, column: str) -> np.ndarray:
-    return _numpy(_array(table, column)).astype(np.float32)
+    return _numpy(_array(table, column)).astype(bool)
 
 
 def _is_set(table: pa.Table, column: str) -> np.ndarray:
-    return _numpy(pc.is_valid(_array(table, column))).astype(np.float32)
+    return _numpy(pc.is_valid(_array(table, column)))
 
 
 def _has_items(table: pa.Table, column: str) -> np.ndarray:
-    return _numpy(pc.fill_null(pc.greater(pc.list_value_length(_array(table, column)), 0), False)).astype(np.float32)
+    return _numpy(pc.fill_null(pc.greater(pc.list_value_length(_array(table, column)), 0), False))
 
 
-def _add_counters(table: pa.Table, live: np.ndarray) -> None:
+def _codes(array: pa.Array, values: list[str]) -> np.ndarray:
+    """Each entry's index in `values`, which holds them all."""
+    return _numpy(pc.index_in(array, value_set=pa.array(values, pa.string()))).astype(np.int64)
+
+
+def _pack(flags: dict[str, np.ndarray], rows: int) -> np.ndarray:
+    packed = np.zeros(rows, dtype=np.uint16)
+    for name, values in flags.items():
+        packed |= values.astype(np.uint16) << FLAG_BIT[name]
+    return packed
+
+
+def _add_counters(table: pa.Table, counts: np.ndarray) -> None:
     counters = _array(table, "counters")
-    owner = np.repeat(np.arange(len(counters)), np.diff(_numpy(counters.offsets)))
-    names = _numpy(counters.keys)
-    amounts = _numpy(counters.items).astype(np.float32)
+    offsets = _numpy(counters.offsets)
+    owner = np.repeat(np.arange(len(counters)), np.diff(offsets))
+    entries = slice(offsets[0], offsets[-1])  # `keys` and `items` ignore a slice of the map array
+    names = _numpy(counters.keys)[entries]
+    amounts = _numpy(counters.items)[entries].astype(np.float64)
     other = np.ones(len(owner), dtype=bool)
     for counter, column in NAMED_COUNTERS.items():
         match = names == counter
         other &= ~match
-        np.add.at(live[:, LIVE[column]], owner[match], amounts[match])
-    np.add.at(live[:, LIVE["counters_other"]], owner[other], amounts[other])
+        counts[:, COUNT[column]] += np.bincount(owner[match], amounts[match], len(counters)).astype(np.int64)
+    counts[:, COUNT["counters_other"]] += np.bincount(owner[other], amounts[other], len(counters)).astype(np.int64)
 
 
-def _card_live(table: pa.Table) -> np.ndarray:
-    """The live state of each card row. All of it is on the row itself, so it is what this side saw."""
-    live = np.zeros((table.num_rows, len(LIVE_FIELDS)), dtype=np.float32)
-    live[:, LIVE["power"]] = _numbers(table, "power")
-    live[:, LIVE["toughness"]] = _numbers(table, "toughness")
-    live[:, LIVE["is_creature"]] = _is_set(table, "power")
-    live[:, LIVE["tapped"]] = _flag(table, "tapped")
-    live[:, LIVE["summoning_sick"]] = _flag(table, "summoning_sick")
-    live[:, LIVE["face_down"]] = _flag(table, "face_down")
-    live[:, LIVE["hidden"]] = 1 - _is_set(table, "name")
-    live[:, LIVE["damage"]] = _numbers(table, "damage")
-    live[:, LIVE["attacking"]] = np.maximum(_is_set(table, "attacking_seat"), _is_set(table, "attacking_card"))
-    live[:, LIVE["blocking"]] = _has_items(table, "blocking")
-    live[:, LIVE["blocked"]] = _has_items(table, "blocked_by")
-    live[:, LIVE["attached"]] = np.maximum(_is_set(table, "attached_to"), _is_set(table, "attached_to_seat"))
-    _add_counters(table, live)
-    return live
+def _card_live(table: pa.Table, mine: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Flags and counts per card row. All of it is on the row itself, so it is what this side saw."""
+    counts = np.zeros((table.num_rows, len(COUNT_FIELDS)), dtype=np.int64)
+    counts[:, COUNT["power"]] = _ints(table, "power")
+    counts[:, COUNT["toughness"]] = _ints(table, "toughness")
+    counts[:, COUNT["damage"]] = _ints(table, "damage")
+    _add_counters(table, counts)
+    flags = {"is_creature": _is_set(table, "power"), "tapped": _flag(table, "tapped"),
+             "summoning_sick": _flag(table, "summoning_sick"), "mine": mine, "face_down": _flag(table, "face_down"),
+             "hidden": ~_is_set(table, "name"),
+             "attacking": _is_set(table, "attacking_seat") | _is_set(table, "attacking_card"),
+             "blocking": _has_items(table, "blocking"), "blocked": _has_items(table, "blocked_by"),
+             "attached": _is_set(table, "attached_to") | _is_set(table, "attached_to_seat")}
+    return _pack(flags, table.num_rows), counts
 
 
-def _stack_live(table: pa.Table) -> np.ndarray:
-    live = np.zeros((table.num_rows, len(LIVE_FIELDS)), dtype=np.float32)
-    live[:, LIVE["face_down"]] = _flag(table, "face_down")
-    live[:, LIVE["hidden"]] = 1 - _is_set(table, "name")
-    live[:, LIVE["stack_ability"]] = _numpy(pc.equal(_array(table, "kind"), "ability")).astype(np.float32)
-    return live
+def _stack_live(table: pa.Table, mine: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    flags = {"mine": mine, "face_down": _flag(table, "face_down"), "hidden": ~_is_set(table, "name"),
+             "stack_ability": _numpy(pc.equal(_array(table, "kind"), "ability"))}
+    return _pack(flags, table.num_rows), np.zeros((table.num_rows, len(COUNT_FIELDS)), dtype=np.int64)
+
+
+def _card_zones(table: pa.Table) -> np.ndarray:
+    zones = pc.dictionary_encode(_array(table, "zone"))
+    ids = np.array([ZONE_IDS[name] for name in zones.dictionary.to_pylist()], dtype=np.int8)
+    return ids[_numpy(zones.indices)]
+
+
+def _stack_zones(table: pa.Table) -> np.ndarray:
+    return np.full(table.num_rows, ZONE_IDS["stack"], dtype=np.int8)
 
 
 class _Features:
@@ -267,24 +354,29 @@ class _Features:
         self.keys: list[tuple[str, str] | None] = [None]
         self.encoded: list[Encoded] = [EMPTY_CARD]
         self.index: dict[tuple[str, str], int] = {}
+        self.of_pair: dict[str, int] = {}  # "name\0face" to its feature, or -1
 
-    def indices(self, table: pa.Table) -> np.ndarray:
-        """A feature index per row: 0 for a hidden card, -1 for an unmatched name."""
+    def indices(self, table: pa.Table, *, count: bool = True) -> np.ndarray:
+        """A feature index per row: 0 for a hidden card, -1 for an unmatched name.
+
+        `count` adds the rows to the join report. The second pass reads the same rows again and doesn't.
+        """
         pairs = pc.binary_join_element_wise(_array(table, "name"), _array(table, "face"), "\0").dictionary_encode()
         codes = _numpy(pc.fill_null(pairs.indices, -1)).astype(np.int64)
-        counts = np.bincount(codes[codes >= 0], minlength=len(pairs.dictionary))
-        lookup = [self._feature(*pair.split("\0"), int(rows))
-                  for pair, rows in zip(pairs.dictionary.to_pylist(), counts)]
+        rows = np.bincount(codes[codes >= 0], minlength=len(pairs.dictionary))
+        lookup = []
+        for pair, n in zip(pairs.dictionary.to_pylist(), rows.tolist()):
+            if pair not in self.of_pair:
+                self.of_pair[pair] = self._feature(*pair.split("\0"))
+            if count:
+                self._count(*pair.split("\0"), self.of_pair[pair], n)
+            lookup.append(self.of_pair[pair])
         return np.array([*lookup, 0], dtype=np.int64)[codes]  # a null code of -1 reads the 0 on the end: hidden
 
-    def _feature(self, name: str, face: str, rows: int) -> int:
+    def _feature(self, name: str, face: str) -> int:
         resolved = self.cards.resolve(name, face)
         if resolved is None:
-            self.report.unmatched[(name, face)] += rows
             return -1
-        if resolved.ambiguous:
-            self.report.ambiguous[name] += rows
-            self.report.script_counts[name] = self.cards.script_count(name)
         key = (name, face_slot(face))
         if key not in self.index:
             self.index[key] = len(self.encoded)
@@ -292,10 +384,51 @@ class _Features:
             self.encoded.append(encode(resolved.rows, self.vocab, self.caps))
         return self.index[key]
 
+    def _count(self, name: str, face: str, feature: int, rows: int) -> None:
+        if feature < 0:
+            self.report.unmatched[(name, face)] += rows
+        elif self.cards.resolve(name, face).ambiguous:
+            self.report.ambiguous[name] += rows
+            self.report.script_counts[name] = self.cards.script_count(name)
+
+
+class _CardArrays:
+    """The corpus's card arrays, filled a chunk at a time. Counts start as int16 and widen when a value needs it."""
+
+    def __init__(self, rows: int, features: int):
+        self.feature = np.zeros(rows, dtype=np.uint16 if features <= 2**16 else np.int32)
+        self.zone = np.zeros(rows, dtype=np.int8)
+        self.flags = np.zeros(rows, dtype=np.uint16)
+        self.counts = np.zeros((rows, len(COUNT_FIELDS)), dtype=np.int16)
+
+    def put(self, at: np.ndarray, feature: np.ndarray, zone: np.ndarray, flags: np.ndarray, counts: np.ndarray) -> None:
+        if counts.size:
+            low, high = int(counts.min()), int(counts.max())
+            while not np.iinfo(self.counts.dtype).min <= low <= high <= np.iinfo(self.counts.dtype).max:
+                self.counts = self.counts.astype(WIDER[self.counts.dtype])
+        self.feature[at], self.zone[at], self.flags[at], self.counts[at] = feature, zone, flags, counts
+
+
+def _ranks(groups: np.ndarray) -> np.ndarray:
+    """For each entry, how many entries before it have the same value."""
+    order = np.argsort(groups, kind="stable")
+    ordered = groups[order]
+    starts = np.flatnonzero(np.concatenate([[True], ordered[1:] != ordered[:-1]]))
+    first = np.repeat(starts, np.diff(np.concatenate([starts, [len(ordered)]])))
+    ranks = np.empty(len(groups), dtype=np.int64)
+    ranks[order] = np.arange(len(groups)) - first
+    return ranks
+
 
 def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manifest: dict[str, str], *,
                 game_share: float = HELD_OUT_GAME_SHARE, caps: Caps = Caps()) -> Corpus:
-    """Join `parquet`'s tables, as `gamerecord convert` writes them, to the card dump."""
+    """Join `parquet`'s tables, as `gamerecord convert` writes them, to the card dump.
+
+    The card and stack tables are never read whole. Two passes go through them a chunk at a
+    time. The first resolves names and finds the snapshots an unmatched card drops, which
+    fixes where each kept card row goes. The second fills the card arrays in place. A row's
+    cards are its card table rows in table order, then its stack rows.
+    """
     parquet = Path(parquet)
     snapshots = _read(parquet / "snapshots", SNAPSHOT_COLUMNS)
     if not snapshots.num_rows:
@@ -312,6 +445,17 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
     keys = line_keys(snapshots)
     order = np.argsort(keys, kind="stable")
     snapshots, keys = snapshots.take(pa.array(order)), keys[order]
+    snapshot_count = snapshots.num_rows
+    # Everything later steps need from the table, as arrays, so the table can go before the card passes.
+    side = _numpy(_array(snapshots, "side"))
+    scoreboard = np.stack([_numpy(_array(snapshots, name)).astype(np.float32) for name in SCOREBOARD_FIELDS], axis=1)
+    labels = _numpy(_array(snapshots, "won")).astype(np.float32)
+    seats = (_array(snapshots, "seat1_deck"), _array(snapshots, "seat2_deck"))
+    all_decks = sorted(set(pc.unique(seats[0]).to_pylist()) | set(pc.unique(seats[1]).to_pylist()))
+    seat_codes = [_codes(seat, all_decks).astype(np.int32) for seat in seats]
+    batches = pc.dictionary_encode(_array(snapshots, "batch_id"))
+    batch_names, batch_code = batches.dictionary.to_pylist(), _numpy(batches.indices)
+    del snapshots, seats, batches
 
     def owning_row(table: pa.Table) -> np.ndarray:
         rows_keys = line_keys(table)
@@ -320,63 +464,75 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
             raise DatasetError(f"{parquet}: a card row has no snapshot")
         return rows
 
-    report = JoinReport(games=len(games), snapshots=snapshots.num_rows)
+    report = JoinReport(games=len(games), snapshots=snapshot_count)
     features = _Features(cards, vocab, caps, report)
-    card_table, stack_table = _read(parquet / "cards", CARD_COLUMNS), _read(parquet / "stack", STACK_COLUMNS)
+    tables = ((parquet / "cards", CARD_COLUMNS, _card_live, _card_zones),
+              (parquet / "stack", STACK_COLUMNS, _stack_live, _stack_zones))
 
-    card_row = np.concatenate([owning_row(card_table), owning_row(stack_table)])
-    feature = np.concatenate([features.indices(card_table), features.indices(stack_table)])
-    zone = np.concatenate([[ZONE_IDS[name] for name in card_table["zone"].to_pylist()],
-                           np.full(stack_table.num_rows, ZONE_IDS["stack"])]).astype(np.int64)
-    live = np.concatenate([_card_live(card_table), _stack_live(stack_table)])
-    controller = np.concatenate([_numpy(_array(card_table, "controller")), _numpy(_array(stack_table, "controller"))])
-    live[:, LIVE["mine"]] = controller == _numpy(_array(snapshots, "side"))[card_row]
-
-    report.card_rows, report.hidden_cards = len(feature), int(live[:, LIVE["hidden"]].sum())
-    bad = feature < 0
-    if HIDDEN_COUNTS_AS_UNMATCHED:
-        bad |= live[:, LIVE["hidden"]] > 0
-    keep = np.ones(snapshots.num_rows, dtype=bool)
-    keep[card_row[bad]] = False
+    # Pass 1: names, drops, and each snapshot's card count.
+    keep = np.ones(snapshot_count, dtype=bool)
+    per_row = np.zeros(snapshot_count, dtype=np.int64)
+    for folder, *_ in tables:
+        for chunk in _chunks(folder, ("game_id", "snapshot_index", "name", "face")):
+            row, feature = owning_row(chunk), features.indices(chunk)
+            hidden = ~_is_set(chunk, "name")
+            report.card_rows += len(feature)
+            report.hidden_cards += int(hidden.sum())
+            bad = feature < 0
+            if HIDDEN_COUNTS_AS_UNMATCHED:
+                bad |= hidden
+            keep[row[bad]] = False
+            per_row += np.bincount(row, minlength=len(per_row))
     report.snapshots_dropped = int((~keep).sum())
     if not keep.any():
         raise DatasetError(f"{parquet}: every snapshot was dropped\n{report.format()}")
 
-    kept_cards = keep[card_row]
-    new_row = (np.cumsum(keep) - 1)[card_row[kept_cards]]
-    order = np.argsort(new_row, kind="stable")
-    card_row = new_row[order]
-    feature, zone, live = feature[kept_cards][order], zone[kept_cards][order], live[kept_cards][order]
-    snapshots = snapshots.filter(pa.array(keep))
+    # Pass 2: each kept card row straight to its place.
+    new_row = np.cumsum(keep) - 1
+    card_offsets = np.concatenate([[0], np.cumsum(per_row[keep])])
+    arrays = _CardArrays(int(card_offsets[-1]), len(features.encoded))
+    filled = np.zeros(len(card_offsets) - 1, dtype=np.int64)
+    for folder, columns, live_of, zones_of in tables:
+        for chunk in _chunks(folder, columns):
+            row = owning_row(chunk)
+            kept = keep[row]
+            if not kept.any():
+                continue
+            mine = _numpy(pc.fill_null(_array(chunk, "controller"), 0)) == side[row]
+            flags, counts = live_of(chunk, mine)
+            feature = features.indices(chunk, count=False)
+            target = new_row[row[kept]]
+            at = card_offsets[target] + filled[target] + _ranks(target)
+            filled += np.bincount(target, minlength=len(filled))
+            arrays.put(at, feature[kept], zones_of(chunk)[kept], flags[kept], counts[kept])
+    pa.default_memory_pool().release_unused()  # hand the chunks' buffers back rather than keep them pooled
 
-    game = keys[keep] // stride
+    side, scoreboard, labels, batch_code = side[keep], scoreboard[keep], labels[keep], batch_code[keep]
+    seat_codes = [codes[keep] for codes in seat_codes]
+    game = (keys[keep] // stride).astype(np.int32)
     rows_per_game = np.bincount(game, minlength=len(games))
     report.games_left = int((rows_per_game > 0).sum())
     game_ids = games.to_pylist()
-    seat_decks = (snapshots["seat1_deck"].to_pylist(), snapshots["seat2_deck"].to_pylist())
-    split_of_game = {}
-    for row, code in enumerate(game.tolist()):
-        if code not in split_of_game:
-            pair = (seat_decks[0][row], seat_decks[1][row])
-            split_of_game[code] = SPLITS.index(game_split(game_ids[code], pair, manifest, game_share))
-    split = np.array([split_of_game[code] for code in game.tolist()], dtype=np.int64)
+    codes, first_rows = np.unique(game, return_index=True)  # a game's decks, read from its first row
+    split_of_game = np.zeros(len(games), dtype=np.int8)
+    for code, row in zip(codes.tolist(), first_rows.tolist()):
+        pair = (all_decks[seat_codes[0][row]], all_decks[seat_codes[1][row]])
+        split_of_game[code] = SPLITS.index(game_split(game_ids[code], pair, manifest, game_share))
+    split = split_of_game[game]
 
-    own = [seat_decks[seat - 1][row] for row, seat in enumerate(snapshots["side"].to_pylist())]
-    decks = sorted(set(own))
-    deck_index = {deck: index for index, deck in enumerate(decks)}
-    batch_of_row = snapshots["batch_id"].to_pylist()
+    own = np.where(side == 1, seat_codes[0], seat_codes[1])
+    own_codes = np.unique(own)
+    train_batches = np.unique(batch_code[split == SPLITS.index(TRAIN)])
     token_ids, token_mask, numbers, number_mask = densify(features.encoded, caps, len(vocab.numeric_keys))
     return Corpus(
-        scoreboard=np.stack([_numpy(_array(snapshots, name)).astype(np.float32) for name in SCOREBOARD_FIELDS], axis=1),
-        labels=_numpy(_array(snapshots, "won")).astype(np.float32),
+        scoreboard=scoreboard, labels=labels,
         weights=1.0 / rows_per_game[game],
-        game=game, snapshot_index=_numpy(_array(snapshots, "snapshot_index")).astype(np.int64), split=split,
-        own_deck=np.array([deck_index[deck] for deck in own], dtype=np.int64),
-        game_ids=game_ids, decks=decks,
-        batch_ids=sorted({batch_of_row[row] for row in np.flatnonzero(split == SPLITS.index(TRAIN)).tolist()}),
+        game=game, snapshot_index=(keys[keep] % stride).astype(np.int64), split=split, own_deck=np.searchsorted(own_codes, own).astype(np.int32),
+        game_ids=game_ids, decks=[all_decks[code] for code in own_codes.tolist()],
+        batch_ids=sorted(batch_names[code] for code in train_batches.tolist()),
         held_out_decks=sorted(deck for deck, where in manifest.items() if where == "held_out"),
-        card_offsets=np.concatenate([[0], np.cumsum(np.bincount(card_row, minlength=snapshots.num_rows))]),
-        card_feature=feature, card_zone=zone, card_live=live, feature_keys=features.keys, encoded=features.encoded,
+        card_offsets=card_offsets, card_feature=arrays.feature, card_zone=arrays.zone, card_flags=arrays.flags,
+        card_counts=arrays.counts, feature_keys=features.keys, encoded=features.encoded,
         token_ids=token_ids, token_mask=token_mask, numbers=numbers, number_mask=number_mask, report=report, caps=caps)
 
 

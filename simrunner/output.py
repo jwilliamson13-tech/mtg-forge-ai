@@ -32,6 +32,7 @@ AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget 
                             r"(\d+) land drops missed)?$")
 TRIPWIRE_LINE = re.compile(r"^Tripwire: (\d+) hits$")
 TRIPWIRE_HIT_LINE = re.compile(r"^Tripwire hit: (\d+) (.+)$")
+TRIPWIRE_COPIES_LINE = re.compile(r"^Tripwire copies: (\d+) checked$")
 TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
 TURN_CAP_LINE = "Stopping game at the turn cap as draw"
@@ -72,6 +73,7 @@ class GameResult:
     ai_limits: AiLimits | None = None
     tripwire_hits: int | None = None  # None when Forge printed no tripwire line for this game
     tripwire_signatures: tuple[tuple[str, int], ...] = ()  # each signature with its hits in this game
+    tripwire_copies: int | None = None  # search copies the tripwire checked; None when Forge didn't say
 
     @property
     def is_win(self) -> bool:
@@ -87,6 +89,7 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
     outcome_winners = 0
     limits = None
     tripwire_hits = None
+    tripwire_copies = None
     signatures = []
     for line in lines:
         if line == CLOCK_LINE:
@@ -99,12 +102,15 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
             tripwire_hits = int(match[1])
         elif match := TRIPWIRE_HIT_LINE.match(line):
             signatures.append((match[2], int(match[1])))
+        elif match := TRIPWIRE_COPIES_LINE.match(line):
+            tripwire_copies = int(match[1])
         elif match := TURN_LINE.match(line):
             turn = int(match[1])
         elif OUTCOME_WON_LINE.match(line):
             outcome_winners += 1
         elif line.startswith("Game Result:"):
-            printed = {"ai_limits": limits, "tripwire_hits": tripwire_hits, "tripwire_signatures": tuple(signatures)}
+            printed = {"ai_limits": limits, "tripwire_hits": tripwire_hits, "tripwire_signatures": tuple(signatures),
+                       "tripwire_copies": tripwire_copies}
             if match := WIN_LINE.match(line):
                 number, duration = int(match[1]), int(match[2])
                 if clock_stopped:
@@ -123,6 +129,7 @@ def parse_games(lines: Iterable[str]) -> list[GameResult]:
             outcome_winners = 0
             limits = None
             tripwire_hits = None
+            tripwire_copies = None
             signatures = []
     return results
 

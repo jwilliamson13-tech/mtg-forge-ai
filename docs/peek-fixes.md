@@ -8,7 +8,7 @@ Issue #21. The tripwire in `docs/forge-build.md` finds forge-ai reading hidden c
 
 `simrunner` passes `-honest on` whenever records are on, because records are training data. `--no-honest` leaves the flag out. Forge skips flags it doesn't know, so a stale jar would ignore `-honest`. Each game record says `honest_play`, and the runner fails a batch that asked for honest play and has a file that doesn't show it.
 
-`-honest` works without `-record`. There is no reveal log then, so the AI goes by public cards alone. It can't go with `-t`. `GameCopier` copies the flag, so the AI thinks the same way on a copy. A copy has no reveal log, so what the AI was shown is missing from a search.
+`-honest` works without `-record`. There is no reveal log then, so the AI goes by public cards alone. It can't go with `-t`. `GameCopier` copies the flag, so the AI thinks the same way on a copy. A pruned copy also gets a reveal log of its own, holding what the searching seat had written down, so honest play on a copy goes by the same cards. A copy made with `-prune off` has none. See "Pruned copies" in `docs/forge-build.md`.
 
 ## What an AI may know
 
@@ -48,6 +48,7 @@ Line numbers are from the commit before each fix.
 | `PlayerControllerAi.orderMoveToZoneList:665` | `getCardsInGame`, looking for Volrath's Shapeshifter | `allCardsKnownTo` | Reorders only for a Shapeshifter it knows about |
 | `ChangeZoneAi.hiddenOriginCanPlayAI:338` | Each defined player's zones. Show and Tell read the opponent's hand | `seenIn`, and `holdsUnseen` says an unseen zone isn't empty | Treats a nonempty hidden zone as holding something, because only the count is public |
 | `AiBlockController.wouldLikeToRandomlyTrade:1404` | A predicted blocker's real side, because the blocking seat could see it. Found by the face-down check | The decider has to be able to see it too | Values the opponent's morph as a 2/2 |
+| `ComputerUtilCost.checkDiscardCost:148` | The payer's hand, copied before the cost parts were checked. A Ward check on the AI's own creature makes the opponent the payer. The gen-0 pool hit it once in 676 games, on Hexing Squelcher, whose Ward costs life, so the copy went unused | `handAsKnown` | Judges an opponent's discard cost by the cards it has seen in their hand. The pool has no Ward-discard card, so the games didn't change: chunk 12 replays to the same digests, record `5f20f414971a` and result `e31aa5f7cd06`, with the tripwire at 0 |
 
 ### Found by reading
 
@@ -58,6 +59,7 @@ The batches didn't reach these. I fixed them because they are the same read as a
 | `NamedDiscard.knownInHand`, `chooseName`, `bestGuess` | The opponent's hand, library and a `DeckPlan` of their deck | The notepad's hand cards, then `knownCards` by copies and cost, with no deck plan. `consider` uses the same |
 | `SpecialCardAi.PithingNeedle` | Deck-list key cards and `getAllCards` | Scoring over `knownCards`. With nothing worth naming it says Liliana of the Veil, the stock answer, where stock fell through to the AI's own cards |
 | `ComputerUtilCard.chooseColor` | `getCardsInGame`, even when keeping only the AI's own cards | Own zones for the AI, `knownCards` for the opponent, `handAsKnown` for the active player's hand |
+| `ComputerUtil.getCardPreference`, the `DiscardCost` madness check | The payer's `DeckPlan`, which reads their library. The `checkDiscardCost` test found it right behind the hand read | Only the deciding player gets its own deck plan. For an opponent the madness check is skipped |
 | `ComputerUtil.chooseSomeType:2574`, the vote logic at L2700, `PlayerControllerAi` color choice at L1405 | `getCardsInGame` filtered to the opponents | `knownOpponentCards` |
 | `ComputerUtilCard.getBestLandAI:265` | The land controller's hand, for Urza lands | `handAsKnown` |
 | `AiController.chooseNumber:2948`, Emissary's Ploy | The related player's library | `knownCards` if that player isn't the AI |
@@ -96,7 +98,7 @@ Full sim, records on, clock 300:
 | Burn full, Merfolk heuristic | 12 | 0 |
 | Sneak Show full, Mono Black Devotion full | 8 | 0 |
 
-That zero covers the real game only. The search still plays on copies that hold the opponent's real hand and library. `GameCopier` reads the real game to make them, the tripwire exempts it by class, and no watch sits on a copy. That is #25's. Until then a full-sim seat can see hidden cards however clean this count reads.
+That zero covered the real game only. At the time the search played on copies that held the opponent's real hand and library. #25 prunes those copies and has the tripwire check each one. "Pruned copies" in `docs/forge-build.md` has the numbers.
 
 **The digests didn't move.** I expected them to differ, and they didn't. Every pair I compared has the same digest with `-honest` on and off, random draws included, while about 400 hits per game went to none. Stompy looked different at first, but its digests moved between runs because some decisions hit the AI's 5 second limit. With `--search-budget 100`, which removes that limit, 30 games matched at `a9403716463c`, with honest play on and with it off.
 
@@ -136,7 +138,7 @@ A zero says nothing about these. None of them counts as a hit, by design:
 - Anything read from a forge-game frame. Rules code running inside a decision gets the real list, so `sa.canPlay()` on an opponent's spell stays silent and the AI still learns the answer.
 - `Card.getZone`, and the like, on a card the AI already holds.
 - The order of the AI's own library, which story 10 exempts.
-- `GameCopier`, which is exempt by class. No watch sits on a copy either.
+- `GameCopier`, which is exempt by class. No watch sits on a copy either. The copy check covers what a copy holds, not what code reads from it.
 
 ## What this doesn't cover
 

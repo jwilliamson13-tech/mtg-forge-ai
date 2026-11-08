@@ -197,7 +197,7 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
              search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
-             tripwire: bool = True) -> list[str]:
+             tripwire: bool = True, prune: bool = True) -> list[str]:
     """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -212,6 +212,9 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-budget", str(search_budget)]
     if not tripwire:
         args += ["-tripwire", "off"]
+    if not prune:
+        # Forge prunes a searching seat's copies by default, so only turning it off needs the flag
+        args += ["-prune", "off"]
     if records:
         args += ["-record", str(records.folder), "-batch", batch_id]
         if records.turn_cap is not None:
