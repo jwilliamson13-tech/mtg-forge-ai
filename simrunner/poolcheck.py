@@ -22,6 +22,7 @@ from gamerecord.record import GameRecordError, read_metadata
 from simrunner.batch import STATUS_FILE
 from simrunner.output import AI_TIMEOUT_LINE, TRACE_HEAD_LINE
 from simrunner.pool import CHUNKS_FOLDER, PLAN_FILE, RESULT_FILE
+from simrunner.seeds import derive_seed
 
 GAMES_FOLDER = "games"
 GAME_FILES = "*.jsonl.gz"
@@ -81,6 +82,8 @@ def check_pool(run_dir: Path) -> dict:
     finished = wins = records = 0
     draws = Counter()
     timeouts, heads = [], Counter()
+    # A pool chunk runs one worker, and its game files carry that worker's seed, not the chunk's.
+    chunk_seeds = {f"chunk-{chunk['index']:04d}": derive_seed(chunk["seed"], 0) for chunk in chunks if "seed" in chunk}
     for chunk in chunks:
         folder = run_dir / CHUNKS_FOLDER / f"chunk-{chunk['index']:04d}"
         result_path = folder / RESULT_FILE
@@ -102,11 +105,13 @@ def check_pool(run_dir: Path) -> dict:
 
     end_reasons, unreadable, tripwire_games = Counter(), [], []
     tripwire_off = hits = 0
+    by_game = {}  # (chunk seed, game number) -> file name, to name the timeout games' files
     files = sorted((run_dir / GAMES_FOLDER).glob(GAME_FILES))
     for path in files:
         try:
             metadata = read_metadata(path)
             end_reasons[metadata["end_reason"]] += 1
+            by_game[(metadata["seed"], metadata["game_number"])] = path.name
             tripwire = metadata["tripwire"]
             if not tripwire["enabled"]:
                 tripwire_off += 1
@@ -144,6 +149,10 @@ def check_pool(run_dir: Path) -> dict:
                      "games_with_hits": len(tripwire_games), "games": tripwire_games[:LISTED],
                      "signatures": [{"signature": s, "games": n} for s, n in signatures.most_common()]},
         "ai_timeouts": {"games": games_with_timeouts, "timeouts": sum(count for _, _, count in timeouts),
+                        "game_files": sorted(file for chunk, number, _ in timeouts
+                                             if (file := by_game.get((chunk_seeds.get(chunk), number)))),
+                        "games_without_file": sum(1 for chunk, number, _ in timeouts
+                                                  if (chunk_seeds.get(chunk), number) not in by_game),
                         "worst": [{"chunk": chunk, "game_number": number, "timeouts": count}
                                   for chunk, number, count in sorted(timeouts, key=lambda t: -t[2])[:LISTED]]},
         "stack_traces": {"total": sum(heads.values()), "ai_timeouts": timeout_traces,

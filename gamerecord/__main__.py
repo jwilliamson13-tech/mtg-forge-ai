@@ -14,7 +14,14 @@ def _convert(args: argparse.Namespace) -> int:
     folder = Path(args.folder)
     if not game_files(folder):
         args.parser.error(f"no game files under {folder}")
-    report = convert_folder(folder, Path(args.out), args.drop_tripwire_hits)
+    drop_files = set()
+    if args.drop_list:
+        try:
+            drop_files = {line.strip() for line in Path(args.drop_list).read_text(encoding="utf-8").splitlines()
+                          if line.strip()}
+        except OSError as e:
+            args.parser.error(f"can't read {args.drop_list}: {e}")
+    report = convert_folder(folder, Path(args.out), args.drop_tripwire_hits, drop_files)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
     sys.stdout.write(format_report(report))
@@ -39,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
     convert.add_argument("out", help="folder for the snapshots, cards and stack tables")
     convert.add_argument("--drop-tripwire-hits", action="store_true",
                          help="leave out every game the tripwire caught reading hidden cards, and name each one")
+    convert.add_argument("--drop-list", metavar="FILE",
+                         help="leave out every game file named in FILE, one file name per line, and name each one")
     convert.set_defaults(handler=_convert, parser=convert)
 
     hidden = commands.add_parser("hiddencheck", help="try to name a batch's hidden cards from its ids, exit 1 if any are")

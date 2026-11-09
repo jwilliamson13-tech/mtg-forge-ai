@@ -94,7 +94,9 @@ def _data(data: dict) -> list[str]:
         + (" The search's game copies are unchecked." if data.get("search_unchecked") else ""),
     ]
     lines += [f"  - `{s['signature']}`: {_n(s['games'], 'game')}" for s in tripwire.get("signatures") or []]
-    lines.append(f"- Forge AI timeouts: {_count(timeouts.get('timeouts'))} in {_n(timeouts.get('games'), 'game')}.")
+    lines.append(f"- Forge AI timeouts: {_count(timeouts.get('timeouts'))} in {_n(timeouts.get('games'), 'game')}"
+                 + (", all left out of training." if timeouts.get("game_files") is not None else "."))
+    lines += [f"  - `{name}`" for name in timeouts.get("game_files") or []]
     lines.append(f"- Stack traces on stderr: {_count(traces.get('total'))}, of which {_count(traces.get('ai_timeouts'))} "
                  f"AI timeouts and {_count(traces.get('other'))} other.")
     lines += [f"  - `{name}`: {n:,}" for name, n in (traces.get("by_exception") or {}).items()]
