@@ -9,6 +9,10 @@ from dataclasses import dataclass
 
 FULL = "full"  # the run with no ablation
 
+# The tensor contract this code trains and exports, docs/tensor-contract.md. A model artifact records it, and
+# `train.load_model` refuses one trained under another version, whose inputs this code no longer builds.
+CONTRACT_VERSION = 2
+
 CHECK_STATES = 300
 CHECK_THRESHOLD = 1e-4
 

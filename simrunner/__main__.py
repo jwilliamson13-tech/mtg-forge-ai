@@ -316,7 +316,8 @@ def _generation(args: argparse.Namespace) -> int:
         pool_options=tuple(options["pool"]), ladder_options=tuple(options["ladder"]),
         converge_options=tuple(options["converge"]), forge_options=tuple(options["forge"]),
         train=loop.TrainOptions(args.epochs, args.batch_size, args.device, args.train_seed),
-        max_tripwire_share=args.max_tripwire_share, max_drop_share=args.max_drop_share, min_free_mb=args.min_free_mb,
+        max_tripwire_share=args.max_tripwire_share, max_drop_share=args.max_drop_share,
+        max_timeout_share=args.max_timeout_share, min_free_mb=args.min_free_mb,
         memory_floor_mb=args.memory_floor_mb, ignore_kill_criterion=args.ignore_kill_criterion, redo=args.redo)
     try:
         entry = loop.Loop(config).run()
@@ -385,6 +386,9 @@ def _add_generation_arguments(parser: argparse.ArgumentParser) -> None:
     gates.add_argument("--max-tripwire-share", type=float, default=loop.DEFAULT_MAX_TRIPWIRE_SHARE,
                        help="stop if more of the pool's games than this had tripwire hits; those under it are left "
                             f"out of training (default: {loop.DEFAULT_MAX_TRIPWIRE_SHARE})")
+    gates.add_argument("--max-timeout-share", type=float, default=loop.DEFAULT_MAX_TIMEOUT_SHARE,
+                       help="stop if more of the pool's games than this had a Forge AI timeout; those under it are "
+                            f"left out of training (default: {loop.DEFAULT_MAX_TIMEOUT_SHARE})")
     gates.add_argument("--max-drop-share", type=float, default=loop.DEFAULT_MAX_DROP_SHARE,
                        help="stop if join drops more of the snapshots than this for an unmatched card "
                             f"(default: {loop.DEFAULT_MAX_DROP_SHARE})")
@@ -588,7 +592,8 @@ def build_parser() -> argparse.ArgumentParser:
     converge = commands.add_parser("converge", help="run the manifest's four tracked matchups under two players to "
                                                     "the same width, and say for each whether the win rate moved",
                                    description="Each matchup puts one player in both seats. A matchup converged when "
-                                               "the two Wilson intervals overlap. Players are named as for ladder. "
+                                               "the 95% Newcombe interval for the difference, after minus before, "
+                                               "contains 0, and moved when it excludes 0. Players are named as for ladder. "
                                                "A matchup already in the folder under the same settings is reused, "
                                                "so the next generation's check plays only the new player.")
     converge.add_argument("before", metavar="BEFORE", help="the player before, such as onnx:gen0")

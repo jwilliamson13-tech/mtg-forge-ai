@@ -22,7 +22,9 @@ from setmodel.dataset import LIVE_FIELDS, SCOREBOARD_FIELDS, ZONE_NAMES
 
 # What a typical value is, so each input starts near 1. These are fixed, not learned from a corpus.
 SCOREBOARD_SCALE = {"me_life": 20, "opp_life": 20, "me_poison": 10, "opp_poison": 10, "me_library": 60,
-                    "opp_library": 60, "opp_hand": 7, "turn": 20, "me_active": 1, "me_on_play": 1}
+                    "opp_library": 60, "opp_hand": 7, "turn": 20, "me_active": 1, "me_on_play": 1,
+                    "me_initiative": 1, "opp_initiative": 1, "me_monarch": 1, "opp_monarch": 1, "me_speed": 4,
+                    "opp_speed": 4}
 LIVE_SCALE = {"power": 5, "toughness": 5, "damage": 5, "counters_p1p1": 5, "counters_m1m1": 5, "counters_loyalty": 5,
               "counters_other": 5}
 
@@ -87,7 +89,7 @@ class SetModel(nn.Module):
 
 
 class StateModel(nn.Module):
-    """One state in, one probability out: the shape of tensor contract version 1."""
+    """One state in, one probability out: the shape of the tensor contract."""
 
     def __init__(self, model: SetModel):
         super().__init__()

@@ -7,9 +7,9 @@ heuristic AI's games, which is the "from heuristic" step. The steps, in order:
 | Step | Does | Gate |
 |---|---|---|
 | play | `simrunner pool` with the source player in both seats, records on | every chunk finished |
-| check | reads the pool folder (`simrunner.poolcheck`) | tripwire-hit games at most `max_tripwire_share` |
+| check | reads the pool folder (`simrunner.poolcheck`), lists the AI-timeout games | tripwire-hit games at most `max_tripwire_share`, AI-timeout games at most `max_timeout_share` |
 | hiddencheck | `gamerecord hiddencheck` | record ids name no hidden card |
-| convert | `gamerecord convert --drop-tripwire-hits` | no file rejected |
+| convert | `gamerecord convert --drop-tripwire-hits --drop-list` (the AI-timeout games) | no file rejected |
 | join | `setmodel join` | unmatched-card drops at most `max_drop_share` of snapshots |
 | train | `setmodel train --generation k+1` | metrics written for that generation |
 | ablate | `setmodel ablate` | kill criterion 2: full beats no_cards by 5 points |
@@ -58,11 +58,13 @@ MEMORY_STEPS = ("convert", "join", "train", "ablate", "pairtest", "export")  # t
 STEPS_FOLDER = "steps"
 LOGS_FOLDER = "logs"
 CHECK_FILE = "check.json"
+TIMEOUT_LIST_FILE = "ai-timeout-games.txt"  # one game file name per line, for convert's --drop-list
 LOOP_LOG = "loop.log"
 HEURISTIC = "heuristic"
 GENERATION = re.compile(r"gen(\d+)")
 KILL_BAR_POINTS = 5.0  # kill criterion 2, HANDOFF.md
 DEFAULT_MAX_TRIPWIRE_SHARE = 0.01
+DEFAULT_MAX_TIMEOUT_SHARE = 0.01
 DEFAULT_MAX_DROP_SHARE = 0.01
 DEFAULT_MIN_FREE_MB = 4096
 DEFAULT_MEMORY_FLOOR_MB = 1024
@@ -290,6 +292,7 @@ class LoopConfig:
     train: TrainOptions = TrainOptions()
     max_tripwire_share: float = DEFAULT_MAX_TRIPWIRE_SHARE
     max_drop_share: float = DEFAULT_MAX_DROP_SHARE
+    max_timeout_share: float = DEFAULT_MAX_TIMEOUT_SHARE
     min_free_mb: float = DEFAULT_MIN_FREE_MB
     memory_floor_mb: float = DEFAULT_MEMORY_FLOOR_MB
     ignore_kill_criterion: bool = False
@@ -331,7 +334,8 @@ def check_config(config: LoopConfig) -> None:
         raise LoopError(f"--redo takes a step: {', '.join(STEPS)}")
     if config.games < 1:
         raise LoopError("--games needs at least 1 game")
-    for name, share in (("--max-tripwire-share", config.max_tripwire_share), ("--max-drop-share", config.max_drop_share)):
+    for name, share in (("--max-tripwire-share", config.max_tripwire_share), ("--max-drop-share", config.max_drop_share),
+                        ("--max-timeout-share", config.max_timeout_share)):
         if not 0 <= share <= 1:
             raise LoopError(f"{name} is a fraction from 0 to 1")
 
@@ -425,7 +429,8 @@ class Loop:
         if step == "hiddencheck":
             return self._module("gamerecord", "hiddencheck", c.data_dir / "games")
         if step == "convert":
-            return self._module("gamerecord", "convert", c.data_dir / "games", self.parquet, "--drop-tripwire-hits")
+            return self._module("gamerecord", "convert", c.data_dir / "games", self.parquet, "--drop-tripwire-hits",
+                                "--drop-list", self.run_dir / TIMEOUT_LIST_FILE)
         if step == "join":
             return self._module("setmodel", "join", *inputs)
         if step == "train":
@@ -458,7 +463,7 @@ class Loop:
         c = self.config
         return {
             "play": [c.data_dir / STATUS_FILE, c.data_dir / PLAN_FILE],
-            "check": [self.run_dir / CHECK_FILE],
+            "check": [self.run_dir / CHECK_FILE, self.run_dir / TIMEOUT_LIST_FILE],
             "hiddencheck": [self.log_path("hiddencheck")],
             "convert": [self.parquet / "snapshots"],
             "join": [self.log_path("join")],
@@ -546,6 +551,12 @@ class Loop:
             raise GateFailed("check", f"{tripwire['games_with_hits']} of {finished} games had tripwire hits, over "
                                       f"{self.config.max_tripwire_share:.2%}; fix the peeks first. Signatures: "
                                       + "; ".join(s["signature"] for s in tripwire["signatures"][:5]))
+        timeouts = summary["ai_timeouts"]
+        share = timeouts["games"] / finished if finished else 0.0
+        if share > self.config.max_timeout_share:
+            raise GateFailed("check", f"{timeouts['games']} of {finished} games had a Forge AI timeout, over "
+                                      f"{self.config.max_timeout_share:.2%}; the games are slow or stuck, so leaving them "
+                                      "out would skew what training sees. Look at the pool's worker logs first")
         return summary
 
     def _gate_hiddencheck(self, ran: Ran | None) -> dict:
@@ -559,13 +570,24 @@ class Loop:
         counts = _numbers(text)
         dropped = {m[1]: int(m[2]) for m in re.finditer(r"^  ([a-z_]+): (\d+)$", text.split("dropped", 1)[-1]
                                                         .split("rejected", 1)[0], re.M)}
-        summary = {"kept": counts.get("kept"), "dropped": dropped, "rejected": counts.get("rejected"),
+        timeout_files = self._timeout_files()
+        if "listed" in dropped:
+            dropped["ai_timeout"] = dropped.pop("listed")  # the only list the loop passes
+        summary = {"kept": counts.get("kept"), "dropped": dropped,
+                   "ai_timeout_games": {"listed": len(timeout_files), "dropped": dropped.get("ai_timeout", 0),
+                                        "files": timeout_files}, "rejected": counts.get("rejected"),
                    "snapshot_rows": counts.get("snapshot rows"), "card_rows": counts.get("card rows"),
                    "stack_rows": counts.get("stack rows"), "parquet": str(self.parquet)}
         if ran is not None and ran.exit == 1 and summary["rejected"]:
             raise GateFailed("convert", f"{summary['rejected']} game files rejected, see {self.log_path('convert')}")
         self._require_exit("convert", ran)
         return summary
+
+    def _timeout_files(self) -> list[str]:
+        path = self.run_dir / TIMEOUT_LIST_FILE
+        if not path.is_file():
+            return []
+        return [line for line in path.read_text(encoding="utf-8").splitlines() if line]
 
     def _gate_join(self, ran: Ran | None) -> dict:
         self._require_exit("join", ran)
@@ -700,6 +722,9 @@ class Loop:
             except PoolCheckError as e:
                 raise StepFailed("check", str(e)) from e
             write_json(self.run_dir / CHECK_FILE, summary)
+            files = summary["ai_timeouts"]["game_files"]
+            (self.run_dir / TIMEOUT_LIST_FILE).write_text("".join(f"{name}\n" for name in files), encoding="utf-8",
+                                                          newline="\n")
         elif step == "log":
             self.logged = self.entry("complete")
             append_entry(self.config.results, self.logged)

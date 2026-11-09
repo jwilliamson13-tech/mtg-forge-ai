@@ -17,6 +17,7 @@ from simrunner.__main__ import main
 from simrunner.loop import (STEPS, GateFailed, Loop, LoopConfig, LoopError, Runner, StepFailed, TrainOptions,
                             check_config)
 from simrunner.poolcheck import check_pool, game_timeouts, trace_heads
+from simrunner.seeds import derive_seed
 from simrunner.results import LOG_FILE, PAGE_FILE, read_entries, render_entry
 from simrunner.window import Window
 
@@ -32,7 +33,7 @@ def open_window(minutes=60):
 def bundle(models, name, generation):
     folder = models / name
     folder.mkdir(parents=True)
-    (folder / "contract.json").write_text(json.dumps({"bundle": {"generation": generation}}), encoding="utf-8")
+    (folder / "contract.json").write_text(json.dumps({"version": 1, "bundle": {"generation": generation}}), encoding="utf-8")
     (folder / "model.onnx").write_bytes(f"weights of {name}".encode())
 
 
@@ -267,7 +268,7 @@ def test_tripwire_games_under_the_bar_are_counted_and_left_out(setup):
     tripwire = entry["data"]["tripwire"]
     assert tripwire["games_with_hits"] == 1 and tripwire["hits"] == 1
     assert tripwire["games"][0]["signatures"] == ["forge.ai.ability.PlayAi.chooseSingleCard:173"]
-    assert entry["conversion"]["dropped"] == {"tripwire": 1}
+    assert entry["conversion"]["dropped"] == {"tripwire": 1, "ai_timeout": 1}
 
 
 def test_too_many_tripwire_games_stop_the_loop_with_their_signatures_logged(setup):
@@ -281,6 +282,69 @@ def test_too_many_tripwire_games_stop_the_loop_with_their_signatures_logged(setu
     assert entry["status"] == "stopped" and entry["stopped_at"] == "check"
     assert entry["data"]["tripwire"]["games_with_hits"] == 5
     assert setup.steps_called() == ["play"]
+
+
+def test_ai_timeout_games_are_listed_by_file_and_left_out_of_convert(setup):
+    entry = setup.loop().run()
+
+    seed = derive_seed(11, 0)  # the stub's first chunk, with its one worker
+    expected = f"pool_{seed}_2_burn-1_vs_elves-1.jsonl.gz"
+    assert entry["data"]["ai_timeouts"]["game_files"] == [expected]
+    assert (setup.config.run_dir / "ai-timeout-games.txt").read_text(encoding="utf-8") == expected + "\n"
+    convert = setup.argv("convert")
+    assert convert[convert.index("--drop-list") + 1] == str(setup.config.run_dir / "ai-timeout-games.txt")
+    assert entry["conversion"]["dropped"] == {"tripwire": 1, "ai_timeout": 1}
+    assert entry["conversion"]["ai_timeout_games"] == {"listed": 1, "dropped": 1, "files": [expected]}
+
+
+def test_the_results_page_names_the_timeout_games_left_out(setup):
+    page = render_entry(setup.loop().run())
+
+    assert "Forge AI timeouts: 2 in 1 game, all left out of training." in page
+    assert "  - `pool_" in page and "_2_burn-1_vs_elves-1.jsonl.gz`" in page
+    assert "dropped tripwire 1, ai_timeout 1" in page
+
+
+def test_a_pool_with_no_timeouts_lists_nothing_and_convert_still_gets_the_list(setup):
+    setup.knobs(timeout_games=0)
+
+    entry = setup.loop().run()
+
+    assert entry["data"]["ai_timeouts"]["game_files"] == []
+    assert (setup.config.run_dir / "ai-timeout-games.txt").read_text(encoding="utf-8") == ""
+    assert entry["conversion"]["ai_timeout_games"] == {"listed": 0, "dropped": 0, "files": []}
+
+
+def test_a_timeout_game_without_a_record_is_counted_but_not_listed(setup):
+    setup.loop().run()
+    for path in (setup.config.data_dir / "games").glob("*_2_burn-1_vs_elves-1.jsonl.gz"):
+        path.unlink()
+
+    ai_timeouts = check_pool(setup.config.data_dir)["ai_timeouts"]
+    assert ai_timeouts["games"] == 1 and ai_timeouts["game_files"] == [] and ai_timeouts["games_without_file"] == 1
+
+
+def test_too_many_timeout_games_stop_the_loop_at_check(setup):
+    setup.knobs(timeout_games=5)  # 5 of 100 is over 1%
+
+    with pytest.raises(GateFailed) as stopped:
+        setup.loop().run()
+
+    assert stopped.value.step == "check" and "5 of 100 games had a Forge AI timeout" in stopped.value.why
+    [entry] = setup.entries()
+    assert entry["status"] == "stopped" and entry["stopped_at"] == "check"
+    assert entry["data"]["ai_timeouts"]["games"] == 5
+    assert setup.steps_called() == ["play"]
+
+
+def test_timeout_games_at_the_share_are_dropped_and_over_it_are_not(setup):
+    setup.knobs(timeout_games=2)  # 2 of 100 is 2%
+    assert setup.loop(max_timeout_share=0.02).run()["conversion"]["ai_timeout_games"]["dropped"] == 2
+
+
+def test_the_timeout_share_is_a_fraction(setup):
+    with pytest.raises(LoopError, match="--max-timeout-share"):
+        check_config(replace(setup.config, max_timeout_share=2.0))
 
 
 def test_record_ids_that_name_hidden_cards_stop_the_loop(setup):
@@ -439,7 +503,8 @@ def test_the_pool_check_counts_timeouts_per_game_and_traces_by_exception(setup):
     setup.loop().run()
 
     summary = check_pool(setup.config.data_dir)
-    assert summary["ai_timeouts"] == {"games": 1, "timeouts": 2,
+    assert summary["ai_timeouts"] == {"games": 1, "timeouts": 2, "games_without_file": 0,
+                                      "game_files": [f"pool_{derive_seed(11, 0)}_2_burn-1_vs_elves-1.jsonl.gz"],
                                       "worst": [{"chunk": "chunk-0000", "game_number": 2, "timeouts": 2}]}
     assert summary["stack_traces"] == {"total": 2, "ai_timeouts": 2, "other": 0,
                                        "by_exception": {"java.util.concurrent.TimeoutException": 2}}
@@ -502,7 +567,7 @@ def test_the_page_gives_every_win_rate_with_its_interval_and_games(setup):
     assert "Kill criterion 2 passed: full beats no_cards by 7.50 points, the bar is 5.0." in page
     assert "Tripwire: 1 of 100 (1.00%) games had hits (1 hit), all left out of training." in page
     assert "`forge.ai.ability.PlayAi.chooseSingleCard:173`: 1 game" in page
-    assert "Forge AI timeouts: 2 in 1 game." in page
+    assert "Forge AI timeouts: 2 in 1 game, all left out of training." in page
     assert page.startswith("## gen1 from onnx:gen0, complete\n")
     assert "Held-out accuracy: 62.00% over 2 games (100 rows), log loss 0.6000." in page
     assert "Join: 3 of 1,000 (0.30%) snapshots dropped for an unmatched card" in page

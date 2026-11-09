@@ -61,7 +61,9 @@ def snapshot(side, *, life=20, turn=1, battlefield=(), hand=(), graveyard=(), re
     return {
         "side": side,
         "scoreboard": {"me_life": life, "opp_life": 20, "me_poison": 0, "opp_poison": 0, "me_library": 40,
-                       "opp_library": 40, "opp_hand": 5, "turn": turn, "me_active": side == 1, "me_on_play": side == 1},
+                       "opp_library": 40, "opp_hand": 5, "turn": turn, "me_active": side == 1, "me_on_play": side == 1,
+                       "me_initiative": False, "opp_initiative": False, "me_monarch": False, "opp_monarch": False,
+                       "me_speed": 0, "opp_speed": 0},
         "zones": {"battlefield": list(battlefield), "me_hand": list(hand), "me_graveyard": list(graveyard),
                   "opp_graveyard": [], "me_exile": [], "opp_exile": [], "opp_revealed": list(revealed)},
         "stack": list(stack),
@@ -71,7 +73,7 @@ def snapshot(side, *, life=20, turn=1, battlefield=(), hand=(), graveyard=(), re
 def game(number, snapshots, *, winner=1, end_reason="win", decks=TRAIN_DECKS, final_turn=9, seed=7, profile="Default"):
     seats = [{"seat": seat, "deck": deck, "ai_profile": profile, "sim_mode": "heuristic", "search_budget": 0}
              for seat, deck in zip((1, 2), decks)]
-    metadata = {"schema_version": 1, "batch_id": BATCH, "seed": seed, "game_number": number, "seats": seats,
+    metadata = {"schema_version": 2, "batch_id": BATCH, "seed": seed, "game_number": number, "seats": seats,
                 "winner": winner, "final_turn": final_turn, "end_reason": end_reason, "honest_play": True,
                 "tripwire": {"enabled": True, "hits": 0, "signatures": []}}
     return [metadata, *snapshots]

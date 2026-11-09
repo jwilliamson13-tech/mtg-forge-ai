@@ -2,13 +2,15 @@
 
 Each tracked matchup from the manifest runs as a matchup (`simrunner.matchup`) with the same player
 in both seats, once for the player before and once for the player after, to the same target
-width on the same seed. A matchup converged when the two Wilson intervals overlap: the stronger
-AI didn't move the number beyond the interval, so the number is about the decks. It moved when
-they don't overlap. It has no verdict when either side spent its budget or didn't finish.
+width on the same seed. The verdict reads the difference, after minus before, with Newcombe's
+hybrid score interval (method 10, the one `simrunner cardswap` uses). A matchup converged when
+that interval contains 0: the stronger AI didn't move the number beyond what chance explains, so
+the number is about the decks. It moved when the interval excludes 0. It has no verdict when
+either side spent its budget or didn't finish.
 
-The verdict is the overlap, as HANDOFF.md and Spec 6 word it. The report also gives the
-difference, after minus before, with Newcombe's interval, which flags a smaller move than overlap
-does (see "Convergence" in docs/forge-build.md).
+This replaced a test that two Wilson intervals overlap. Overlap is lenient: two intervals can
+overlap while the difference between them is clearly nonzero, so it let moves of up to about 10
+points at 400 games a side pass as converged (see "Convergence" in docs/forge-build.md).
 
 A matchup's folder is named for its player and its decks, so a later check reuses it. When the
 generation loop goes from gen 1 against gen 0 to gen 2 against gen 1, gen 1's four matchups are
@@ -87,23 +89,24 @@ class Verdict:
 
     @property
     def verdict(self) -> str:
-        if not (self.before and self.after and self.before.met and self.after.met):
+        difference = self.difference
+        if difference is None:
             return NO_VERDICT
-        return CONVERGED if self.before.interval.overlaps(self.after.interval) else MOVED
+        return MOVED if difference.excludes_zero else CONVERGED
 
     @property
     def difference(self) -> Difference | None:
         """After minus before, with Newcombe's interval. None without both rates."""
-        if self.verdict == NO_VERDICT:
+        if not (self.before and self.after and self.before.met and self.after.met):
             return None
         return newcombe(self.after.interval, self.before.interval)
 
     @property
     def why(self) -> str:
         if self.verdict == CONVERGED:
-            return "the intervals overlap"
+            return "the difference interval contains 0"
         if self.verdict == MOVED:
-            return "the intervals don't overlap"
+            return "the difference interval excludes 0"
         missing = [estimate for estimate in (self.before, self.after) if estimate and not estimate.met]
         if missing:
             return "; ".join(f"{estimate.player} {_short_status(estimate)}" for estimate in missing)
@@ -293,7 +296,7 @@ def converge_fields(result: ConvergeResult) -> dict:
         "status": result.status,
         "before": config.before.fields(),
         "after": config.after.fields(),
-        "rule": "converged when the two Wilson intervals overlap",
+        "rule": "converged when the Newcombe interval for after minus before contains 0",
         "manifest": str(config.manifest),
         "seed": batch.batch_seed,
         "workers": batch.workers,
@@ -329,10 +332,10 @@ def format_converge_report(result: ConvergeResult) -> str:
         ("status", f"{status}: {counts[CONVERGED]} converged, {counts[MOVED]} moved, {counts[NO_VERDICT]} with no verdict"),
         ("before", config.before.label),
         ("after", config.after.label),
-        ("rule", f"converged when the two {config.matchup.confidence * 100:g}% confidence Wilson intervals overlap"),
+        ("rule", f"converged when the {config.matchup.confidence * 100:g}% confidence Newcombe interval for after minus before contains 0"),
         ("target", f"a half-width of {config.matchup.width:.1f} points for each, both seats one player"),
         ("seed", f"{config.matchup.batch.batch_seed}, the same for both players"),
-        ("difference", "after minus before, Newcombe hybrid score interval, for reading only"),
+        ("difference", "after minus before, Newcombe hybrid score interval (method 10), the verdict's test"),
     ]
     if result.set_aside:
         rows.append(("set aside", ", ".join(folder.name for folder in result.set_aside)))

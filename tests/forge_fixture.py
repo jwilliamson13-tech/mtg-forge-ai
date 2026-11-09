@@ -4,7 +4,8 @@
 
 writes `OUT/bundle/` (the five bundle files), `OUT/game.jsonl.gz` (a game record with every
 input the contract has: hidden, split, token and revealed cards, the stack, combat,
-attachments and counters) and `OUT/expected.tsv` (PyTorch's probability for each of its
+attachments and counters, and from version 2 the initiative, the monarch, speed, two stack
+abilities with no card behind them and the search's `hidden` placeholder in public zones) and `OUT/expected.tsv` (PyTorch's probability for each of its
 snapshots, in the scores format of `setmodel.parity`). The fork commits the result under
 `forge-gui-desktop/src/test/resources/onnx-fixture/`. The model is the smoke model, so its
 numbers mean nothing, but Java has to reproduce them.
@@ -18,7 +19,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from setmodel.dataset import load_corpus
+from setmodel.dataset import PLACEHOLDER_NAME, load_corpus
 from setmodel.export import export_bundle, export_check
 from setmodel.parity import corpus_scores, write_scores
 from setmodel.train import TrainConfig, train
@@ -46,24 +47,29 @@ def fixture_snapshots() -> list[dict]:
     morph = card(None, 2, id=14, power=2, toughness=2, hidden=True, counters={"LOYALTY": 3})
     token = card("Elemental Token", 1, id=15, power=3, toughness=3, attached_to_seat=2)
     goblin = card("Goblin Token", 2, id=16, power=1, toughness=1, attached_to=13)
-    first = snapshot(1, life=17, turn=3, battlefield=[bears, knight, angel, morph, token, goblin],
+    placeholder = card(PLACEHOLDER_NAME, 2, id=17, tapped=True)  # a search copy played an unknown card
+    first = snapshot(1, life=17, turn=3, battlefield=[bears, knight, angel, morph, token, goblin, placeholder],
                      hand=[card("Lightning Bolt", 1, id=21), card("Fire // Ice", 1, id=22),
                            card("Snapcaster Mage", 1, id=23)],
                      graveyard=[card("Fire", 1, id=24, face="LeftSplit")],
                      revealed=[revealed("Snapcaster Mage", 2, power=2, toughness=1), revealed("Lightning Bolt", 2)],
                      stack=[stack_item("Lightning Bolt", 2, "spell", id=31, targets=[{"card": None, "seat": 1}]),
                             stack_item("Snapcaster Mage", 1, "ability", id=32),
-                            stack_item(None, 2, "spell", id=33, hidden=True)])
-    first["zones"]["opp_graveyard"] = [card("Ice", 2, id=25, face="RightSplit")]
+                            stack_item(None, 2, "spell", id=33, hidden=True),
+                            stack_item("The Initiative", 1, "ability", id=34),
+                            stack_item("Tamiyo, Seasoned Scholar (48)'s Effect", 2, "ability", id=35)])
+    first["zones"]["opp_graveyard"] = [card("Ice", 2, id=25, face="RightSplit"), card(PLACEHOLDER_NAME, 2, id=28)]
     first["zones"]["me_exile"] = [card("Grizzly Bears", 1, id=26)]
     first["zones"]["opp_exile"] = [card("Lightning Bolt", 2, id=27)]
-    first["scoreboard"].update(opp_life=12, me_poison=1, opp_poison=4, me_library=33, opp_library=31, opp_hand=3)
+    first["scoreboard"].update(opp_life=12, me_poison=1, opp_poison=4, me_library=33, opp_library=31, opp_hand=3,
+                               me_initiative=True, opp_monarch=True, me_speed=2, opp_speed=1)
 
     # the other side of the same moment: the morph is that side's own, so it has a name
     second = json.loads(json.dumps(first))
     second["side"] = 2
     second["scoreboard"].update(me_life=12, opp_life=17, me_poison=4, opp_poison=1, me_library=31, opp_library=33,
-                                opp_hand=3, me_active=False, me_on_play=False)
+                                opp_hand=3, me_active=False, me_on_play=False, me_initiative=False,
+                                opp_initiative=True, me_monarch=True, opp_monarch=False, me_speed=1, opp_speed=2)
     second["zones"]["battlefield"][3] = card("Snapcaster Mage", 2, id=14, power=2, toughness=2, face_down=True,
                                              counters={"LOYALTY": 3})
     second["zones"]["me_hand"] = [card("Silver Knight", 2, id=41)]

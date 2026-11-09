@@ -81,5 +81,5 @@ def test_the_forge_fixture_holds_a_bundle_a_game_and_every_snapshot_scored(tmp_p
     expected = read_scores(out / "expected.tsv")
     assert sorted(index for _, index in expected) == list(range(len(lines) - 1))
     assert all(0 < p < 1 for p in expected.values())
-    assert json.loads((out / "bundle" / CONTRACT).read_text(encoding="utf-8"))["version"] == 1
+    assert json.loads((out / "bundle" / CONTRACT).read_text(encoding="utf-8"))["version"] == 2
     assert not (out / "work").exists()
