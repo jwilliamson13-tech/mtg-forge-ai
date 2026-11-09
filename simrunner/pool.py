@@ -27,7 +27,7 @@ from simrunner.batch import (STATUS_FILE, BatchConfig, BatchResult, SetupError, 
 from simrunner.output import DrawCause
 from simrunner.report import format_report, table, tripwire_rows, worker_note
 from simrunner.seeds import derive_seed, split_games
-from simrunner.worker import any_seat_searches, remove_folder
+from simrunner.worker import DEFAULT_FIRST_PLAYER, any_seat_searches, remove_folder
 
 DEFAULT_CHUNK_GAMES = 50  # a JVM takes 24 to 45 seconds to start, so a chunk has to outlast that by a long way
 DEFAULT_HELD_OUT_SHARE = 0.15
@@ -139,6 +139,9 @@ def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     if batch.ai_steps:
         # left out when off, so that a plan written before the setting existed reads as played without it
         fields["ai_steps"] = batch.ai_steps
+    if batch.first_player != DEFAULT_FIRST_PLAYER:
+        # left out on stock Forge's rule, so that a plan written before the setting existed reads as played on it
+        fields["first_player"] = batch.first_player
     evaluators = [seat.evaluator for seat in batch.seats]
     if any(evaluators):
         # only when set, so that a plan written before evaluators existed still matches on a restart

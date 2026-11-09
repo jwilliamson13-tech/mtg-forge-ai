@@ -12,7 +12,7 @@ The fork is https://github.com/jwilliamson13-tech/forge. All work goes on its `m
 | Maven | 3.10.0, from scoop |
 | Forge version | 2.0.16-SNAPSHOT |
 | Upstream commit | `da66fb1ac4be7957461477bc8bd26628a439c747` (2026-11-04) |
-| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. They add `-sim` (issue #17), `-budget` (issue #50), the search changes of issue #51 and, later, `-aisteps` |
+| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. They add `-sim` (issue #17), `-budget` (issue #50), the search changes of issue #51 and, later, `-aisteps` and `-firstplayer` |
 | Jar | `forge-gui-desktop\target\forge-gui-desktop-2.0.16-SNAPSHOT-jar-with-dependencies.jar` |
 
 Forge's pom requires Java 17 or newer and Maven 3.8.1 or newer. It compiles to release 17, so Java 21 works.
@@ -106,6 +106,7 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-sim` is the simulation mode per seat, in deck order, such as `-sim full heuristic`. The modes are `heuristic`, `hybrid` and `full`, the same three as the desktop lobby's menu. Seats left out stay heuristic. With the flag, each player name ends in `[sim=mode]`, so every result line names the mode. Without it, the output is what stock Forge prints. An unknown mode prints the valid ones and stops, and so does `-sim` with `-t`.
 - `-budget` is the number of search steps an AI decision may take, such as `-budget 100`. A step is one game copied for the search. With it, the wall-clock limit on AI decisions stops mattering, so a run replays from its seed on a busy machine too. What a decision that runs out does is under "Stopped decisions" below. Without the flag the limit stays at 5 seconds. Only `forge sim` sets a budget.
 - `-aisteps` is the number of AI steps a heuristic decision may take, such as `-aisteps 1000`. A step is one call to `AITimeoutTracker.check()`, which the AI makes in its loops. Like `-budget`, it takes the 5-second limit away, so heuristic play replays from its seed on a busy machine too. A full sim spell choice doesn't get it, because `-budget` already bounds that search. See "Heuristic step budget" below. Without the flag, play is what it was.
+- `-firstplayer random|loser` picks who takes the first turn in each game after a JVM's first. `loser`, the default, is stock Forge: the loser of the last game goes first, and after a draw seat 1 does. `random` flips a coin for every game, the same flip game 1 gets, and prints `First player: random each game` once before the match header. Anything else prints why and stops. See "First player" below.
 - `-record DIR` writes one game record per game to that folder, as `docs/game-record.md` describes. It needs `-batch`, `-s` and exactly two decks, and it can't go with `-t`. Anything missing prints why and stops. Without it Forge writes no records, keeps no reveal log and has no turn cap.
 - `-batch ID` is the batch id for those records: letters, digits, `_` and `-`.
 - `-turncap N` stops a recorded game as a draw once turn N is over, default 50. A capped game prints `Stopping game at the turn cap as draw` before its result lines.
@@ -152,7 +153,7 @@ $decks = "..\forge\forge-gui\res\geneticaidecks"
 python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
 ```
 
-Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--evaluator random forge` sets `-eval` per seat, in deck order, and leaving it out leaves the flag off. The runner refuses anything but `forge` on a heuristic seat before it launches. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--ai-steps` sets `-aisteps`. It is off by default for `batch`, `nightly`, `matchup`, `cardswap`, `ladder` and `converge`, and on for `pool`, where `--ai-steps 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` or `--evaluator` doesn't get those modes or evaluators back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. So does a batch with `--ai-steps` whose `AI limits:` lines have no step fields. It also exits 1 if a game file and a result line disagree.
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--evaluator random forge` sets `-eval` per seat, in deck order, and leaving it out leaves the flag off. The runner refuses anything but `forge` on a heuristic seat before it launches. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--ai-steps` sets `-aisteps`. It is off by default for `batch`, `nightly`, `matchup`, `cardswap`, `ladder` and `converge`, and on for `pool`, where `--ai-steps 0` turns it off. `--first-player random` passes `-firstplayer random`. It defaults to `loser` everywhere but `pool`, and for `loser` the runner passes no flag, so those batches still run on a jar from before it. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` or `--evaluator` doesn't get those modes or evaluators back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. So does a batch with `--ai-steps` whose `AI limits:` lines have no step fields, and a batch with `--first-player random` whose worker never printed `First player: random each game`. It also exits 1 if a game file and a result line disagree.
 
 `--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, with or without records. `--no-prune` passes `-prune off`. Without it the runner leaves the flag out, so Forge prunes a searching seat's copies. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
 
@@ -169,6 +170,7 @@ Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Defa
 - **AI stops that played a line**, **AI stops that passed**, **AI stops with a land candidate** and **AI land drops missed on stops** add up the last four numbers of the `AI limits:` lines. They say `not reported` for a jar from before issue #51.
 - **AI decision timeouts** counts the `AI eval thread at timeout:` lines, one narrow kind of expiry that the heuristic AI prints. **AI deadline expiries** counts every decision the clock cut short, and includes those. **AI search budget stops** counts the decisions the budget cut short. The last two come from the `AI limits:` lines and say `not reported` for a run without `-sim` or `-budget`.
 - **AI step budget**, **AI step budget stops** and **AI most steps in one decision** appear only with `--ai-steps`. They give the steps per heuristic decision, the decisions that ran out, and the largest decision of the batch.
+- **First player** appears only with `--first-player random`, and says `random each game`.
 - **Game records written** counts this batch's files against the games finished, when records are on. A game that threw has no file, and neither does one the clock stopped before its first priority pass.
 - **Records against results** reads every finished game against its file, when records are on: winner and end reason. It leaves turns out: `GameLogFormatter` prints `Game Outcome: Turn` as the turn number halved and rounded up, so 20 in a file prints as 10, and Karn's restart would throw that off. It takes the metadata line of each file and leaves the snapshots alone, so a night of files costs seconds. `match` is games that agree. `no file by design` is clock and exception games with no file, the two kinds allowed to have none. `mismatches` is everything else: a file that disagrees, a game that should have a file and doesn't, an exception game with one, a file that can't be read, and a file with no result line. That last one isn't counted after a hard stop, which can land between the two. Any mismatch fails the batch, and the report lists the first 20.
 - **Tripwire hits per game** gives the max and mean over the games that reported. **Tripwire clean** is yes only when every finished game printed a count and every count is 0. A game that printed nothing means the jar has no tripwire. It fails the batch, and a jar like that never reads as a clean zero. With a `hybrid` or `full` seat a zero says yes only when every game also printed its `Tripwire copies:` line, because a copy has no watch and only that check covers it. A jar from before #25 doesn't print it, and the row then says `the real game is clean, search copies unchecked, so the jar may be from before #25`. **Search copies checked** adds up those lines. With `--no-tripwire` the row says `off`.
@@ -220,7 +222,7 @@ What the stop doesn't cover:
 python -m simrunner pool --games 10000 --seed 20261107 --workers 4 --start 23:00 --stop 05:00 --run-dir runs/gen0-pool
 ```
 
-It takes every `nightly` option except the two decks, and `--start` and `--stop` work the same way. Three defaults differ: both seats are `heuristic`, records are on, and so is the AI step budget, at `DEFAULT_AI_STEPS` in `simrunner/worker.py` (see "Heuristic step budget"). The gen-0 pool of 2026-11-07 was played before the step budget existed, on the 5-second clock, so a pool made with the default plays the heuristic AI under other rules than gen 0's data. `--ai-steps 0` plays the old way. The plan records the setting, so a restart can't switch it halfway, and a plan from before it existed reads as played without it. The tripwire and honest play are on as usual, and `--no-tripwire` and `--no-honest` turn them off. `--manifest` picks another manifest, and its deck files resolve as they do for `batch`.
+It takes every `nightly` option except the two decks, and `--start` and `--stop` work the same way. Four defaults differ: both seats are `heuristic`, records are on, the AI step budget is on, at `DEFAULT_AI_STEPS` in `simrunner/worker.py` (see "Heuristic step budget"), and each game's first player is a coin flip (see "First player"). The gen-0 pool of 2026-11-07 was played before the step budget existed, on the 5-second clock, so a pool made with the default plays the heuristic AI under other rules than gen 0's data. `--ai-steps 0` plays the old way. The plan records the setting, so a restart can't switch it halfway, and a plan from before it existed reads as played without it. The first player works the same way. `--first-player loser` plays stock Forge's rule, the plan records `first_player` only when it is `random`, and a plan from before it reads as `loser`, so the 2026-11-07 pool refuses a restart under the new default. The tripwire and honest play are on as usual, and `--no-tripwire` and `--no-honest` turn them off. `--manifest` picks another manifest, and its deck files resolve as they do for `batch`.
 
 Always pass `--run-dir`. The default name has the time in it, so a restart couldn't find the folder. The folder name is the batch id of every game in the run, which makes the whole run one batch in Parquet.
 
@@ -459,7 +461,7 @@ Both rules have a gate on their share of games. Tripwire hits over `--max-tripwi
 
 **Memory.** Before convert, join, train, ablate, pairtest or export starts, the loop wants `--min-free-mb` of free physical memory, 4,096 by default, and stops with a message if it isn't there. While one of them runs, the loop polls free memory each second and kills the step if it falls under `--memory-floor-mb`, 1,024 by default, rather than let the PC page itself to a halt. Each record has the step's peak working set, summed over its process tree, because a venv's `python.exe` is a launcher whose own peak is a few MB. It also has the least free memory seen while the step ran.
 
-**Settings passed through.** `--chunk-games` and `--held-out-share` go to `pool`. `--deck-pairs` and `--pair-games` go to `ladder`. `--width`, `--round-games` and `--max-games` go to `converge`. `--ai-steps` goes to `pool` alone, so the play step gets the pool's default unless it is given. `--search-budget`, `--clock`, `--heap` and `--forge` go to all three Forge steps, and `--epochs`, `--batch-size`, `--device` and `--train-seed` to train and ablate. Left out, each takes the command's own default. The ladder and convergence seeds default to 41 and 42 and must stay the same every generation, because both folders refuse a seed change.
+**Settings passed through.** `--chunk-games` and `--held-out-share` go to `pool`. `--deck-pairs` and `--pair-games` go to `ladder`. `--width`, `--round-games` and `--max-games` go to `converge`. `--ai-steps` and `--first-player` go to `pool` alone, so the play step gets the pool's defaults unless they are given. `--search-budget`, `--clock`, `--heap` and `--forge` go to all three Forge steps, and `--epochs`, `--batch-size`, `--device` and `--train-seed` to train and ablate. Left out, each takes the command's own default. The ladder and convergence seeds default to 41 and 42 and must stay the same every generation, because both folders refuse a seed change.
 
 ```
 runs\generations\gen{k+1}\
@@ -563,7 +565,7 @@ Forge calls `MyRandom.setRandom(new Random(seed))` once, before the first game, 
 - A batch replays as a whole. You can't replay game 4 of a worker without games 1 to 3.
 - The same batch seed, game count and worker count give the same games. A different worker count gives a different split and different games.
 - A worker's first k games are the same in a longer run. A 20-game batch with seed 1 matched the first two games of all ten workers in the 50-game batch, 20 of 20, on winner and turn, with ten JVMs running.
-- Games in one JVM aren't independent. Game 1's starting player is random, and after that the loser of the last game goes first (`GameAction.determineFirstTurnPlayer`).
+- On stock Forge's rule, games in one JVM aren't independent. Game 1's first player is a coin flip, and after that the loser of the last game goes first (`GameAction.determineFirstTurnPlayer`), so who is on the play tells of the last game's result. `-firstplayer random` flips for every game instead, and `pool` and `generation` pass it by default. The games still share one stream from `MyRandom`, so they replay only as a whole. See "First player".
 
 Two wall clocks can break replay, and both depend on machine load. `-c` stops a game, and its thread can keep drawing from the shared stream until it notices the interrupt. `Game.AI_TIMEOUT` gives each AI decision 5 seconds. `HostedMatch` sets it from a preference for a real match, but a sim doesn't go through `HostedMatch`, so a sim runs on the default. A heuristic decision is fast enough that this limit rarely matters, and the 20 of 20 match above suggests neither clock mattered in those runs. A full-sim decision is a different story, covered next. So is a heuristic decision on a big board, covered under "Heuristic step budget".
 
@@ -749,13 +751,66 @@ What this doesn't cover:
 - A game record doesn't say whether the AI had a step budget. `plan.json`, `matchup.json`, `convergence.json` and the ladder's plan do, when it is on.
 - The `-c` clock is still wall time, and the two Dragon's Rage Channelers of "Pruned copies" are a race the budget doesn't touch.
 
+### First player
+
+Stock Forge plays the games of one `-n` run as one `Match`. `Match.startGame` hands the last game's outcome to `GameAction.startGame`, and `determineFirstTurnPlayer` flips a coin only when there is none, for game 1. From game 2 on it picks the player who didn't win the last game, and after a draw the first player in seat order. The AI then always takes the play, because `PlayerControllerAi.chooseStartingPlayer` returns itself. So from game 2 on, the player on the play is the last game's loser.
+
+In the 10,000-game gen-0 pool of 2026-11-07, all 9,770 pairs of consecutive games in a JVM follow that rule. The player on the play won 33.4% of games, against 52.3% in the JVMs' first games. And `me_on_play`, a scoreboard feature in every snapshot, carries the last game's result into training. On the play means you lost last game, which mostly means you hold the weaker deck.
+
+**The fix.** `-firstplayer random` sets `GameRules.randomStartEachGame`, and `Match.startGame` then passes no last outcome, so every game picks its first player as game 1 does. I put it there and not in `determineFirstTurnPlayer` because that leaves the picking code alone, and every game takes a path stock Forge already takes. That path is one draw from `MyRandom` for the coin, one `GameEventFlipCoin` marked as the starting toss, and `chooseStartingPlayer(true)`. In a sim nothing listens to that event. The game log has no entry for it, and only the desktop GUI and its sound do. `Match.lastOutcome` stays set, so AI sideboarding, which reads it, still knows who won. With the default, `loser`, the code runs as it did. `RandomStartEachGameTest` plays 16-game matches where the first player concedes on its first turn. Stock gives that seat every game, and the flag gives both seats some, flips once a game, and repeats from the same seed.
+
+**Results.** Run 2026-11-09 with one worker at below-normal priority, records, honest play and the tripwire on. The stock rule column ran on fork `8f84198`, the other two on this branch's jar.
+
+mardu-aggro-2 against painter-2, chunk 194 of the gen-0 pool, with its seed `263398586371481`, 51 games and `--ai-steps 1000`:
+
+| | Stock rule | `--first-player random` | The same again |
+|---|---|---|---|
+| Wins, seat 1 and seat 2 | 44, 7 | 46, 5 | 46, 5 |
+| On-play wins | 11 of 51, 21.6% | 24 of 51, 47.1% | 24 of 51 |
+| Seat 1 on the play | 8 of 51 | 25 of 51 | 25 of 51 |
+| Games after a decisive game with its loser on the play | 50 of 50 | 29 of 50 | 29 of 50 |
+| Record digest | `45fb4f496986` | `e5bd912e8f75` | `e5bd912e8f75` |
+| Result digest | `e916a3e2c514` | `72ed4df624dd` | `72ed4df624dd` |
+
+Game 1 is the same game under both rules, seat 1 on the play and winning. Mardu wins 44 or 46 of 51 either way, so on stock's rule painter-2, the weaker deck, gets the play in nearly every game.
+
+Burn vs Merfolk (`GAL_`), 20 games, seed 1, `--sim-mode heuristic heuristic --records`, no step budget:
+
+| | Stock rule | `--first-player random` | The same again |
+|---|---|---|---|
+| Wins, seat 1 and seat 2 | 7, 13 | 11, 9 | 11, 9 |
+| On-play wins | 10 of 20 | 17 of 20 | 17 of 20 |
+| Seat 1 on the play | 13 of 20 | 10 of 20 | 10 of 20 |
+| Games after a decisive game with its loser on the play | 19 of 19 | 11 of 19 | 11 of 19 |
+| Record digest | `bdfb3b77c432` | `fd36cfb402a2` | `fd36cfb402a2` |
+| Result digest | `b524f8efe9fc` | `5abe5ef77893` | `5abe5ef77893` |
+
+On an even pair the stock rule hides the play advantage instead of showing a false one. The loser goes first, and the play helps it win back, so the two decks trade games and on-play wins sit at 10 of 20. With a coin flip the player on the play won 17 of 20, 85%, with a 95% Wilson interval of 64% to 95%. Twenty games is too few to size that advantage, but it says the rule moves on-play rates both ways, depending on the pair.
+
+**Default play is unchanged.** Burn vs Merfolk (`GAL_`), 20 games, seed 1, one worker, on fork `8f84198` and on this branch, with no `--first-player`:
+
+| Run | `8f84198` | This branch |
+|---|---|---|
+| `--sim-mode heuristic heuristic --records` | record `bdfb3b77c432`, result `b524f8efe9fc` | the same, and 100 of 100 outcome, result and `AI limits:` lines match |
+| No flags | result `4d3087bd2c5f` | the same, and 80 of 80 outcome and result lines match |
+
+The result digests are the ones PR #73 got on its jars. The record digest differs from #73's `39de6332ed66` because contract v2 has changed the snapshots since.
+
+**Defaults.** `pool` flips for every game, and so does `generation`'s play step, through `pool`, so a new gen-0 pool and the pools of gen 1 and later don't carry the old rule. `batch`, `nightly`, `matchup`, `cardswap`, `ladder` and `converge` keep `loser`. They compare decks or AI settings on stock Forge's rule, and `ladder` and `converge` folders refuse a settings change across generations. A matchup plays half its games with each deck in seat 1, but that doesn't balance who is on the play under the loser rule, so its rates still carry the rule's bias. Turning it on there is `--first-player random` and a new folder.
+
+What this doesn't cover:
+
+- A game record doesn't say which rule picked its first player. A new metadata field is a schema change under `docs/game-record.md`, so I left it out. `plan.json`, `matchup.json`, `convergence.json` and the ladder's plan say it when it is `random`.
+- The 2026-11-07 gen-0 pool keeps the old rule and its `me_on_play` leak. Training on it needs that feature dropped, or a new pool.
+- A tournament (`-t`) and a `-m` match honor the flag too, because both go through `GameRules`. Neither was run.
+
 ### Game records
 
 `docs/game-record.md` is the format. This is how they get written.
 
 `GameRecorder` in the fork's `forge.view` package subscribes to the real game's own event bus, so the AI's copied games never reach it. `GameEventPlayerPriority` gives it a snapshot from each side, and `SnapshotLine` builds those. It holds the lines in memory and writes the file after `simulateSingleMatch` has finished with the game. Only that method sees every way a game can stop, so it tells the recorder why, and checks with the recorder before it forces the game over. The recorder takes `winner` from Forge's outcome only when the rules had ended the game by then, and a game forced over with no reason gets no file.
 
-The turn cap sits on `GameEventTurnBegan` and marks both players drawn before it ends the game, as a draw effect does. A plain `setGameOver(Draw)` gets the false winner that a clock stop gets. A capped game is a true draw in Forge's own eyes, so after one, seat 1 goes first in the next game.
+The turn cap sits on `GameEventTurnBegan` and marks both players drawn before it ends the game, as a draw effect does. A plain `setGameOver(Draw)` gets the false winner that a clock stop gets. A capped game is a true draw in Forge's own eyes, so on stock Forge's rule seat 1 goes first in the next game. With `-firstplayer random` the next game flips, as after any other game.
 
 The hook only reads. It adds no draw from `MyRandom`, and only `-honest` lets the AI read the reveal log. So with `-honest` off a game plays the same with records on or off, unless the cap ends it.
 

@@ -23,8 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from simrunner.generations import ONNX, Generation
-from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, GameResult, count_stack_traces, find_fatal, onnx_summary,
-                              parse_games, printed_evaluators, printed_onnx_seats, printed_sim_modes)
+from simrunner.output import (AI_TIMEOUT_LINE, HEADER_LINE, RANDOM_FIRST_PLAYER_LINE, GameResult, count_stack_traces,
+                              find_fatal, onnx_summary, parse_games, printed_evaluators, printed_onnx_seats,
+                              printed_sim_modes)
 
 JVM_PROPERTIES = ("-Dfile.encoding=UTF-8", "-Dsentry.enabled=false")
 PROFILE_FILE = "forge.profile.properties"
@@ -42,6 +43,12 @@ DEFAULT_SEARCH_BUDGET = 100
 # AI steps per heuristic decision, Forge's `-aisteps`. `pool` turns it on by default. See "Heuristic step budget" in
 # docs/forge-build.md for how this was chosen.
 DEFAULT_AI_STEPS = 1000
+# Who goes first in each game after a JVM's first, Forge's `-firstplayer`. `loser` is stock Forge: the loser of the last
+# game, so a game's first player tells of the game before. `random` flips a coin for every game. `pool` and `generation`
+# default to `random`, everything else to `loser`. See "First player" in docs/forge-build.md.
+FIRST_PLAYER_RULES = ("random", "loser")
+DEFAULT_FIRST_PLAYER = "loser"
+POOL_FIRST_PLAYER = "random"
 
 # Past this, a worker is hung rather than slow, and gets killed. The clock already
 # bounds each game, so this is a backstop for a JVM that stops responding.
@@ -110,6 +117,7 @@ class WorkerResult:
     fatal: str | None = None
     sim_modes: tuple[str, ...] = ()  # what Forge's match header says each seat is playing
     evaluators: tuple[str, ...] = ()  # what the header says each seat's search scores with
+    random_first_player: bool = False  # Forge said it flips for the first player of every game
     onnx_seats: tuple[tuple[int, str], ...] = ()  # (seat, bundle) for each seat the ONNX evaluator says it took
     onnx_summary: str | None = None  # the ONNX evaluator's lines at exit, one per bundle: calls and time per call
     records: list[GameFile] = field(default_factory=list)  # game files with this worker's seed
@@ -197,7 +205,8 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
              search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
-             tripwire: bool = True, prune: bool = True, ai_steps: int = 0) -> list[str]:
+             tripwire: bool = True, prune: bool = True, ai_steps: int = 0,
+             first_player: str = DEFAULT_FIRST_PLAYER) -> list[str]:
     """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -212,6 +221,9 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-budget", str(search_budget)]
     if ai_steps:
         args += ["-aisteps", str(ai_steps)]
+    if first_player != DEFAULT_FIRST_PLAYER:
+        # stock Forge's rule needs no flag, so a batch on it still runs on a jar from before the flag
+        args += ["-firstplayer", first_player]
     if not tripwire:
         args += ["-tripwire", "off"]
     if not prune:
@@ -356,6 +368,7 @@ def _read_stdout(result: WorkerResult, lines: list[tuple[float, str]]) -> None:
     result.games = parse_games(text)
     result.fatal = find_fatal(text)
     result.ai_timeouts = text.count(AI_TIMEOUT_LINE)
+    result.random_first_player = RANDOM_FIRST_PLAYER_LINE in text
     for stamp, line in lines:
         if result.ready_s is None and HEADER_LINE.match(line):
             result.ready_s = stamp

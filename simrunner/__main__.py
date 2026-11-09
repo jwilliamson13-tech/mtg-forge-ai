@@ -31,7 +31,8 @@ from simrunner.players import Player, PlayerError, parse_player
 from simrunner.pool import DEFAULT_CHUNK_GAMES, DEFAULT_HELD_OUT_SHARE, PoolConfig, format_pool_report, run_pool
 from simrunner.report import format_report
 from simrunner.window import Window, parse_clock, resolve_window
-from simrunner.worker import DEFAULT_AI_STEPS, DEFAULT_SEARCH_BUDGET, EVALUATORS, SIM_MODES, RecordPlan, Seat
+from simrunner.worker import (DEFAULT_AI_STEPS, DEFAULT_FIRST_PLAYER, DEFAULT_SEARCH_BUDGET, EVALUATORS,
+                              FIRST_PLAYER_RULES, POOL_FIRST_PLAYER, SIM_MODES, RecordPlan, Seat)
 
 CORES_RESERVED = 2
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +133,7 @@ def _run_config(args: argparse.Namespace, seats: tuple[Seat, Seat], workers: int
         forge_root=Path(args.forge), run_dir=run_dir, clock_s=args.clock, heap=args.heap,
         java=tuple(args.java), keep_profiles=args.keep_profiles, search_budget=args.search_budget, window=window,
         records=records, tripwire=not args.no_tripwire, prune=not args.no_prune, ai_steps=args.ai_steps,
+        first_player=args.first_player,
     )
 
 
@@ -299,7 +301,7 @@ def _generation(args: argparse.Namespace) -> int:
                               ("ladder", "--deck-pairs", args.deck_pairs), ("ladder", "--pair-games", args.pair_games),
                               ("converge", "--width", args.width), ("converge", "--round-games", args.round_games),
                               ("converge", "--max-games", args.max_games), ("forge", "--search-budget", args.search_budget),
-                              ("pool", "--ai-steps", args.ai_steps),
+                              ("pool", "--ai-steps", args.ai_steps), ("pool", "--first-player", args.first_player),
                               ("forge", "--clock", args.clock), ("forge", "--heap", args.heap),
                               ("forge", "--forge", args.forge and Path(args.forge).resolve())):
         if value is not None:
@@ -375,6 +377,8 @@ def _add_generation_arguments(parser: argparse.ArgumentParser) -> None:
     passed.add_argument("--max-games", type=int, help="to converge")
     passed.add_argument("--search-budget", type=int, help="to pool, ladder and converge")
     passed.add_argument("--ai-steps", type=int, help=f"to pool, where it defaults to {DEFAULT_AI_STEPS}; 0 turns it off")
+    passed.add_argument("--first-player", choices=FIRST_PLAYER_RULES,
+                        help=f"to pool, where it defaults to {POOL_FIRST_PLAYER}")
     passed.add_argument("--clock", type=int, help="to pool, ladder and converge")
     passed.add_argument("--heap", help="to pool, ladder and converge")
     passed.add_argument("--forge", help="to pool, ladder and converge")
@@ -482,6 +486,10 @@ def _add_run_arguments(batch: argparse.ArgumentParser, run_dir: str = "runs/<tim
     batch.add_argument("--ai-steps", type=int, default=0,
                        help="AI steps per heuristic decision, in place of Forge's wall-clock limit, so that heuristic "
                             f"play replays from its seed (default: off, and {DEFAULT_AI_STEPS} for pool; 0 turns it off)")
+    batch.add_argument("--first-player", choices=FIRST_PLAYER_RULES, default=DEFAULT_FIRST_PLAYER,
+                       help="who goes first in each game after a JVM's first: loser, the loser of the last game, as "
+                            "stock Forge does, or random, a coin flip every game so that games don't depend on each "
+                            f"other (default: {DEFAULT_FIRST_PLAYER}, and {POOL_FIRST_PLAYER} for pool)")
     batch.add_argument("--clock", type=int, default=2400, help="seconds before Forge stops a game (default: 2400)")
     batch.add_argument("--heap", default="2048m", help="-Xmx per JVM (default: 2048m)")
     batch.add_argument("--forge", default=str(DEFAULT_FORGE), help="Forge clone (default: ../forge)")
@@ -537,7 +545,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="share of the games played held-out deck against held-out deck "
                            f"(default: {DEFAULT_HELD_OUT_SHARE})")
     pool.set_defaults(handler=_pool, parser=pool, sim_mode=["heuristic", "heuristic"], records=True,
-                      ai_steps=DEFAULT_AI_STEPS)
+                      ai_steps=DEFAULT_AI_STEPS, first_player=POOL_FIRST_PLAYER)
 
     matchup = commands.add_parser("matchup", help="play two decks in seat-swapped rounds until deck A's win rate "
                                                   "has a narrow enough interval",

@@ -37,6 +37,8 @@ TRACE_HEAD_LINE = re.compile(r"^[\w.$]*(Exception|Error)\b")
 CLOCK_LINE = "Stopping slow match as draw"
 TURN_CAP_LINE = "Stopping game at the turn cap as draw"
 AI_TIMEOUT_LINE = "AI eval thread at timeout:"
+# Forge prints it once with `-firstplayer random`, and a jar from before the flag never does.
+RANDOM_FIRST_PLAYER_LINE = "First player: random each game"
 FATAL_LINES = ("Could not load deck", "Unknown AI profile", "Unknown simulation mode", "Unknown evaluator", "-eval ")
 
 
