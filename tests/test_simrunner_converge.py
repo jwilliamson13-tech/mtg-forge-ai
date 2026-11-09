@@ -43,25 +43,36 @@ def verdict(before, after):
 # Verdicts on fixed tallies
 
 
-def test_overlapping_intervals_converge():
-    # 200 of 400 is 45.1% to 54.9%, and 215 of 400 is 48.8% to 58.6%.
+def test_a_difference_interval_with_zero_in_it_converges():
+    # 200 of 400 against 215 of 400: the difference is +3.75 points, and its interval runs from about -3 to +10.
     result = verdict(estimate("gen0", 200, 400), estimate("gen1", 215, 400))
-    assert result.verdict == CONVERGED and result.why == "the intervals overlap"
+    assert result.verdict == CONVERGED and result.why == "the difference interval contains 0"
+    assert not result.difference.excludes_zero
     assert result.difference.estimate == pytest.approx(0.0375)
 
 
-def test_intervals_apart_have_moved():
-    # 200 of 400 against 250 of 400: 45.1% to 54.9% and 57.6% to 67.2%.
+def test_a_difference_interval_without_zero_has_moved():
+    # 200 of 400 against 250 of 400: the Wilson intervals are 45.1% to 54.9% and 57.6% to 67.2%, apart as well.
     result = verdict(estimate("gen0", 200, 400), estimate("gen1", 250, 400))
-    assert result.verdict == MOVED and result.why == "the intervals don't overlap"
+    assert result.verdict == MOVED and result.why == "the difference interval excludes 0"
     assert result.difference.excludes_zero and result.difference.estimate == pytest.approx(0.125)
 
 
-def test_overlap_is_looser_than_the_difference_interval():
-    # 200 of 400 against 230 of 400 overlap, but the difference's interval leaves out 0.
-    result = verdict(estimate("gen0", 200, 400), estimate("gen1", 230, 400))
-    assert result.verdict == CONVERGED
-    assert result.difference.excludes_zero
+def test_overlapping_wilson_intervals_can_still_have_moved():
+    # 200 of 400 against 230 of 400: the Wilson intervals overlap, which used to pass as converged, but the
+    # difference's interval, +0.6 to +14.3 points, leaves out 0.
+    before, after = estimate("gen0", 200, 400), estimate("gen1", 230, 400)
+    assert before.interval.overlaps(after.interval)
+    result = verdict(before, after)
+    assert result.verdict == MOVED
+    assert result.difference.low == pytest.approx(0.006, abs=0.001)
+    assert result.difference.high == pytest.approx(0.143, abs=0.001)
+
+
+def test_the_verdict_follows_the_sign_of_the_interval_either_way():
+    # A drop is a move as much as a gain.
+    assert verdict(estimate("gen0", 230, 400), estimate("gen1", 200, 400)).verdict == MOVED
+    assert verdict(estimate("gen0", 230, 400), estimate("gen1", 230, 400)).verdict == CONVERGED
 
 
 def test_a_side_without_a_rate_gives_no_verdict_and_says_why():
@@ -131,7 +142,7 @@ def test_each_tracked_matchup_gets_both_estimates_and_a_verdict(converge, monkey
     assert first.difference.estimate == pytest.approx(0.4)
 
     saved = json.loads((tmp_path / "convergence" / RESULT_FILE).read_text(encoding="utf-8"))
-    assert saved["status"] == MOVED and saved["rule"] == "converged when the two Wilson intervals overlap"
+    assert saved["status"] == MOVED and saved["rule"] == "converged when the Newcombe interval for after minus before contains 0"
     assert saved["before"]["label"] == "full" and saved["after"]["label"] == "full:random"
     row = saved["matchups"][0]
     assert (row["slot"], row["deck_a"], row["deck_b"], row["verdict"]) == (1, "held0", "held1", MOVED)
@@ -161,7 +172,7 @@ def test_the_report_lists_both_estimates_and_a_verdict_with_no_bare_percentage(c
     assert re.search(r"1\s+held0\s+held1\s+50\.0% \(40\.4% to 59\.6%\)\s+90\.0% \(82\.6% to 94\.5%\)\s+"
                      + POINTS + r"\s+moved", report)
     assert re.search(r"3\s+held3\s+held4\s+50\.0% \(.*\)\s+50\.0% \(.*\)\s+\+0\.0 points .*converged", report)
-    assert re.search(r"rule\s+converged when the two 95% confidence Wilson intervals overlap", report)
+    assert re.search(r"rule\s+converged when the 95% confidence Newcombe interval for after minus before contains 0", report)
     assert_no_bare_percentage(report)
 
 
