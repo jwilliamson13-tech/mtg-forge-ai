@@ -225,6 +225,75 @@ def test_generation_passes_the_ai_step_budget_to_pool_alone(monkeypatch):
     assert "--ai-steps" not in off.ladder_options + off.converge_options + off.forge_options
 
 
+def test_a_batch_keeps_stock_forges_first_player_unless_asked(config, records):
+    batch = run_batch(config())
+    assert all("-firstplayer" not in run["argv"] for run in records().values())
+    assert batch.clean
+    assert "first player" not in format_summary(batch)
+
+
+def test_a_random_first_player_passes_through_and_is_reported(config, records):
+    batch = run_batch(config(first_player="random"))
+    assert all(run["argv"][run["argv"].index("-firstplayer") + 1] == "random" for run in records().values())
+    assert batch.clean
+    assert all(worker.random_first_player for worker in batch.workers)
+    assert "first player                      random each game\n" in format_summary(batch)
+
+
+def test_a_jar_that_ignores_the_first_player_rule_fails_the_batch(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_first_player_jar")
+    batch = run_batch(config(first_player="random"))
+    assert not batch.clean
+    assert "did not say it flips for the first player of every game" in format_workers(batch)
+
+
+def test_an_unknown_first_player_rule_stops_the_batch(config, records):
+    with pytest.raises(SetupError, match="first player"):
+        run_batch(config(first_player="winner"))
+    assert records() == {}
+
+
+def test_pool_flips_for_the_first_player_by_default_and_the_rest_keep_stock_forges_rule():
+    from simrunner.__main__ import build_parser
+    parser = build_parser()
+    window = ["--start", "23:00", "--stop", "05:00"]
+    assert parser.parse_args(["pool", "--games", "10", "--seed", "1", *window]).first_player == "random"
+    assert parser.parse_args(["pool", "--games", "10", "--seed", "1", *window,
+                              "--first-player", "loser"]).first_player == "loser"
+    for command in (["batch", "a.dck", "b.dck", "--games", "10", "--seed", "1"],
+                    ["nightly", "a.dck", "b.dck", "--games", "10", "--seed", "1", *window],
+                    ["matchup", "a", "b", "--seed", "1"],
+                    ["cardswap", "a", "b", "--seed", "1", "--swap", "X=Y"],
+                    ["ladder", "--players", "heuristic", "full", "--seed", "1"],
+                    ["converge", "full", "full:random", "--seed", "1"]):
+        assert parser.parse_args(command).first_player == "loser", command[0]
+    with pytest.raises(SystemExit):
+        parser.parse_args(["batch", "a.dck", "b.dck", "--games", "10", "--seed", "1", "--first-player", "winner"])
+
+
+def test_generation_passes_the_first_player_rule_to_pool_alone(monkeypatch):
+    from simrunner import loop
+    seen = []
+
+    class Captured(Exception):
+        pass
+
+    def capture(config):
+        seen.append(config)
+        raise Captured
+
+    monkeypatch.setattr(loop, "Loop", capture)
+    base = ["generation", "--from", "heuristic", "--to", "gen0", "--games", "10", "--seed", "1",
+            "--start", "23:00", "--stop", "05:00"]
+    for extra in ([], ["--first-player", "loser"]):
+        with pytest.raises(Captured):
+            main(base + extra)
+    left_out, stock = seen
+    assert "--first-player" not in left_out.pool_options  # so the pool's own default, random, applies
+    assert stock.pool_options[stock.pool_options.index("--first-player") + 1] == "loser"
+    assert "--first-player" not in stock.ladder_options + stock.converge_options + stock.forge_options
+
+
 def test_each_worker_gets_its_own_throwaway_profile(config, records, tmp_path):
     run_batch(config(workers=3))
     runs = list(records().values())

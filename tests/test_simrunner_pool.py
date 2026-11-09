@@ -14,7 +14,7 @@ from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, TRAIN, game_split, 
 from simrunner.__main__ import main
 from simrunner.batch import plan_workers
 from simrunner.pool import plan_pool
-from simrunner.worker import DEFAULT_AI_STEPS
+from simrunner.worker import DEFAULT_AI_STEPS, POOL_FIRST_PLAYER
 
 STUB = Path(__file__).parent / "stub_java.py"
 SPLITS = {deck.id: deck.split for deck in mf.load().decks}
@@ -208,3 +208,36 @@ def test_a_pool_with_the_ai_step_budget_refuses_a_restart_without_it(pool_manife
     with pytest.raises(SystemExit):
         main(pool_args(pool_manifest, forge, run_dir) + ["--ai-steps", "0"])
     assert "different plan, in: ai_steps" in capsys.readouterr().err
+
+
+def test_a_pool_flips_for_the_first_player_of_every_game_by_default(pool_manifest, forge, tmp_path, launches):
+    run_dir = tmp_path / "run"
+    assert main(pool_args(pool_manifest, forge, run_dir)) == 0
+    assert POOL_FIRST_PLAYER == "random"
+    assert all(argv[argv.index("-firstplayer") + 1] == "random" for argv in launches().values())
+    assert json.loads((run_dir / "plan.json").read_text(encoding="utf-8"))["first_player"] == "random"
+
+
+def test_a_pool_from_before_the_first_player_rule_restarts_only_on_stock_forges_rule(pool_manifest, forge, tmp_path,
+                                                                                       capsys, launches):
+    # A plan written before the setting existed has no such key, as a pool played on stock Forge's rule has none.
+    # Played on that rule it has to keep matching, and the new default must not finish its games under another.
+    run_dir = tmp_path / "run"
+    assert main(pool_args(pool_manifest, forge, run_dir) + ["--first-player", "loser"]) == 0
+    assert "first_player" not in json.loads((run_dir / "plan.json").read_text(encoding="utf-8"))
+    assert all("-firstplayer" not in argv for argv in launches().values())
+    assert main(pool_args(pool_manifest, forge, run_dir) + ["--first-player", "loser"]) == 0
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        main(pool_args(pool_manifest, forge, run_dir))
+    assert "different plan, in: first_player" in capsys.readouterr().err
+
+
+def test_a_pool_with_a_random_first_player_refuses_a_restart_on_stock_forges_rule(pool_manifest, forge, tmp_path,
+                                                                                    capsys, launches):
+    run_dir = tmp_path / "run"
+    assert main(pool_args(pool_manifest, forge, run_dir)) == 0
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        main(pool_args(pool_manifest, forge, run_dir) + ["--first-player", "loser"])
+    assert "different plan, in: first_player" in capsys.readouterr().err

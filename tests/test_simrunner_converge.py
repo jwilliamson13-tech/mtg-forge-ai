@@ -196,6 +196,8 @@ def test_a_folder_played_under_other_settings_is_refused(converge, monkeypatch):
         run_converge(converge(width=8.0))
     with pytest.raises(SetupError, match=r"under other settings, in: seed"):
         run_converge(converge(seed=43))
+    with pytest.raises(SetupError, match=r"under other settings, in: first_player"):
+        run_converge(converge(first_player="random"))
 
 
 def test_a_spent_budget_gives_no_verdict_and_exits_1(forge, manifest, tmp_path, monkeypatch, capsys):

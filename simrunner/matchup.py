@@ -23,7 +23,7 @@ from simrunner.interval import DEFAULT_CONFIDENCE, Interval, games_needed, wilso
 from simrunner.output import DrawCause
 from simrunner.report import describe_seat, format_report, table, tripwire_rows, worker_note
 from simrunner.seeds import derive_seed
-from simrunner.worker import Seat, any_seat_searches
+from simrunner.worker import DEFAULT_FIRST_PLAYER, Seat, any_seat_searches
 
 DEFAULT_WIDTH = 5.0  # points either side of the rate. HANDOFF.md: about 400 games at even odds
 DEFAULT_ROUND_GAMES = 100
@@ -320,6 +320,8 @@ def result_fields(result: MatchupResult) -> dict:
         "tripwire": batch.tripwire,
         # only when on, so that a matchup.json written before the setting existed reads as played without it
         **({"ai_steps": batch.ai_steps} if batch.ai_steps else {}),
+        # only off stock Forge's rule, for the same reason
+        **({"first_player": batch.first_player} if batch.first_player != DEFAULT_FIRST_PLAYER else {}),
         "games_attempted": result.attempted,
         "games_finished": result.finished,
         **_tally_fields(result.tally),

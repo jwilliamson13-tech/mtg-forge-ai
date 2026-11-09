@@ -20,6 +20,9 @@ gives every game hits, more of them in odd games. The `no_honest_jar` scenario i
 `-honest`, and writes files without saying it played honestly. The `no_eval_jar` scenario
 ignores `-eval`, as a jar from before issue #23 would, and `stale_jar` ignores it too.
 
+With `-firstplayer random` it prints Forge's `First player: random each game` line, unless the
+`no_first_player_jar` scenario, a jar from before the flag, ignores it.
+
 `-eval onnx:DIR` gets the stderr lines Forge's ONNX evaluator writes: one when it loads a bundle
 folder, once per folder, one per seat that takes a bundle, and a summary per folder at exit. The
 header names such a seat `[eval=onnx]`. A bundle folder with no contract.json stops the run before
@@ -263,6 +266,8 @@ def main() -> int:
     record(argv)
     print("Error handling registered!", flush=True)
     print("Simulation mode", flush=True)
+    if option_is(argv, "-firstplayer", "random") and scenario not in ("stale_jar", "no_first_player_jar"):
+        print("First player: random each game", flush=True)
 
     deck_dir = Path(option(argv, "-D")[0])
     names = []

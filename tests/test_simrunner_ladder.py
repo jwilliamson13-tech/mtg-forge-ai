@@ -264,6 +264,22 @@ def test_other_settings_in_a_ladder_folder_are_refused(ladder, monkeypatch):
         run_ladder(ladder(deck_pairs=2))
 
 
+def test_a_ladder_folder_refuses_a_change_of_first_player_rule_either_way(ladder, monkeypatch, tmp_path):
+    from dataclasses import replace
+    pattern(monkeypatch, "seat1:WL")
+    stock = ladder()
+    flipped = replace(stock, base=replace(stock.base, first_player="random"))
+    run_ladder(stock)
+    assert "first_player" not in json.loads((stock.run_dir / PLAN_FILE).read_text(encoding="utf-8"))
+    with pytest.raises(SetupError, match="other settings, in: first_player"):
+        run_ladder(flipped)
+    other = replace(flipped, base=replace(flipped.base, run_dir=tmp_path / "flipped"))
+    run_ladder(other)
+    assert json.loads((other.run_dir / PLAN_FILE).read_text(encoding="utf-8"))["first_player"] == "random"
+    with pytest.raises(SetupError, match="other settings, in: first_player"):
+        run_ladder(replace(stock, base=replace(stock.base, run_dir=tmp_path / "flipped")))
+
+
 def test_a_generation_whose_weights_changed_under_its_name_is_refused(ladder, monkeypatch, models):
     pattern(monkeypatch, "seat1:WL")
     run_ladder(ladder(("heuristic", "onnx:gen0")))
