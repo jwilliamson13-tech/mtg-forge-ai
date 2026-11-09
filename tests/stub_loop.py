@@ -11,6 +11,7 @@ STUB_LOOP holds a JSON object of knobs. Without it every step succeeds:
 - `sleep`: {step: seconds} to sleep first, so a test can kill a step while it runs.
 - `pool_incomplete`: the pool ends with a failed chunk and exits 1.
 - `tripwire_games`: games with a tripwire hit (default 1), from the first game on.
+- `timeout_games`: games where the AI's eval thread times out (default 1), from game 2 of the first chunk on. Each times out twice.
 - `hidden_named`: hiddencheck names a hidden card and exits 1.
 - `rejected`: files convert rejects, which makes it exit 1.
 - `dropped`: snapshots join drops for an unmatched card, of 1,000 (default 3).
@@ -26,6 +27,10 @@ import os
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # the stub runs as a script
+
+from simrunner.seeds import derive_seed  # noqa: E402
 
 STEPS = {("simrunner", "pool"): "play", ("gamerecord", "hiddencheck"): "hiddencheck",
          ("gamerecord", "convert"): "convert", ("setmodel", "join"): "join", ("setmodel", "train"): "train",
@@ -97,12 +102,12 @@ def pool(args, knobs):
         for game in range(1, chunk["games"] + 1):
             number += 1
             hits = 1 if number <= tripwire_games else 0
-            if chunk["index"] == 0 and game == 2:  # the eval thread times out twice in this game
+            if chunk["index"] == 0 and 2 <= game < 2 + knobs.get("timeout_games", 1):  # times out twice in each
                 out += ["AI eval thread at timeout:", "\tat forge.ai.AiController.canPlaySa(AiController.java:1024)"] * 2
                 err += ["java.util.concurrent.TimeoutException", "\tat java.base/FutureTask.get(FutureTask.java:204)"] * 2
             out += [f"Tripwire: {hits} hits", f"Game Result: Game {game} ended in 100 ms. Ai(1)-x has won!", ""]
             if not failed:
-                game_file(games_folder, run_dir.name, chunk["seed"], game, hits)
+                game_file(games_folder, run_dir.name, derive_seed(chunk["seed"], 0), game, hits)
         (folder / "worker-00.out.log").write_text("\n".join(out) + "\n", encoding="utf-8")
         (folder / "worker-00.err.log").write_text("\n".join(err) + "\n", encoding="utf-8")
         result = {"index": chunk["index"], "status": "failed" if failed else "finished",
@@ -132,9 +137,11 @@ def convert(args, knobs):
     (out / "snapshots" / "batch_id=x").mkdir(parents=True, exist_ok=True)
     rejected = knobs.get("rejected", 0)
     tripwire = knobs.get("tripwire_games", 1)
-    print(f"kept 9\n  win: 9\ndropped {tripwire}\n  tripwire: {tripwire}\n  tripwire game x-1-1: 1 hits\n"
-          f"    forge.ai.ability.PlayAi.chooseSingleCard:173\nrejected {rejected}\nsnapshot rows 1000\n"
-          "card rows 20000\nstack rows 100")
+    listed = [line for line in Path(option(args, "--drop-list")).read_text(encoding="utf-8").splitlines() if line]
+    print(f"kept 9\n  win: 9\ndropped {tripwire + len(listed)}\n  listed: {len(listed)}\n  tripwire: {tripwire}\n"
+          "  tripwire game x-1-1: 1 hits\n    forge.ai.ability.PlayAi.chooseSingleCard:173\n"
+          + "".join(f"  listed game {name}\n" for name in listed)
+          + f"rejected {rejected}\nsnapshot rows 1000\ncard rows 20000\nstack rows 100")
     return 1 if rejected else 0
 
 
@@ -240,7 +247,7 @@ def converge(args, knobs):
     counts = {"converged": 4 - len(moved), "moved": len(moved), "no verdict": 0}
     write_json(run_dir / "convergence.json", {
         "status": "moved" if moved else "converged", "before": {"label": before}, "after": {"label": after},
-        "rule": "converged when the two Wilson intervals overlap", "seed": int(option(args, "--seed")),
+        "rule": "converged when the Newcombe interval for after minus before contains 0", "seed": int(option(args, "--seed")),
         "width_points": 5.0, "confidence": 0.95, "max_games": 4000, "counts": counts, "matchups": rows})
     return 1 if knobs.get("converge_unended") else 0
 

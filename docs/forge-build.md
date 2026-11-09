@@ -393,9 +393,9 @@ python -m simrunner converge onnx:gen0 onnx:gen1 --seed 42
 
 Players are named as for `ladder`. Each tracked matchup is a `matchup` with that player in both seats, deck A first as the manifest lists it, to the target width (`--width`, 5 points by default). Both players use the same seed, round size and budget, so round r of each starts from the same shuffles. The manifest has to have all four slots filled, and the command refuses before any game otherwise.
 
-**The verdict** follows HANDOFF.md and Spec 6. A matchup converged when the two Wilson intervals overlap, and moved when they don't. Touching counts as overlap. A matchup where either player spent its budget or was cut off has no verdict, and the report says which player and how many more games it needs. Overall, the check moved if any matchup moved, converged only if all four converged, and is incomplete otherwise.
+**The verdict** reads the difference, after minus before, with Newcombe's hybrid score interval (method 10, the one `cardswap` uses, from `simrunner.interval.newcombe`). A matchup converged when that interval contains 0 and moved when it excludes 0. A matchup where either player spent its budget or was cut off has no verdict, and the report says which player and how many more games it needs. Overall, the check moved if any matchup moved, converged only if all four converged, and is incomplete otherwise.
 
-**The difference** is there to read alongside. The report gives after minus before with Newcombe's hybrid score interval, as `cardswap` does. Overlap is the looser test of the two: 200 wins in 400 against 230 in 400 overlap, so the matchup converged, while the difference's interval, +0.6 to +14.3 points, leaves out 0. Two intervals of 5 points each overlap until the rates are about 10 points apart, and the difference flags a move from about 7. The verdict stays the overlap because that's the rule as written. Switching it to the difference is a one-line change in `Verdict.verdict`.
+**Why not overlap.** The check first called a matchup converged when the two Wilson intervals overlapped, which is how HANDOFF.md and Spec 6 word the gate. That test is lenient. Two intervals of 5 points each overlap until the rates are about 10 points apart, while the difference's interval excludes 0 from about 7. At 400 games a side, 200 wins against 230 overlap, and the difference's interval, +0.6 to +14.3 points, leaves out 0, so that pair now reads as moved. The JSON keeps `difference` with the same fields it had, and `rule` and each matchup's `why` carry the new wording. The method takes the two players' games as independent, and shared seeds make them agree more often than that, so the interval is wider than it has to be. A move it flags is real, and a small one can slip under it.
 
 **Reuse.** A matchup's folder is named for its player and decks, `runs\convergence\<player>\<deck A>--<deck B>\`. The generation loop checks gen 1 against gen 0, then gen 2 against gen 1, and the second check reuses gen 1's four matchups. A folder is reused only when its matchup ended, target met or budget spent, under the same settings: seed, workers, width, confidence, round size, budget, clock, search budget, records, honest play, turn cap, tripwire, and each side's deck, mode, evaluator and generation, with the model digest. Workers matter because they split the seeds. A folder with other settings is refused, with the settings that differ. A matchup that failed or was cut off by the hard stop is moved aside to `<deck A>--<deck B>-unfinished-N` and played again.
 
@@ -425,9 +425,9 @@ python -m simrunner generation --from gen0 --to gen1 --games 10000 --seed 202611
 | Step | Command | Stops the loop when |
 |---|---|---|
 | `play` | `simrunner pool`, the source player in both seats | any chunk is unfinished or failed |
-| `check` | reads the pool folder, in the loop | more than `--max-tripwire-share` of games, 1% by default, had tripwire hits, or the tripwire was off |
+| `check` | reads the pool folder, in the loop, and writes the AI-timeout game list | more than `--max-tripwire-share` of games, 1% by default, had tripwire hits, or the tripwire was off, or more than `--max-timeout-share` of games, 1% by default, had a Forge AI timeout |
 | `hiddencheck` | `gamerecord hiddencheck` | record ids name a hidden card |
-| `convert` | `gamerecord convert --drop-tripwire-hits` | any game file is rejected |
+| `convert` | `gamerecord convert --drop-tripwire-hits --drop-list ai-timeout-games.txt` | any game file is rejected |
 | `join` | `setmodel join` | more than `--max-drop-share` of snapshots, 1% by default, drop for an unmatched card |
 | `train` | `setmodel train --generation k+1` | the metrics name another generation |
 | `ablate` | `setmodel ablate` | kill criterion 2 fails: full beats no_cards by under 5 points of held-out accuracy |
@@ -437,7 +437,9 @@ python -m simrunner generation --from gen0 --to gen1 --games 10000 --seed 202611
 | `converge` | `simrunner converge` source against gen{k+1} | a tracked matchup hasn't ended |
 | `log` | appends to `results\log.jsonl` and rebuilds `results\log.md`, in the loop | |
 
-The 2026-11-07 gen-0 pool is why `check` exists. Its report said 1 of 10,000 games had a tripwire hit and 418 stack traces, and nothing more. `check` names the game, `gen0-pool-80267367397852-35`, and its signature, `face-down: forge.ai.ability.PlayAi.chooseSingleCard:173`. It also shows that all 418 traces were the AI's eval-thread `TimeoutException`, spread over 6 games of one chunk, with 318 of them in game 32 of chunk 160. A game with a tripwire hit never reaches training, because `convert --drop-tripwire-hits` leaves it out and names it. Games with AI timeouts are counted and kept. Over the share, the loop stops instead, since that many hits means a peek to fix before any more data.
+The 2026-11-07 gen-0 pool is why `check` exists. Its report said 1 of 10,000 games had a tripwire hit and 418 stack traces, and nothing more. `check` names the game, `gen0-pool-80267367397852-35`, and its signature, `face-down: forge.ai.ability.PlayAi.chooseSingleCard:173`. It also shows that all 418 traces were the AI's eval-thread `TimeoutException`, spread over 6 games of one chunk, with 318 of them in game 32 of chunk 160. A game with a tripwire hit never reaches training, because `convert --drop-tripwire-hits` leaves it out and names it. Games with AI timeouts are left out the same way. `check` names each one's game file in `ai-timeout-games.txt` in the generation's folder (from the worker logs' `AI eval thread at timeout:` lines, matched to the file by the chunk's worker seed and the game number), and `convert --drop-list` skips those files and counts them as dropped under `ai_timeout`. This is what was done by hand for gen 0 on 2026-11-08: `runs\gen0-train-records-v2` was the pool's 10,000 files minus the 1 tripwire game and these 6 timeout games. A game with both is counted as a tripwire game. The step record's `convert` summary has `ai_timeout_games` with how many were listed, how many convert dropped, and the file names, and the results log lists the files under the check's data.
+
+Both rules have a gate on their share of games. Tripwire hits over `--max-tripwire-share` stop the loop, since that many hits means a peek to fix before any more data. AI-timeout games over `--max-timeout-share` stop it too, at 1% by default. Gen 0 had 6 of 10,000, 0.06%, so the line is well clear of it. A timeout game is a slow or stuck one, so a game that hits the line means the pool is dominated by states where the AI stalls, and dropping that many would train on a skewed sample. The line is a guess at "rare enough to drop without bias". Move it with the flag. The count only sees the heuristic AI's eval thread. Full sim searches on the game thread and prints no such line, so a pool played by a searching generation reports 0 timeout games whatever happened.
 
 **Resuming.** A step that finishes writes `steps\<step>.json` with its command, log, exit code, time, peak memory and what its gate read. The next start skips every step whose record and outputs are still there, and runs the first one that isn't, plus everything after it. A step that ran again makes everything after it run again too, so a stale model never reaches the ladder. `--redo STEP` forces a step and all that follow. A finished pool folder from before the loop, such as `runs\gen0-pool`, is adopted through `--data-dir` without replaying, as long as its seed, games, modes and generation match the command. A different pool in that folder is refused before anything runs.
 
@@ -453,6 +455,7 @@ The 2026-11-07 gen-0 pool is why `check` exists. Its report said 1 of 10,000 gam
 runs\generations\gen{k+1}\
     pool\               the data pool, unless --data-dir names another
     check.json          what check read: tripwire games, AI timeouts, stack traces, record counts
+    ai-timeout-games.txt  the game files convert leaves out for AI timeouts, one per line
     parquet\  model\  ablation\
     logs\<step>.log     each command's output, its command line first
     steps\<step>.json   each finished step's record
@@ -480,7 +483,7 @@ The page never prints a bare percentage. A win rate carries its interval and gam
 ```
 ### Convergence
 
-- onnx:gen0 against onnx:gen1: moved, 3 converged, 1 moved, 0 with no verdict. Seed 42, target half-width 5.0 points, converged when the two Wilson intervals overlap.
+- onnx:gen0 against onnx:gen1: moved, 3 converged, 1 moved, 0 with no verdict. Seed 42, target half-width 5.0 points, converged when the Newcombe interval for after minus before contains 0.
 
 | Slot | Deck A | Deck B | onnx:gen0 win rate | onnx:gen1 win rate | Verdict |
 |---|---|---|---|---|---|

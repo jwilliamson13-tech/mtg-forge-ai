@@ -313,3 +313,53 @@ def test_the_command_drops_tripwire_games_on_request(tmp_path, game_file, out, c
     assert "tripwire: 1" in printed
     assert f"tripwire game {GAME_ID}: 3 hits" in printed
     assert "    forge.ai.ability.ClashAi.checkApi:72" in printed
+
+
+def test_listed_files_are_left_out_and_named(tmp_path, game_file, out):
+    folder = tmp_path / "night"
+    kept = game_file("win", folder)
+    other = game_file("draw_clock", folder)
+
+    report = convert_folder(folder, out, drop_files={kept.name})
+
+    assert report.kept == {} and report.dropped == {"listed": 1, "draw_clock": 1}
+    assert report.listed_games == [kept.name] and other.name not in report.listed_games
+
+
+def test_a_listed_file_that_is_not_there_changes_nothing(tmp_path, game_file, out):
+    folder = tmp_path / "night"
+    game_file("win", folder)
+
+    report = convert_folder(folder, out, drop_files={"no-such-game.jsonl.gz"})
+
+    assert report.kept == {"win": 1} and report.dropped == {} and report.listed_games == []
+
+
+def test_a_tripwire_game_that_is_also_listed_counts_as_a_tripwire_game(night, out):
+    names = {path.name for path in night.glob("*.jsonl.gz")}
+
+    report = convert_folder(night, out, drop_tripwire_hits=True, drop_files=names)
+
+    assert report.dropped["tripwire"] == 1 and report.dropped["listed"] == 2  # the two draws; the exception game and the rejected files are not counted
+    assert len(report.tripwire_games) == 1
+
+
+def test_the_command_takes_a_drop_list_and_names_each_file(tmp_path, game_file, out, capsys):
+    folder = tmp_path / "night"
+    path = game_file("win", folder)
+    game_file("draw_clock", folder)
+    listing = tmp_path / "drop.txt"
+    listing.write_text(f"{path.name}\n\n", encoding="utf-8")
+
+    assert main(["convert", str(folder), str(out), "--drop-list", str(listing)]) == 0
+    printed = capsys.readouterr().out
+    assert "kept 0" in printed and "  listed: 1" in printed
+    assert f"  listed game {path.name}" in printed
+
+
+def test_a_drop_list_that_cannot_be_read_is_an_error(tmp_path, game_file, out):
+    folder = tmp_path / "night"
+    game_file("win", folder)
+
+    with pytest.raises(SystemExit):
+        main(["convert", str(folder), str(out), "--drop-list", str(tmp_path / "missing.txt")])
