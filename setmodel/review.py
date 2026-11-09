@@ -33,8 +33,10 @@ def ablation_rows(results: dict[str, dict]) -> list[dict]:
     rows = []
     for name, metrics in results.items():
         accuracy = _points(metrics["held_out"]["accuracy"])
+        kept = (metrics.get("validation") or {}).get("kept")
         rows.append({"run": name, "accuracy": accuracy, "log_loss": metrics["held_out"]["log_loss"],
-                     "vs_full": None if accuracy is None or full is None else accuracy - full})
+                     "vs_full": None if accuracy is None or full is None else accuracy - full,
+                     "kept_epoch": None if kept is None else kept["epoch"]})
     return rows
 
 
@@ -52,14 +54,20 @@ def format_table(rows: list[dict], verdict: str) -> str:
     def cell(value: float | None, digits: int) -> str:
         return "n/a" if value is None else f"{value:.{digits}f}"
 
-    lines = ["| Run | Held-out accuracy (%) | Held-out log loss | Against full (points) |", "|---|---|---|---|"]
-    lines += [f"| {r['run']} | {cell(r['accuracy'], 2)} | {cell(r['log_loss'], 4)} | {cell(r['vs_full'], 2)} |"
+    lines = ["| Run | Held-out accuracy (%) | Held-out log loss | Against full (points) | Kept at epoch |",
+             "|---|---|---|---|---|"]
+    lines += [f"| {r['run']} | {cell(r['accuracy'], 2)} | {cell(r['log_loss'], 4)} | {cell(r['vs_full'], 2)} | "
+              f"{cell(r.get('kept_epoch'), 2)} |"
               for r in rows]
     return "\n".join(lines) + f"\n\n{verdict}\n"
 
 
 def run_ablations(corpus: Corpus, vocab: Vocabulary, config: TrainConfig, out: str | Path) -> str:
-    """Train the full model and the four ablations, same seed and settings, and write the table."""
+    """Train the full model and the four ablations, same seed and settings, and write the table.
+
+    Every run stops by the same rule, on the same validation games (the split depends on the seed and the corpus,
+    not the ablation), so each model is compared at its own best point, not after a fixed epoch count.
+    """
     out = Path(out)
     results = {name: run(corpus, vocab, replace(config, ablation=name), out / name) for name in (FULL, *ABLATIONS)}
     rows = ablation_rows(results)

@@ -1,4 +1,4 @@
-# Training
+﻿# Training
 
 `setmodel` turns game records and parsed cards into a trained model and an export bundle for Forge. `game-record.md` has its input tables, `card-structure.md` its card format, and `tensor-contract.md` what it hands Forge.
 
@@ -42,7 +42,7 @@ python -m setmodel pairtest MODEL CARDS [--fixture FILE]
 python -m setmodel parity MODEL PARQUET CARDS MANIFEST SCORES
 ```
 
-`join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
+`join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device`, `--weight-decay`, `--val-share`, `--eval-every`, `--patience` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
 
 ## Rows
 
@@ -137,12 +137,38 @@ Mean pooling can't count. One bear and five bears pool to the same `battlefield`
 | `held_out` | `log_loss`, `accuracy`, `rows` and `games` over both held-out splits. Ablations compare this. |
 | `held_out_games`, `held_out_decks` | The same, per split. |
 | `per_deck_accuracy` | The same, for each held-out deck in the manifest, over rows where it is this side's deck. |
-| `epoch_loss` | Training loss per epoch, the weighted mean over its rows. |
+| `epoch_loss` | Training loss per epoch, the weighted mean over its rows. The last entry covers a part of an epoch when the run stopped inside it. |
+| `validation` | The early-stopping record: `share`, `games`, `rows`, `eval_every`, `patience`, `stopped_early`, `kept`, and `curve`. See Early stopping. |
 | `truncation` | How often each cap bit. See `tensor-contract.md`. |
 | `join` | The join report, with unmatched names and ambiguous names and their counts. |
 | `device`, `torch`, `seconds`, `config` | What ran. |
 
 Scores are null when a split is empty, because 0 would read as a result.
+
+## Early stopping
+
+Gen 0's first real run (9,958 games, 2.45M snapshots, 7,618 training games) trained a fixed 10 epochs and overfit from epoch 2. Held-out numbers after each epoch, both held-out splits together:
+
+| Epoch | Train loss | Held-out log loss | Held-out accuracy |
+|---|---|---|---|
+| 1 | 0.338 | 0.429 | 81.1% |
+| 2 | 0.258 | 0.542 | 79.0% |
+| 3 | 0.204 | 0.668 | 78.2% |
+| 4 | 0.171 | 0.778 | 78.0% |
+| 5 | 0.150 | 0.822 | 78.2% |
+| 10 (shipped) | 0.106 | 1.140 | 76.1% |
+
+Held-out predictions above 0.99 or below 0.01 went from 22% of them at epoch 1 to 52% at epoch 5. Every snapshot in a game has the game's label, so one game is about 250 near-copy rows, and the model can memorize games.
+
+`train` now holds back `--val-share` of the training games (default 0.1) and scores them during training. The split is by whole game, never by row, and it is drawn from the training split only: a game in `held_out_games` or `held_out_decks` is never read, by the weights or by the stopping rule. The draw uses its own generator seeded from `--seed`, at least one game goes each way, and a corpus with fewer than two training games, or `--val-share 0`, has no validation and trains all `--epochs` as before.
+
+The model is scored on the validation games every `--eval-every` batches (default 2000) and at the end of each epoch. At batch size 256 and gen 0's 1.7M fitting rows an epoch is about 6,600 batches, so that is about 3 scores in epoch 1 plus the end of each epoch. The best score so far is a copy of the weights. After `--patience` scores in a row with no lower validation log loss (default 4) the run stops, and the copy of the best weights is restored before `model.pt` and the held-out report are written. `--epochs` stays the cap. `--eval-every 0` scores at epoch ends only, which is cheaper and can miss a best point inside epoch 1. A score runs the model forward, with no backward pass, over the validation rows, about 10% of the fitting rows. That should cost about 4% of an epoch per score, an estimate from row counts that nobody has timed on gen 0 yet. At the defaults that is roughly 3 scores per epoch, so about 12% extra.
+
+`--weight-decay` (default 0) switches the optimizer to AdamW's decoupled decay. At 0 it is plain Adam.
+
+`metrics.json` `validation.curve` has one point per score: `step`, `epoch` (fractional inside an epoch), `train_loss` (the weighted mean since the last score), `val_log_loss` and `val_accuracy`. `validation.kept` is the curve point whose weights were saved. The held-out numbers in the report are for those weights. `train_rows` and `train_games` in the artifact's metadata still count the whole training split, validation games included. The vocabulary, caps and key scales come from the whole training split too, which is features and not labels.
+
+The loop (`simrunner/loop.py`) calls `train` and `ablate` without these flags, so it gets the defaults, and its `train` summary carries `kept` and `stopped_early`.
 
 ## Ablations
 
@@ -156,7 +182,7 @@ Scores are null when a split is empty, because 0 would read as a result.
 | `no_live_state` | All live state. Cards are as printed. |
 | `no_numbers` | Keyed values. Each key stays present with a value of 1, as a token would. |
 
-The table has one row per run, with the columns `Run`, `Held-out accuracy (%)`, `Held-out log loss` and `Against full (points)`. One line under it gives kill criterion 2. The full model must beat `no_cards` by at least 5 points of held-out accuracy, the `KILL_MARGIN_POINTS` in `setmodel/review.py`. Post the real table on the issue when real data exists.
+Every run, the full model and the four ablations, stops by the early-stopping rule above, on the same validation games. Kill criterion 2 therefore compares models that each stopped at their own best validation point, not models cut off at the same epoch. The split depends on the seed and the corpus, not on the ablation. The table has one row per run, with the columns `Run`, `Held-out accuracy (%)`, `Held-out log loss`, `Against full (points)` and `Kept at epoch`. One line under it gives kill criterion 2. The full model must beat `no_cards` by at least 5 points of held-out accuracy, the `KILL_MARGIN_POINTS` in `setmodel/review.py`. Post the real table on the issue when real data exists.
 
 ## Pair test
 

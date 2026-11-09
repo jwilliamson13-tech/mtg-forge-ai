@@ -631,7 +631,9 @@ class Loop:
                 "held_out_decks": metrics.get("held_out_decks"), "device": metrics.get("device"),
                 "torch": metrics.get("torch"), "seconds": metrics.get("seconds"), "epochs": config.get("epochs"),
                 "seed": config.get("seed"), "config": config,
-                "last_epoch_loss": (metrics.get("epoch_loss") or [None])[-1]}
+                "last_epoch_loss": (metrics.get("epoch_loss") or [None])[-1],
+                "kept": (metrics.get("validation") or {}).get("kept"),
+                "stopped_early": (metrics.get("validation") or {}).get("stopped_early")}
 
     def _gate_ablate(self, ran: Ran | None) -> dict:
         self._require_exit("ablate", ran)

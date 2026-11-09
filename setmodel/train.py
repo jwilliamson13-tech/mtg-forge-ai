@@ -39,6 +39,11 @@ class Trained:
     config: TrainConfig
     device: str
     epoch_losses: list[float] = field(default_factory=list)
+    curve: list[dict] = field(default_factory=list)  # one point per validation score
+    kept: dict | None = None  # the curve point whose weights the model holds, None without validation
+    stopped_early: bool = False
+    val_rows: int = 0
+    val_games: int = 0
 
 
 def pick_device(device: str) -> str:
@@ -93,34 +98,98 @@ def _logits(model: SetModel, batch: dict[str, torch.Tensor]) -> torch.Tensor:
     return model.score(text[batch["slot"]], batch["live"], batch["zone"], batch["row"], batch["scoreboard"])
 
 
+def validation_split(corpus: Corpus, rows: np.ndarray, share: float, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """Split these training rows into (fit, validation) by whole game.
+
+    Rows of one game share a label and are near copies, so a split by row would score the model on games it
+    trained on. `share` of the games, at least one and never all, go to validation, drawn from a seeded generator
+    of their own so the shuffler's stream doesn't change. A corpus with under two training games, or a share of 0,
+    has no validation rows.
+    """
+    if not 0 <= share < 1:
+        raise ValueError(f"val_share must be in [0, 1), got {share}")
+    games = np.unique(corpus.game[rows])
+    if share == 0 or len(games) < 2:
+        return rows, rows[:0]
+    count = min(max(1, round(share * len(games))), len(games) - 1)
+    chosen = np.random.default_rng([seed, 1]).permutation(games)[:count]
+    held = np.isin(corpus.game[rows], chosen)
+    return rows[~held], rows[held]
+
+
 def train(corpus: Corpus, vocab: Vocabulary, config: TrainConfig) -> Trained:
-    """Train on the corpus's training rows. Held-out rows are never read here."""
+    """Train on the corpus's training rows. Held-out rows are never read here.
+
+    `val_share` of the training games are held back, and their log loss picks when to stop: it is scored every
+    `eval_every` batches and at each epoch's end, the best state is kept, and the run stops after `patience`
+    scores without an improvement. The kept state is restored before this returns.
+    """
     device = pick_device(config.device)
     torch.manual_seed(config.seed)
     shuffler = np.random.default_rng(config.seed)
     key_scale = corpus.key_scales()
     corpus = ablated(corpus, config.ablation, key_scale)
-    rows = corpus.rows(TRAIN)
-    if not len(rows):
+    all_rows = corpus.rows(TRAIN)
+    if not len(all_rows):
         raise ValueError("no training rows")
+    rows, val_rows = validation_split(corpus, all_rows, config.val_share, config.seed)
     loss_scale = float(corpus.weights[rows].mean()) * config.batch_size
 
     model_config = ModelConfig(len(vocab.tokens), len(vocab.numeric_keys), config.width)
     model = SetModel(model_config, torch.as_tensor(key_scale)).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     trained = Trained(model, vocab, config, device)
-    for _ in range(config.epochs):
+    trained.val_rows, trained.val_games = int(len(val_rows)), int(len(np.unique(corpus.game[val_rows])))
+    best_state, best_loss, since_best, step = None, float("inf"), 0, 0
+    window_total, window_rows = 0.0, 0
+
+    def evaluate(epoch: float) -> bool:
+        """Score the validation games, keep the state if it is the best yet, and say whether to stop."""
+        nonlocal best_state, best_loss, since_best, window_total, window_rows
+        scores = _scores(corpus, val_rows, probabilities(trained, corpus, val_rows))
+        point = {"step": step, "epoch": round(epoch, 4), "train_loss": window_total / window_rows,
+                 "val_log_loss": scores["log_loss"], "val_accuracy": scores["accuracy"]}
+        trained.curve.append(point)
+        window_total, window_rows = 0.0, 0
+        if scores["log_loss"] < best_loss:
+            best_loss, since_best = scores["log_loss"], 0
+            best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+            trained.kept = point
+        else:
+            since_best += 1
         model.train()
-        total = 0.0
+        return since_best >= config.patience
+
+    stop = False
+    for epoch in range(config.epochs):
+        model.train()
+        total, seen = 0.0, 0
         order = shuffler.permutation(rows)
         for start in range(0, len(order), config.batch_size):
-            batch = _batch(corpus, order[start:start + config.batch_size], device)
+            chunk = order[start:start + config.batch_size]
+            batch = _batch(corpus, chunk, device)
             loss = weighted_loss(_logits(model, batch), batch["labels"], batch["weights"], loss_scale)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             total += loss.item() * config.batch_size
-        trained.epoch_losses.append(total / len(order))
+            seen += len(chunk)
+            window_total += loss.item() * config.batch_size
+            window_rows += len(chunk)
+            step += 1
+            if len(val_rows) and config.eval_every and step % config.eval_every == 0 and start + config.batch_size < len(order):
+                if evaluate(epoch + (start + len(chunk)) / len(order)):
+                    stop = True
+                    break
+        trained.epoch_losses.append(total / seen)
+        if stop:
+            break
+        if len(val_rows) and evaluate(epoch + 1):
+            stop = True
+            break
+    trained.stopped_early = stop
+    if best_state is not None:
+        model.load_state_dict(best_state)
     return trained
 
 
@@ -176,7 +245,11 @@ def save_run(trained: Trained, corpus: Corpus, out: str | Path, seconds: float) 
                 "train_rows": int(len(corpus.rows(TRAIN))),
                 "train_games": int(len(np.unique(corpus.game[corpus.rows(TRAIN)]))),
                 "torch": str(torch.__version__), "device": _device_name(trained.device)}
-    metrics = {**metadata, **report(trained, corpus), "epoch_loss": trained.epoch_losses, "seconds": seconds,
+    metrics = {**metadata, **report(trained, corpus), "epoch_loss": trained.epoch_losses,
+               "validation": {"share": config.val_share, "games": trained.val_games, "rows": trained.val_rows,
+                              "eval_every": config.eval_every, "patience": config.patience,
+                              "stopped_early": trained.stopped_early, "kept": trained.kept, "curve": trained.curve},
+               "seconds": seconds,
                "truncation": corpus.truncation(), "join": corpus.report.to_dict(), "config": asdict(config)}
     (out / METRICS_FILE).write_text(json.dumps(metrics, indent=1) + "\n", encoding="utf-8")
     torch.save({"state_dict": {k: v.cpu() for k, v in trained.model.state_dict().items()},

@@ -1,8 +1,9 @@
-"""The training command, end to end on the synthetic corpus: files in, artifact and report out."""
+﻿"""The training command, end to end on the synthetic corpus: files in, artifact and report out."""
 
 import json
 import subprocess
 import sys
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -10,9 +11,9 @@ import torch
 
 from setmodel import train as training
 from setmodel.__main__ import main
-from setmodel.dataset import HELD_OUT_DECKS, TRAIN, ZONE_IDS, load_corpus
+from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, load_corpus
 from setmodel.train import (GRAVEYARD_EXILE, METRICS_FILE, MODEL_FILE, NO_CARDS, NO_GRAVEYARD_EXILE, NO_LIVE_STATE,
-                            TrainConfig, ablated, load_model, probabilities, report, train)
+                            TrainConfig, ablated, load_model, probabilities, report, train, validation_split)
 from tests.setmodel_corpus import (BATCH, HELD_OUT_DECK, card_table, manifest, smoke_games, vocabulary, write_dump,
                                    write_manifest, write_parquet)
 
@@ -97,7 +98,8 @@ def test_a_short_last_batch_gives_each_row_the_same_gradient_scale_as_a_full_bat
     corpus = load_corpus(write_parquet(smoke_games(), tmp_path), card_table(), vocabulary(), manifest(), game_share=0.0)
     rows = len(corpus.rows(TRAIN))
     batch_size = rows - 1  # one full batch, then a batch of one row
-    trained = train(corpus, vocabulary(), TrainConfig(epochs=1, batch_size=batch_size, width=8, device="cpu"))
+    config = TrainConfig(epochs=1, batch_size=batch_size, width=8, device="cpu", val_share=0.0)
+    trained = train(corpus, vocabulary(), config)
 
     assert [len(labels) for _, labels, _ in seen] == [batch_size, 1]
     per_row = [logits.grad / (weights * (torch.sigmoid(logits) - labels)) for logits, labels, weights in seen]
@@ -128,3 +130,134 @@ def test_the_zone_and_live_state_ablations_take_away_only_what_they_name(tmp_pat
     assert kept.tolist() == positions[~gone].tolist() and kept_owner.tolist() == owner[~gone].tolist()
     blank = ablated(corpus, NO_LIVE_STATE, corpus.key_scales())
     assert corpus.live(positions).any() and not blank.live(positions).any()
+
+
+# Early stopping
+
+def smoke_corpus(tmp_path, **kwargs):
+    return load_corpus(write_parquet(smoke_games(), tmp_path), card_table(), vocabulary(), manifest(), **kwargs)
+
+
+def test_the_validation_split_is_by_game_from_train_games_only_and_fixed_by_seed(tmp_path):
+    corpus = smoke_corpus(tmp_path, game_share=0.0)
+    rows = corpus.rows(TRAIN)
+    fit, val = validation_split(corpus, rows, 0.2, seed=3)
+    fit_games, val_games = set(corpus.game[fit].tolist()), set(corpus.game[val].tolist())
+    assert val_games and fit_games and not fit_games & val_games
+    assert len(fit) + len(val) == len(rows) and set(fit) | set(val) == set(rows)
+    assert set(corpus.split[val]) == {SPLITS.index(TRAIN)}
+    assert len(val_games) == round(0.2 * len(fit_games | val_games))
+    again = validation_split(corpus, rows, 0.2, seed=3)[1]
+    other = {tuple(validation_split(corpus, rows, 0.2, seed=n)[1]) for n in range(8)}
+    assert val.tolist() == again.tolist() and len(other) > 1
+
+
+def test_the_validation_split_keeps_at_least_one_game_on_each_side(tmp_path):
+    corpus = smoke_corpus(tmp_path, game_share=0.0)
+    rows = corpus.rows(TRAIN)
+    games = len(np.unique(corpus.game[rows]))
+    tiny = validation_split(corpus, rows, 0.001, seed=0)[1]
+    huge = validation_split(corpus, rows, 0.999, seed=0)[0]
+    assert len(np.unique(corpus.game[tiny])) == 1 and len(np.unique(corpus.game[huge])) == 1 and games > 2
+    assert not len(validation_split(corpus, rows, 0.0, seed=0)[1])
+    one_game = rows[corpus.game[rows] == corpus.game[rows][0]]
+    assert not len(validation_split(corpus, one_game, 0.5, seed=0)[1])
+    with pytest.raises(ValueError):
+        validation_split(corpus, rows, 1.0, seed=0)
+
+
+def test_training_and_validation_read_only_train_rows_and_the_weights_never_see_validation_rows(tmp_path, monkeypatch):
+    corpus = smoke_corpus(tmp_path)
+    held = set(corpus.rows(HELD_OUT_GAMES, HELD_OUT_DECKS).tolist())
+    assert held
+    seen = {"train": set(), "validation": set()}
+    real = training._batch
+
+    def spy(corpus_, rows, device):
+        caller = sys._getframe(1).f_code.co_name
+        seen["validation" if caller == "probabilities" else "train"].update(rows.tolist())
+        return real(corpus_, rows, device)
+
+    monkeypatch.setattr(training, "_batch", spy)
+    trained = train(corpus, vocabulary(), TrainConfig(epochs=2, width=8, device="cpu", val_share=0.25))
+    assert trained.val_games >= 1 and trained.curve
+    assert not (seen["train"] | seen["validation"]) & held
+    assert not seen["train"] & seen["validation"]
+    assert seen["validation"] and seen["train"] | seen["validation"] == set(corpus.rows(TRAIN).tolist())
+
+
+def test_the_best_state_is_restored_and_the_run_stops_after_patience(tmp_path, monkeypatch):
+    corpus = smoke_corpus(tmp_path)
+    script = iter([0.50, 0.40, 0.45, 0.60, 0.70, 0.80, 0.90])
+    states = []
+    real_probabilities = training.probabilities
+
+    def spy_probabilities(trained, corpus_, rows):
+        states.append({k: v.detach().clone() for k, v in trained.model.state_dict().items()})
+        return real_probabilities(trained, corpus_, rows)
+
+    monkeypatch.setattr(training, "probabilities", spy_probabilities)
+    monkeypatch.setattr(training, "_scores", lambda *_: {"log_loss": next(script), "accuracy": 0.5})
+    trained = train(corpus, vocabulary(), TrainConfig(epochs=10, width=8, device="cpu", eval_every=0, patience=2))
+    assert [point["val_log_loss"] for point in trained.curve] == [0.50, 0.40, 0.45, 0.60]
+    assert trained.stopped_early and trained.kept["val_log_loss"] == 0.40 and trained.kept["epoch"] == 2
+    assert len(trained.epoch_losses) == 4
+    final = trained.model.state_dict()
+    assert all(torch.equal(final[name], states[1][name]) for name in final)
+    assert not all(torch.equal(final[name], states[3][name]) for name in final)
+
+
+def test_a_run_that_keeps_improving_goes_to_the_epoch_cap(tmp_path, monkeypatch):
+    corpus = smoke_corpus(tmp_path)
+    losses = iter([0.5, 0.4, 0.3])
+    monkeypatch.setattr(training, "_scores", lambda *_: {"log_loss": next(losses), "accuracy": 0.5})
+    trained = train(corpus, vocabulary(), TrainConfig(epochs=3, width=8, device="cpu", eval_every=0, patience=1))
+    assert not trained.stopped_early and trained.kept["epoch"] == 3 and len(trained.epoch_losses) == 3
+
+
+def test_validation_can_score_inside_an_epoch(tmp_path):
+    corpus = smoke_corpus(tmp_path)
+    config = TrainConfig(epochs=2, batch_size=4, width=8, device="cpu", eval_every=5, patience=1000)
+    trained = train(corpus, vocabulary(), config)
+    steps = [point["step"] for point in trained.curve]
+    assert steps[:3] == [5, 10, 14] and len(steps) > 4  # 14 batches an epoch, so the epoch's end scores at 14
+    epochs = [point["epoch"] for point in trained.curve]
+    assert epochs == sorted(epochs) and epochs[-1] == 2.0 and epochs[0] < 1
+    assert all(point["val_accuracy"] is not None and point["train_loss"] > 0 for point in trained.curve)
+
+
+def test_without_validation_every_epoch_runs_and_the_last_state_is_kept(tmp_path):
+    corpus = smoke_corpus(tmp_path)
+    trained = train(corpus, vocabulary(), TrainConfig(epochs=3, width=8, device="cpu", val_share=0.0))
+    assert trained.curve == [] and trained.kept is None and not trained.stopped_early and trained.val_rows == 0
+    assert len(trained.epoch_losses) == 3
+
+
+def test_weight_decay_changes_the_weights_and_zero_matches_the_default(tmp_path):
+    corpus = smoke_corpus(tmp_path)
+    base = TrainConfig(epochs=1, width=8, device="cpu", val_share=0.0)
+    plain = train(corpus, vocabulary(), base).model.state_dict()
+    zero = train(corpus, vocabulary(), replace(base, weight_decay=0.0)).model.state_dict()
+    decayed = train(corpus, vocabulary(), replace(base, weight_decay=0.5)).model.state_dict()
+    assert all(torch.equal(plain[name], zero[name]) for name in plain)
+    assert not all(torch.equal(plain[name], decayed[name]) for name in plain)
+
+
+def test_the_metrics_record_the_curve_and_the_kept_point(run):
+    metrics = json.loads((run / METRICS_FILE).read_text(encoding="utf-8"))
+    validation = metrics["validation"]
+    assert validation["share"] == 0.1 and validation["patience"] == 4 and validation["games"] >= 1
+    assert validation["rows"] > 0 and len(validation["curve"]) == 2  # 2 epochs, and eval_every 2000 is past them
+    assert set(validation["curve"][0]) == {"step", "epoch", "train_loss", "val_log_loss", "val_accuracy"}
+    assert validation["kept"] in validation["curve"]
+    assert metrics["config"]["eval_every"] == 2000 and metrics["config"]["weight_decay"] == 0.0
+
+
+def test_the_command_line_takes_the_stopping_flags():
+    from setmodel.__main__ import _config, build_parser
+    args = build_parser().parse_args(["train", "p", "c", "m", "--out", "o", "--val-share", "0.2", "--patience", "7",
+                                      "--eval-every", "50", "--weight-decay", "0.01"])
+    config = _config(args)
+    assert (config.val_share, config.patience, config.eval_every, config.weight_decay) == (0.2, 7, 50, 0.01)
+    defaults = _config(build_parser().parse_args(["ablate", "p", "c", "m", "--out", "o"]))
+    assert (defaults.val_share, defaults.patience) == (0.1, 4)

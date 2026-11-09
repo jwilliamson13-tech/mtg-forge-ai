@@ -32,11 +32,23 @@ def _training_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--width", type=int, default=defaults.width)
     parser.add_argument("--seed", type=int, default=defaults.seed)
     parser.add_argument("--device", default=defaults.device, help="auto, cpu or cuda")
+    parser.add_argument("--val-share", type=float, default=defaults.val_share,
+                        help="share of the training games held back to pick the stopping point, 0 turns early "
+                             "stopping off")
+    parser.add_argument("--eval-every", type=int, default=defaults.eval_every,
+                        help="score the validation games every this many batches, and at each epoch's end. "
+                             "0 is the epoch's end only")
+    parser.add_argument("--patience", type=int, default=defaults.patience,
+                        help="stop after this many validation scores without a better log loss")
+    parser.add_argument("--weight-decay", type=float, default=defaults.weight_decay,
+                        help="AdamW weight decay, 0 is plain Adam")
 
 
 def _config(args: argparse.Namespace) -> TrainConfig:
     return TrainConfig(generation=args.generation, epochs=args.epochs, batch_size=args.batch_size,
-                       learning_rate=args.learning_rate, width=args.width, seed=args.seed, device=args.device)
+                       learning_rate=args.learning_rate, width=args.width, seed=args.seed, device=args.device,
+                       val_share=args.val_share, eval_every=args.eval_every, patience=args.patience,
+                       weight_decay=args.weight_decay)
 
 
 def _print(text: str) -> None:
@@ -54,6 +66,15 @@ def _join(args: argparse.Namespace) -> int:
     return 0
 
 
+def _kept(metrics: dict) -> str:
+    validation = metrics["validation"]
+    if validation["kept"] is None:
+        return "off, trained all epochs"
+    kept = validation["kept"]
+    return (f"kept epoch {kept['epoch']:.2f} (step {kept['step']}, log loss {kept['val_log_loss']:.4f}) of "
+            f"{len(validation['curve'])} scores, {'stopped early' if validation['stopped_early'] else 'ran to the cap'}")
+
+
 def _train(args: argparse.Namespace) -> int:
     from setmodel.dataset import load_inputs
     from setmodel.train import METRICS_FILE, run
@@ -61,7 +82,7 @@ def _train(args: argparse.Namespace) -> int:
     corpus, vocab = load_inputs(args.parquet, args.cards, args.manifest, args.min_count)
     _print(corpus.report.format())
     metrics = run(corpus, vocab, _config(args), args.out)
-    _print(f"device {metrics['device']}\nheld out {metrics['held_out']}\nwrote {Path(args.out) / METRICS_FILE}\n")
+    _print(f"device {metrics['device']}\nvalidation {_kept(metrics)}\nheld out {metrics['held_out']}\nwrote {Path(args.out) / METRICS_FILE}\n")
     return 0
 
 

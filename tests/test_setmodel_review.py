@@ -28,6 +28,10 @@ def test_the_ablation_command_writes_the_full_model_and_four_rows(inputs, capsys
     rows = json.loads((out / ABLATION_JSON).read_text(encoding="utf-8"))["rows"]
     assert [row["run"] for row in rows] == ["full", "no_cards", "no_graveyard_exile", "no_live_state", "no_numbers"]
     assert rows[0]["vs_full"] == 0
+    assert all(row["kept_epoch"] == 1 for row in rows)  # 1 epoch is the cap and the only score
+    validations = [json.loads((out / row["run"] / "metrics.json").read_text(encoding="utf-8"))["validation"]
+                   for row in rows]
+    assert len({(v["games"], v["rows"]) for v in validations}) == 1 and validations[0]["games"] >= 1  # one rule, one split
     assert (out / ABLATION_TABLE).read_text(encoding="utf-8") in capsys.readouterr().out
 
 
