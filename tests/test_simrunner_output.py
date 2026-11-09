@@ -245,3 +245,16 @@ def test_a_searching_game_says_how_many_copies_were_checked():
     assert games[0].tripwire_copies == 312
     assert games[0].tripwire_signatures == (("copy: Hand", 1),)
     assert games[1].tripwire_copies is None
+
+
+def test_the_ai_limits_line_can_report_the_ai_step_budget():
+    line = ("AI limits: 0 deadline expiries, 0 budget stops, 5120 random draws, "
+            "0 stops played, 0 stops passed, 0 stops with a land, 0 land drops missed, 2 step stops, 41250 most steps\n")
+    limits = parse(line + WIN)[0].ai_limits
+    assert (limits.step_stops, limits.most_steps) == (2, 41250)
+    assert limits.land_drops_missed == 0
+
+
+def test_without_the_ai_step_budget_the_step_fields_are_none():
+    assert parse(AI_LIMITS + WIN)[0].ai_limits.step_stops is None
+    assert parse(AI_LIMITS + WIN)[0].ai_limits.most_steps is None

@@ -136,6 +136,9 @@ def _plan_fields(config: PoolConfig, chunks: list[Chunk]) -> dict:
     if not batch.prune:
         # left out when on, so that a plan written before the setting existed still matches
         fields["prune"] = False
+    if batch.ai_steps:
+        # left out when off, so that a plan written before the setting existed reads as played without it
+        fields["ai_steps"] = batch.ai_steps
     evaluators = [seat.evaluator for seat in batch.seats]
     if any(evaluators):
         # only when set, so that a plan written before evaluators existed still matches on a restart
@@ -152,7 +155,8 @@ def _hold_plan(config: PoolConfig, chunks: list[Chunk]) -> None:
     fields = _plan_fields(config, chunks)
     if path.is_file():
         held = json.loads(path.read_text(encoding="utf-8"))
-        differs = sorted(key for key in fields if held.get(key) != fields[key])
+        # both sides' keys, because a setting left out when off is still a difference when the held plan has it
+        differs = sorted(key for key in fields.keys() | held.keys() if held.get(key) != fields.get(key))
         if differs:
             raise SetupError(f"{config.batch.run_dir} holds a run with a different plan, in: {', '.join(differs)}")
         return

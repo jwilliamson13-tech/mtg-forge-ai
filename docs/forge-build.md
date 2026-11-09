@@ -12,7 +12,7 @@ The fork is https://github.com/jwilliamson13-tech/forge. All work goes on its `m
 | Maven | 3.10.0, from scoop |
 | Forge version | 2.0.16-SNAPSHOT |
 | Upstream commit | `da66fb1ac4be7957461477bc8bd26628a439c747` (2026-11-04) |
-| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. They add `-sim` (issue #17), `-budget` (issue #50) and the search changes of issue #51 |
+| Fork branch | `mtg-forge-ai`, that upstream commit plus the fork's own patches. `git log da66fb1..mtg-forge-ai` lists them. They add `-sim` (issue #17), `-budget` (issue #50), the search changes of issue #51 and, later, `-aisteps` |
 | Jar | `forge-gui-desktop\target\forge-gui-desktop-2.0.16-SNAPSHOT-jar-with-dependencies.jar` |
 
 Forge's pom requires Java 17 or newer and Maven 3.8.1 or newer. It compiles to release 17, so Java 21 works.
@@ -105,6 +105,7 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-a` is an AI profile per seat, in deck order, such as `-a Default Reckless`. An unknown name prints the valid ones and stops.
 - `-sim` is the simulation mode per seat, in deck order, such as `-sim full heuristic`. The modes are `heuristic`, `hybrid` and `full`, the same three as the desktop lobby's menu. Seats left out stay heuristic. With the flag, each player name ends in `[sim=mode]`, so every result line names the mode. Without it, the output is what stock Forge prints. An unknown mode prints the valid ones and stops, and so does `-sim` with `-t`.
 - `-budget` is the number of search steps an AI decision may take, such as `-budget 100`. A step is one game copied for the search. With it, the wall-clock limit on AI decisions stops mattering, so a run replays from its seed on a busy machine too. What a decision that runs out does is under "Stopped decisions" below. Without the flag the limit stays at 5 seconds. Only `forge sim` sets a budget.
+- `-aisteps` is the number of AI steps a heuristic decision may take, such as `-aisteps 1000`. A step is one call to `AITimeoutTracker.check()`, which the AI makes in its loops. Like `-budget`, it takes the 5-second limit away, so heuristic play replays from its seed on a busy machine too. A full sim spell choice doesn't get it, because `-budget` already bounds that search. See "Heuristic step budget" below. Without the flag, play is what it was.
 - `-record DIR` writes one game record per game to that folder, as `docs/game-record.md` describes. It needs `-batch`, `-s` and exactly two decks, and it can't go with `-t`. Anything missing prints why and stops. Without it Forge writes no records, keeps no reveal log and has no turn cap.
 - `-batch ID` is the batch id for those records: letters, digits, `_` and `-`.
 - `-turncap N` stops a recorded game as a draw once turn N is over, default 50. A capped game prints `Stopping game at the turn cap as draw` before its result lines.
@@ -116,10 +117,16 @@ Read from `SimulateMatch.java` at the commit above, plus the fork's `-sim`:
 - `-q` prints only the result lines, though Forge's startup messages still appear.
 - `-mc on|max|off` turns on Flat Monte Carlo. It is new since `HANDOFF.md` was written and is off by default in a sim.
 
-With `-sim` or `-budget`, each game prints one more line before its `Game Result:` line. Without them and with `-tripwire off`, the output is what stock Forge prints.
+With `-sim`, `-budget` or `-aisteps`, each game prints one more line before its `Game Result:` line. Without them and with `-tripwire off`, the output is what stock Forge prints.
 
 ```
 AI limits: 0 deadline expiries, 2 budget stops, 5120 random draws, 2 stops played, 0 stops passed, 1 stops with a land, 0 land drops missed
+```
+
+With `-aisteps`, and only then, the line ends with two more fields: the decisions in that game that ran out of AI steps, and the most steps any one decision of that game took.
+
+```
+AI limits: 0 deadline expiries, 0 budget stops, 2574 random draws, 0 stops played, 0 stops passed, 0 stops with a land, 0 land drops missed, 0 step stops, 338 most steps
 ```
 
 Deadline expiries and budget stops count the decisions the clock or the budget cut short in that game. Random draws is every draw from `MyRandom` in that game, including the ones the search makes, so two games that played differently almost never share it. The last four numbers say what those stopped decisions did, and only count when a seat is `hybrid` or `full`. A stop played a line or passed. A stop with a land had a land among its candidates. A land drop missed is a turn that ended with no land played after such a stop.
@@ -145,7 +152,7 @@ $decks = "..\forge\forge-gui\res\geneticaidecks"
 python -m simrunner batch "$decks\GAL_19_18_Burn Red Burn-sligh Generated Deck_27_18.dck" "$decks\GAL_1_28_Legacy Merfolk Merfolks Generated Deck_5_19.dck" --games 50 --seed 1 --workers 10 --clock 600
 ```
 
-Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--evaluator random forge` sets `-eval` per seat, in deck order, and leaving it out leaves the flag off. The runner refuses anything but `forge` on a heuristic seat before it launches. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` or `--evaluator` doesn't get those modes or evaluators back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. It also exits 1 if a game file and a result line disagree.
+Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Default Reckless` sets the AI profile per seat, in deck order. `--sim-mode full heuristic` sets the simulation mode the same way, and leaving it out leaves `-sim` off the command. `--evaluator random forge` sets `-eval` per seat, in deck order, and leaving it out leaves the flag off. The runner refuses anything but `forge` on a heuristic seat before it launches. `--search-budget` sets `-budget`. It defaults to 100 when a seat is in `hybrid` or `full` and to off otherwise, and `--search-budget 0` turns it off. `--ai-steps` sets `-aisteps`. It is off by default for `batch`, `nightly`, `matchup`, `cardswap`, `ladder` and `converge`, and on for `pool`, where `--ai-steps 0` turns it off. `--clock` defaults to 2400 seconds, the wall clock in the spec, and `--heap` to 2048m. `--forge` defaults to `..\forge`. The report prints and goes to `runs\<time>-seed<seed>\report.txt`, beside one stdout and one stderr log per worker. `runs\` is gitignored. The command exits 1 if any game didn't finish, if a worker left no log in its throwaway profile, if a worker left a process holding its pipes, if a batch with `--sim-mode` or `--evaluator` doesn't get those modes or evaluators back in Forge's match header, if a batch with a search budget gets no `AI limits:` lines, if a batch with records is missing a file for a game that should have one, or if a batch that asked for honest play has a game file that doesn't say it got it. Those last four mean a stale jar, and the worker table says so. So does a batch with `--ai-steps` whose `AI limits:` lines have no step fields. It also exits 1 if a game file and a result line disagree.
 
 `--records` has Forge write a game record per game, into the run folder's `games\`. `--records-dir` picks another folder, and also turns records on. `--turn-cap` sets `-turncap`, needs records, and leaves Forge's 50 in place if left out. `--no-tripwire` passes `-tripwire off`, with or without records. `--no-prune` passes `-prune off`. Without it the runner leaves the flag out, so Forge prunes a searching seat's copies. With records the runner also passes `-honest on`, because records are training data, and `--no-honest` leaves it out. The run folder's name is the batch id, so with records on it has to be letters, digits, `_` and `-`. See "Game records" and "Tripwire" below.
 
@@ -161,6 +168,7 @@ Run it from this repo. `--workers` defaults to logical cores minus 2. `--ai Defa
 - **Search budget** is the steps per decision, or off.
 - **AI stops that played a line**, **AI stops that passed**, **AI stops with a land candidate** and **AI land drops missed on stops** add up the last four numbers of the `AI limits:` lines. They say `not reported` for a jar from before issue #51.
 - **AI decision timeouts** counts the `AI eval thread at timeout:` lines, one narrow kind of expiry that the heuristic AI prints. **AI deadline expiries** counts every decision the clock cut short, and includes those. **AI search budget stops** counts the decisions the budget cut short. The last two come from the `AI limits:` lines and say `not reported` for a run without `-sim` or `-budget`.
+- **AI step budget**, **AI step budget stops** and **AI most steps in one decision** appear only with `--ai-steps`. They give the steps per heuristic decision, the decisions that ran out, and the largest decision of the batch.
 - **Game records written** counts this batch's files against the games finished, when records are on. A game that threw has no file, and neither does one the clock stopped before its first priority pass.
 - **Records against results** reads every finished game against its file, when records are on: winner and end reason. It leaves turns out: `GameLogFormatter` prints `Game Outcome: Turn` as the turn number halved and rounded up, so 20 in a file prints as 10, and Karn's restart would throw that off. It takes the metadata line of each file and leaves the snapshots alone, so a night of files costs seconds. `match` is games that agree. `no file by design` is clock and exception games with no file, the two kinds allowed to have none. `mismatches` is everything else: a file that disagrees, a game that should have a file and doesn't, an exception game with one, a file that can't be read, and a file with no result line. That last one isn't counted after a hard stop, which can land between the two. Any mismatch fails the batch, and the report lists the first 20.
 - **Tripwire hits per game** gives the max and mean over the games that reported. **Tripwire clean** is yes only when every finished game printed a count and every count is 0. A game that printed nothing means the jar has no tripwire. It fails the batch, and a jar like that never reads as a clean zero. With a `hybrid` or `full` seat a zero says yes only when every game also printed its `Tripwire copies:` line, because a copy has no watch and only that check covers it. A jar from before #25 doesn't print it, and the row then says `the real game is clean, search copies unchecked, so the jar may be from before #25`. **Search copies checked** adds up those lines. With `--no-tripwire` the row says `off`.
@@ -212,7 +220,7 @@ What the stop doesn't cover:
 python -m simrunner pool --games 10000 --seed 20261107 --workers 4 --start 23:00 --stop 05:00 --run-dir runs/gen0-pool
 ```
 
-It takes every `nightly` option except the two decks, and `--start` and `--stop` work the same way. Two defaults differ: both seats are `heuristic`, and records are on. The tripwire and honest play are on as usual, and `--no-tripwire` and `--no-honest` turn them off. `--manifest` picks another manifest, and its deck files resolve as they do for `batch`.
+It takes every `nightly` option except the two decks, and `--start` and `--stop` work the same way. Three defaults differ: both seats are `heuristic`, records are on, and so is the AI step budget, at `DEFAULT_AI_STEPS` in `simrunner/worker.py` (see "Heuristic step budget"). The gen-0 pool of 2026-11-07 was played before the step budget existed, on the 5-second clock, so a pool made with the default plays the heuristic AI under other rules than gen 0's data. `--ai-steps 0` plays the old way. The plan records the setting, so a restart can't switch it halfway, and a plan from before it existed reads as played without it. The tripwire and honest play are on as usual, and `--no-tripwire` and `--no-honest` turn them off. `--manifest` picks another manifest, and its deck files resolve as they do for `batch`.
 
 Always pass `--run-dir`. The default name has the time in it, so a restart couldn't find the folder. The folder name is the batch id of every game in the run, which makes the whole run one batch in Parquet.
 
@@ -447,7 +455,7 @@ The 2026-11-07 gen-0 pool is why `check` exists. Its report said 1 of 10,000 gam
 
 **Memory.** Before convert, join, train, ablate, pairtest or export starts, the loop wants `--min-free-mb` of free physical memory, 4,096 by default, and stops with a message if it isn't there. While one of them runs, the loop polls free memory each second and kills the step if it falls under `--memory-floor-mb`, 1,024 by default, rather than let the PC page itself to a halt. Each record has the step's peak working set, summed over its process tree, because a venv's `python.exe` is a launcher whose own peak is a few MB. It also has the least free memory seen while the step ran.
 
-**Settings passed through.** `--chunk-games` and `--held-out-share` go to `pool`. `--deck-pairs` and `--pair-games` go to `ladder`. `--width`, `--round-games` and `--max-games` go to `converge`. `--search-budget`, `--clock`, `--heap` and `--forge` go to all three Forge steps, and `--epochs`, `--batch-size`, `--device` and `--train-seed` to train and ablate. Left out, each takes the command's own default. The ladder and convergence seeds default to 41 and 42 and must stay the same every generation, because both folders refuse a seed change.
+**Settings passed through.** `--chunk-games` and `--held-out-share` go to `pool`. `--deck-pairs` and `--pair-games` go to `ladder`. `--width`, `--round-games` and `--max-games` go to `converge`. `--ai-steps` goes to `pool` alone, so the play step gets the pool's default unless it is given. `--search-budget`, `--clock`, `--heap` and `--forge` go to all three Forge steps, and `--epochs`, `--batch-size`, `--device` and `--train-seed` to train and ablate. Left out, each takes the command's own default. The ladder and convergence seeds default to 41 and 42 and must stay the same every generation, because both folders refuse a seed change.
 
 ```
 runs\generations\gen{k+1}\
@@ -552,7 +560,7 @@ Forge calls `MyRandom.setRandom(new Random(seed))` once, before the first game, 
 - A worker's first k games are the same in a longer run. A 20-game batch with seed 1 matched the first two games of all ten workers in the 50-game batch, 20 of 20, on winner and turn, with ten JVMs running.
 - Games in one JVM aren't independent. Game 1's starting player is random, and after that the loser of the last game goes first (`GameAction.determineFirstTurnPlayer`).
 
-Two wall clocks can break replay, and both depend on machine load. `-c` stops a game, and its thread can keep drawing from the shared stream until it notices the interrupt. `Game.AI_TIMEOUT` gives each AI decision 5 seconds. `HostedMatch` sets it from a preference for a real match, but a sim doesn't go through `HostedMatch`, so a sim runs on the default. A heuristic decision is fast enough that this limit rarely matters, and the 20 of 20 match above suggests neither clock mattered in those runs. A full-sim decision is a different story, covered next.
+Two wall clocks can break replay, and both depend on machine load. `-c` stops a game, and its thread can keep drawing from the shared stream until it notices the interrupt. `Game.AI_TIMEOUT` gives each AI decision 5 seconds. `HostedMatch` sets it from a preference for a real match, but a sim doesn't go through `HostedMatch`, so a sim runs on the default. A heuristic decision is fast enough that this limit rarely matters, and the 20 of 20 match above suggests neither clock mattered in those runs. A full-sim decision is a different story, covered next. So is a heuristic decision on a big board, covered under "Heuristic step budget".
 
 AI sideboarding is off in a sim (`GameRules.AISideboardingEnabled` defaults to false), so decks don't change between games of a `-n` run.
 
@@ -669,6 +677,72 @@ What this doesn't cover:
 - A stop by the clock takes the same path as one by the budget, in `--search-budget 0` runs, and no batch ran that way. The Forge tests stop searches with the budget only.
 - No batch had a hybrid seat. `AI_SIM_SEARCH` is on for hybrid, so the evaluator change reaches it through `OnePlaySafetyChecker`.
 - A search that a nested AI's catch let finish is treated as stopped, by reading the source. Both-seats games can reach that path, but no test forces it.
+
+### Heuristic step budget
+
+`-budget` left the heuristic AI on the 5-second clock, because a heuristic decision copies no game for it to count. The 2026-11-07 gen-0 pool showed what that costs. Chunk 160, mardu-aggro-3 against boros-aggro-2, printed 418 `AI eval thread at timeout:` traces and 553 deadline expiries in 51 games, and played 52 games an hour while the pool as a whole made 1,853. Game 32 alone took 1,857 s and 353 expiries. 6 of the 51 games had a timeout and 9 had an expiry, and the runs below show such games don't replay.
+
+**What times out.** It is one thread doing slow work, not a hang. All 418 traces have the eval thread inside `canPlayAndPayFor`, the check of one spell ability, and nearly all of them below that in combat prediction: `AiBlockController.getSafeBlockers` and `getKillingBlockers`, `ComputerUtilCombat.predictDamageTo`, `canDestroyAttacker` and friends. Two aggro decks build big boards, and a removal spell's check predicts the whole combat for each target. With no limit, the same pair's largest decision in 9 games took 7,421 steps and 50 s on the loaded machine.
+
+**A step** is one call to `AITimeoutTracker.check()`. The AI already makes that call in its loops: once per spell ability the eval thread weighs, and once per attacker, blocker and pairing in `AiAttackController` and `AiBlockController`. A heuristic decision makes the same calls in the same order however busy the machine is, so `-aisteps N` stops it at the same call on every run. Each spell choice, attack and block declaration gets N steps. The eval thread spends the budget of the decision that started it, and that decision's thread waits on it, so the two never count at once. A nested decision, such as predicting the opponent's attack inside a spell check, spends the outer decision's steps. `AI_TIMEOUT` goes to the game clock, as with `-budget`, so `-c` is the only wall clock left.
+
+The flag changes three more things, all for replay:
+
+- `AiAttackController` works out forced attackers on the deciding thread, one attacker after another, instead of on a thread pool. The order they join combat no longer depends on timing. "Full-sim replay" lists that race as untested.
+- `StormSolver` drops its 4-second limit and keeps its 400-node limit. Its search doesn't spend the decision's steps, because each node plays copies that make far more checks than a whole heuristic decision.
+- A full-sim seat's spell choice gets no step budget, because it is a search and `-budget` bounds it. Its attacks and blocks are heuristic and get one.
+
+**A stop** works as an expiry did. A spell choice that runs out passes priority. The heuristic tries candidates best first and takes the first one its checks approve, so a decision that stops before that has nothing to keep. An attack keeps the attackers chosen so far, blocks keep the blocks made so far, and both then go through the same repairs as after an expiry. `HeuristicStepBudgetTest` pins the spell choice: with one step fewer than a decision needs, it stops, and with one step it passes.
+
+**Why 1,000.** `-Dforge.ai.steps.trace=true` prints each decision's steps and time to stderr. A jar with an unlimited budget played these, one worker at below-normal priority, with seeds from the gen-0 plan where there was one:
+
+| Pair | Games | Decisions | 99th percentile | 99.9th percentile | Most | Over 1,000 |
+|---|---|---|---|---|---|---|
+| Burn vs Merfolk (`GAL_`), seed 1 | 20 | 5,802 | 156 | 227 | 352 | 0 |
+| mardu-aggro-3 vs boros-aggro-2, chunk 160's seed | 9 | 6,649 | 333 | 2,342 | 7,421, in 50 s | 24 |
+| aluren-1 vs mardu-aggro-3, chunk 48 | 10 | 2,962 | 24 | 39 | 44 | 0 |
+| cradle-control-2 vs mississippi-river-2, chunk 95 | 10 | 2,827 | 46 | 76 | 114 | 0 |
+| bug-midrange-2 vs artifacts-prison-2, chunk 132 | 10 | 5,620 | 111 | 246 | 472 | 0 |
+| aluren-3 vs mardu-aggro-1, chunk 176 | 10 | 3,481 | 48 | 266 | 661 | 0 |
+
+Chunks 48 and 176 are two of the three other chunks of the pool with any expiry, 2 and 3 of them. A step is cheap on a small board and dear on a big one: on the 74 decisions of 300 steps or more, one step took 0.3 to 8.2 ms on the loaded machine. So 1,000 steps is above every decision of five of the six pairs, and on the big boards it ends a decision after about 0.3 to 8 seconds. The machine shared its cores with another session's two Forge workers all evening, so these times are high.
+
+**Results.** mardu-aggro-3 against boros-aggro-2, chunk 160's seed and 51 games, as the pool played them: one worker, records, honest play and the tripwire on, below-normal priority, 2026-11-08.
+
+| | Pool, 2026-11-07, clock | Clock, tonight | `--ai-steps 1000` | `--ai-steps 1000` again |
+|---|---|---|---|---|
+| Jar | trunk of 11-07 | fork `9c32892` | this branch | this branch |
+| `AI eval thread at timeout:` lines | 418 | 430 | 0 | 0 |
+| Deadline expiries | 553 | 610 | 0 | 0 |
+| Step stops | | | 72 | 72 |
+| Games with an expiry or a stop | 9 | 10 | 11 | 11 |
+| Wall time | 3,566 s | 4,227 s | 991 s | 1,011 s |
+| Steady-state games per hour | 52 | 44 | 194 | 193 |
+| Wins, seat 1 and seat 2, draws | 19, 31, 1 | 17, 29, 5 | 16, 34, 1 | 16, 34, 1 |
+| Record digest | `3034149a3b8f` | `42b3783e41d7` | `4fab80a1430b` | `4fab80a1430b` |
+
+The two clock runs played the same seed and their records differ. They ran on two jars, so that alone doesn't prove the clock did it, though nothing the fork merged in between touches heuristic play by its own checks. The two step runs are the proof the other way. Both ran beside tonight's clock run and another session's two Forge workers, the second with the machine at 91% CPU, and the second matched the first on the record digest, on the result digest `b82986e7c529`, and line for line on every `AI limits:`, turn and result line of all 51 games, random draws included.
+
+194 games an hour is still slow next to the pool's 1,853, because this pair's boards are big: its median game took 5.5 s, and its slowest three 221, 194 and 103 s. But a pool chunk of it now costs about 16 minutes, not an hour.
+
+**Default play is unchanged.** Burn vs Merfolk, 20 games, seed 1, one worker, on fork `9c32892` and on this branch, with no `--ai-steps`:
+
+| Run | `9c32892` | This branch |
+|---|---|---|
+| `--sim-mode heuristic heuristic --records`, so the digests cover random draws and every snapshot | record `39de6332ed66`, result `b524f8efe9fc` | the same |
+| No flags | result `4d3087bd2c5f`, no `AI limits:` line | the same, and 120 of 120 outcome and result lines match |
+
+An unlimited `-aisteps` on this pair also gave `4d3087bd2c5f`. No decision there came near the clock, so taking it away changed nothing.
+
+**Turning it on for pools.** `pool` defaults to 1,000 steps, and so does `generation`'s play step, through `pool`. The gen-0 pool was played on the clock, so gen 1's pool, and any pool after it, plays the heuristic AI under different rules from gen 0's. Two things make that the better trade. The clock cut 610 decisions in the 51 games above and the budget cut 72, so the budget changes less play than the clock already did, and it changes the same play every run. And the clock's cuts landed on a busy machine's schedule, so a pool on the clock can't be replayed or checked game by game. For gen 1 the pool is gen 0 in full sim in both seats, where `-budget` already took the clock away from spell choices, so `-aisteps` reaches only their attacks and blocks. `ladder` and `converge` stay off by default: their folders are shared across generations and refuse a change of settings, and turning it on there means a new folder. `matchup`, `cardswap`, `batch` and `nightly` stay off, as stock Forge plays.
+
+What this doesn't cover:
+
+- `-mc` keeps its wall-clock rollout budgets. It is off by default in a sim.
+- `StormSolver` still stops when the heap is 90% full, which depends on the garbage collector. No tutor storm deck was played here.
+- A hybrid seat gets the budget, and no hybrid batch ran.
+- A game record doesn't say whether the AI had a step budget. `plan.json`, `matchup.json`, `convergence.json` and the ladder's plan do, when it is on.
+- The `-c` clock is still wall time, and the two Dragon's Rage Channelers of "Pruned copies" are a race the budget doesn't touch.
 
 ### Game records
 

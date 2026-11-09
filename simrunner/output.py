@@ -29,7 +29,7 @@ ONNX_SEAT_LINE = re.compile(r"ONNX evaluator: seat (\d+) searches with (.+)$")
 ONNX_SUMMARY_LINE = re.compile(r"ONNX evaluator: \d+ calls, ")
 AI_LIMITS_LINE = re.compile(r"^AI limits: (\d+) deadline expiries, (\d+) budget stops, (\d+) random draws"
                             r"(?:, (\d+) stops played, (\d+) stops passed, (\d+) stops with a land, "
-                            r"(\d+) land drops missed)?$")
+                            r"(\d+) land drops missed)?(?:, (\d+) step stops, (\d+) most steps)?$")
 TRIPWIRE_LINE = re.compile(r"^Tripwire: (\d+) hits$")
 TRIPWIRE_HIT_LINE = re.compile(r"^Tripwire hit: (\d+) (.+)$")
 TRIPWIRE_COPIES_LINE = re.compile(r"^Tripwire copies: (\d+) checked$")
@@ -49,9 +49,9 @@ class DrawCause(Enum):
 
 @dataclass(frozen=True)
 class AiLimits:
-    """What Forge prints per game with `-sim` or `-budget`. A run without either prints nothing.
+    """What Forge prints per game with `-sim`, `-budget` or `-aisteps`. A run without any of them prints nothing.
 
-    The stop fields are None for a jar from before issue #51.
+    The stop fields are None for a jar from before issue #51. The step fields are None without `-aisteps`.
     """
 
     deadline_expiries: int
@@ -61,6 +61,8 @@ class AiLimits:
     stops_passed: int | None = None
     stops_with_land: int | None = None
     land_drops_missed: int | None = None
+    step_stops: int | None = None  # heuristic decisions that ran out of AI steps
+    most_steps: int | None = None  # the most AI steps one decision of the game spent
 
 
 @dataclass(frozen=True)
