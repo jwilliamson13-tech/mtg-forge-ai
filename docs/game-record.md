@@ -2,7 +2,9 @@
 
 The game record is the only interface between Forge and Python. The Java hook (#18) writes it, `gamerecord` reads it, and neither side may depend on anything else about the other.
 
-The current `schema_version` is 1.
+The current `schema_version` is 2.
+
+Version 2 (2026-11-08) adds six scoreboard fields: `me_initiative`, `opp_initiative`, `me_monarch`, `opp_monarch`, `me_speed` and `opp_speed`. Nothing else changed. The loader still reads version 1 files, and fills those six in as false and 0, because a version 1 file doesn't record them. They can't be worked out from a version 1 file either: Forge keeps the initiative, the monarch and speed as effect objects in the command zone, which no zone here holds, so a version 1 file names them only while one of their triggers is on the stack. The monarch can change hands with no trigger at all, and speed starts at 1 without one, so carrying the last trigger forward would be wrong some of the time. `gamerecord convert` reports how many kept games came from version 1 files.
 
 Any change to a field, a type or a rule here bumps the version once real files exist to protect, and this document, the hook and `gamerecord/record.py` change in the same step. The stack, combat and marked damage fields went in at version 1, because no game file existed yet. So did `honest_play`, opaque ids and the null `id` on log lines, because the only files by then were throwaway test batches. The loader refuses every other version, so a file from a mismatched build fails at load time. `tests/test_gamerecord_schema_doc.py` fails if this document and the validator name different fields, and `tests/test_gamerecord_real_game.py` runs the loader on a file the hook really wrote, which has to be replaced when the schema changes.
 
@@ -33,7 +35,7 @@ Every field in this document is written, null ones included. The hook has to ser
 
 | Field | Type | Meaning |
 |---|---|---|
-| `schema_version` | integer | Always 1 for this version. |
+| `schema_version` | integer | 2 for this version. The loader also reads 1. |
 | `batch_id` | string matching `[A-Za-z0-9_-]+` | The batch this game belongs to. It names a folder in the Parquet output, which is why the characters are limited. |
 | `seed` | integer, 0 to 2^63-1 | The `-s` value the worker's JVM got. A worker's games all share it. |
 | `game_number` | integer, 1 or more | This game's place in the worker's run, the `n` of `Game Result: Game n`. |
@@ -119,6 +121,12 @@ Everything named `me_` belongs to `side`, and everything named `opp_` belongs to
 | `turn` | integer, 1 or more | The game's turn number, at most `final_turn`. |
 | `me_active` | boolean | Whether it is this side's turn. |
 | `me_on_play` | boolean | Whether this side took the game's first turn. |
+| `me_initiative` | boolean | Whether this side has the initiative, `Game.getHasInitiative()`. From version 2. |
+| `opp_initiative` | boolean | Whether the opponent has the initiative. At most one of the two is true. From version 2. |
+| `me_monarch` | boolean | Whether this side is the monarch, `Game.getMonarch()`. From version 2. |
+| `opp_monarch` | boolean | Whether the opponent is the monarch. At most one of the two is true. From version 2. |
+| `me_speed` | integer, 0 to 4 | `Player.getSpeed()`. 0 means the player has no speed. From version 2. |
+| `opp_speed` | integer, 0 to 4 | The opponent's speed. From version 2. |
 
 ### Zones
 
@@ -257,7 +265,8 @@ These are Forge's `CardStateName` values minus `FaceDown`. A value Forge adds la
 
 `gamerecord.load_game(path)` returns a `GameRecord` with `metadata`, `snapshots`, `game_id` and `honest_play`, or raises `GameRecordError`. Beyond the fields and types above, it enforces these rules:
 
-- It checks `schema_version` first and refuses anything but 1.
+- It checks `schema_version` first and refuses anything but 1 or 2. A version 1 file must not carry the version 2 scoreboard fields, and a version 2 file must carry all six.
+- At most one player has the initiative, and at most one is the monarch.
 - A field this document doesn't name is an error, the same as a missing field.
 - An integer must be a JSON integer. `20.0` and `true` fail. Every integer except `seed` must fit Java's `int`.
 - `exception` raises `ExceptionGameError`, a kind of `GameRecordError`.
@@ -328,6 +337,12 @@ One row per snapshot of a kept game.
 | `turn` | int32 | |
 | `me_active` | bool | |
 | `me_on_play` | bool | |
+| `me_initiative` | bool | False for a version 1 file, as are the five below. |
+| `opp_initiative` | bool | |
+| `me_monarch` | bool | |
+| `opp_monarch` | bool | |
+| `me_speed` | int32 | 0 for a version 1 file. |
+| `opp_speed` | int32 | |
 
 ### cards table
 

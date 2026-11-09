@@ -311,6 +311,8 @@ On 2026-11-08 two generations met at one table on fork `t-eval-onnx` (`e7d70f3`)
 
 Seat 2's model scored 315 and 272 cards without features, all of one name, `hidden`. That is #25's placeholder for a card the searching seat can't know. A search copy holds the opponent's unknown hand and library cards as placeholders, and when the copy moves one into a public zone, the snapshot names it, and the card table has no such card. The contract's fallback scores it as a card with no text, which is what the seat knows of it. Boros as seat 1 never showed it.
 
+Tensor contract version 2 (fork `t-contract-v2`) scores the placeholder as a hidden card instead, in any zone, the way training encodes a face-down card it may not see. A 2-game rerun on 2026-11-08, the same decks and seed 4101, `--sim-mode full full` with a version 2 bundle in both seats, 2 workers, made 5,402 calls with 0 cards scored without features and 0 names missing. I didn't count how many placeholders those calls met.
+
 ### Card swaps
 
 `cardswap` answers "how much does this card change deck A's win rate against B". It runs two matchups: deck A as written, then deck A' with one swap made, against the same opponent, with the same seed and settings. It reports both rates with their intervals, and A' minus A with an interval of its own.

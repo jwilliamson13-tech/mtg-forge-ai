@@ -1,0 +1,152 @@
+{
+ "version": 2,
+ "sizes": {
+  "N": "dynamic, 0 or more",
+  "A": 16,
+  "T": 24,
+  "K": 239,
+  "L": 18,
+  "S": 16
+ },
+ "inputs": [
+  {
+   "name": "scoreboard",
+   "dtype": "float32",
+   "shape": [
+    "S"
+   ],
+   "meaning": "Raw values, in `scoreboard_fields` order. Booleans are 0 or 1."
+  },
+  {
+   "name": "token_ids",
+   "dtype": "int64",
+   "shape": [
+    "N",
+    "A",
+    "T"
+   ],
+   "meaning": "Vocabulary ids from the card table. 0 where the mask is 0."
+  },
+  {
+   "name": "token_mask",
+   "dtype": "float32",
+   "shape": [
+    "N",
+    "A",
+    "T"
+   ],
+   "meaning": "1 where a token is present."
+  },
+  {
+   "name": "numbers",
+   "dtype": "float32",
+   "shape": [
+    "N",
+    "A",
+    "K"
+   ],
+   "meaning": "Raw values from the card table, unscaled. The model holds the scales."
+  },
+  {
+   "name": "number_mask",
+   "dtype": "float32",
+   "shape": [
+    "N",
+    "A",
+    "K"
+   ],
+   "meaning": "1 where a key is present."
+  },
+  {
+   "name": "live",
+   "dtype": "float32",
+   "shape": [
+    "N",
+    "L"
+   ],
+   "meaning": "Raw live state, in `live_fields` order."
+  },
+  {
+   "name": "zone",
+   "dtype": "int64",
+   "shape": [
+    "N"
+   ],
+   "meaning": "Index into `zones`."
+  }
+ ],
+ "output": {
+  "name": "win_probability",
+  "dtype": "float32",
+  "shape": [
+   1
+  ],
+  "meaning": "P(this side wins)."
+ },
+ "scoreboard_fields": [
+  "me_life",
+  "opp_life",
+  "me_poison",
+  "opp_poison",
+  "me_library",
+  "opp_library",
+  "opp_hand",
+  "turn",
+  "me_active",
+  "me_on_play",
+  "me_initiative",
+  "opp_initiative",
+  "me_monarch",
+  "opp_monarch",
+  "me_speed",
+  "opp_speed"
+ ],
+ "live_fields": [
+  "power",
+  "toughness",
+  "is_creature",
+  "tapped",
+  "summoning_sick",
+  "mine",
+  "face_down",
+  "hidden",
+  "damage",
+  "attacking",
+  "blocking",
+  "blocked",
+  "attached",
+  "counters_p1p1",
+  "counters_m1m1",
+  "counters_loyalty",
+  "counters_other",
+  "stack_ability"
+ ],
+ "zones": [
+  "battlefield",
+  "me_hand",
+  "me_graveyard",
+  "opp_graveyard",
+  "me_exile",
+  "opp_exile",
+  "opp_revealed",
+  "stack"
+ ],
+ "truncation": {
+  "abilities": "Row 0 stays. Past A rows, the oldest other rows are dropped.",
+  "tokens": "Past T tokens in a row, the oldest are dropped.",
+  "numbers": "Two numbers under one key in a row are added."
+ },
+ "card_table": {
+  "file": "card_features.jsonl.gz",
+  "slots": {
+   "Original": "front",
+   "EmptyRoom": "empty_room",
+   "any other face": "back"
+  },
+  "lookup": "(name, slot), else the name's entry under any slot, else all masks 0.",
+  "hidden": "A hidden card has no lookup: all masks 0 and `hidden` 1 in `live`.",
+  "placeholder": "hidden",
+  "placeholder_rule": "A card or stack item named `placeholder` is a hidden card, in any zone.",
+  "skipped": "A stack ability whose name the table lacks has no card behind it, such as an effect, The Initiative or The Monarch, and is left out of the state."
+ }
+}

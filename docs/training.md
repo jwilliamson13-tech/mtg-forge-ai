@@ -58,7 +58,7 @@ The model's inputs are the fields below, each from the row's own snapshot. `setm
 
 | Goes in | Why it is safe |
 |---|---|
-| All 10 scoreboard fields | Rules-level counts the side can see. The opponent's hand and library are counts. |
+| All 16 scoreboard fields | Rules-level counts the side can see. The opponent's hand and library are counts. Who has the initiative, who is the monarch and each player's speed are public. |
 | `name` and `face`, as the card's parsed tokens and numbers | A record sets a name only when this side may see it. The name itself never reaches the model. |
 | `zone` | Where this side sees the card. The stack is an eighth zone. |
 | `power`, `toughness`, `tapped`, `summoning_sick`, `face_down`, `damage` | Public state, written for this side. |
@@ -79,11 +79,11 @@ The model's inputs are the fields below, each from the row's own snapshot. `setm
 | Card `id`, stack `id`, `attached_to`, `attacking_card`, `blocking` and `blocked_by` values, `targets` | Opaque ids. An id is only an order-of-first-sight number, and it means nothing to a model. So what a stack item targets isn't an input. |
 | The other side's snapshot, all of it | The rule above. |
 
-A hidden card has no name, so it gets the empty card, with no tokens or numbers but with its live state and `hidden` set. It doesn't count as unmatched, so it doesn't drop the snapshot. `HIDDEN_COUNTS_AS_UNMATCHED` in `setmodel/dataset.py` flips that rule.
+A hidden card has no name, so it gets the empty card, with no tokens or numbers but with its live state and `hidden` set. It doesn't count as unmatched, so it doesn't drop the snapshot. `HIDDEN_COUNTS_AS_UNMATCHED` in `setmodel/dataset.py` flips that rule. A card named `hidden`, the placeholder #25's pruned search copies hold, is a hidden card too, in any zone. A real game never holds one, so this rule is for Forge's evaluator, and the join has it so the two sides agree.
 
 ## Joining names
 
-A card joins on name and face. Face picks the script where a name is on a front and a back, as `Phyrexian Token` is. A name with no entry and no split form is unmatched. The join counts it and drops its snapshot.
+A card joins on name and face. Face picks the script where a name is on a front and a back, as `Phyrexian Token` is. A name with no entry and no split form is unmatched. The join counts it and drops its snapshot, with one exception from tensor contract version 2: a stack ability whose source the dump lacks has no card behind it, and the join leaves it out of the state and keeps the snapshot. The report lists these under `stack abilities left out`, with a Forge id in an effect's name written as `(N)`.
 
 - A whole split card, `Fire // Ice`, joins on its two halves. An empty Room joins on their identity rows only. Any face but `EmptyRoom` gets the rows of both halves, and the bundle's table has a `back` entry so it gives the same rows. None of the 3,249 real files below holds a whole name on any face, so only the fixtures test this rule.
 - A face copied from another script through `CopyFaceFrom` has no name in the dump, and it joins on the name it copies.
@@ -99,7 +99,20 @@ On 2026-11-06, a scan of 3,249 real game files gave these counts, from the earli
 | Rows on a name with disagreeing scripts | 113,992, on 21 names |
 | Unmatched | 40, from 36 snapshots |
 
-Every unmatched row is a stack item whose source is `Summon: Fenrir (58)'s Effect` or the like. Forge's effect cards aren't scripts. If a deck pool makes these common, they are worth a rule. So far they cost 36 of 665,118 snapshots.
+Every unmatched row is a stack item whose source is `Summon: Fenrir (58)'s Effect` or the like. Forge's effect cards aren't scripts. So far they cost 36 of 665,118 snapshots.
+
+The 676-game dry run made them common: under version 1 they dropped 1,292 of its 166,054 snapshots, 0.78%. Version 2 has the rule for them. On 2026-11-08 the version 2 join of the same files dropped 0 snapshots, with 0 unmatched names, and left out 1,970 stack rows on 6 names:
+
+| Rows | Name |
+|---|---|
+| 1,104 | `Tamiyo, Seasoned Scholar (N)'s Effect` |
+| 534 | `The Initiative` |
+| 132 | `The Monarch` |
+| 120 | `Start Your Engines!` |
+| 44 | `Forth Eorlingas! (N)'s Effect` |
+| 36 | `Chancellor of the Annex (N)'s Effect` |
+
+The dry run's files are schema version 1, so their initiative, monarch and speed fields are 0. Ten schema version 2 games recorded the same day show how much that loses: in an initiative-stompy-1 game, 54 of 66 snapshots have a player holding the initiative and 6 show its trigger, and in a dredge-2 game against uwx-control-2, 120 of 176 have a monarch and 16 show its trigger.
 
 ## Splits
 
@@ -170,7 +183,19 @@ The scores file is tab-separated, with the header `game_id`, `snapshot_index`, `
 
 On 2026-11-07 it ran on 20 of the dry run's 676 game files, every 34th by name, with the dry-run model and bundle. They held 4,974 snapshots. 4,936 matched, with a largest difference of 7.15e-07 and a mean of 3.8e-08. The other 38 hold an effect card, such as `Tamiyo, Seasoned Scholar (51)'s Effect` or `The Monarch`, and training dropped them.
 
-The fork's Java tests run on a fixture that `tests/forge_fixture.py` builds: a smoke-model bundle, a game file with every kind of input the contract has, and PyTorch's score for each of its snapshots. `python -m tests.forge_fixture OUT` rebuilds it, and the fork keeps the result in `forge-gui-desktop/src/test/resources/onnx-fixture/`.
+On 2026-11-08 it ran under tensor contract version 2 on all 676 files, with a model trained for 1 epoch on the CPU from the version 2 join of the same files and exported with a version 2 bundle (export check 1.79e-07 over 300 states). Forge's side ran on fork branch `t-contract-v2`.
+
+| Snapshots | Matched | Largest difference | Mean |
+|---|---|---|---|
+| All 166,054 of the dry run | 166,054 | 2.98e-07 | 3.72e-08 |
+| The 1,292 that version 1 dropped, each with a left-out stack ability | 1,292 | 2.09e-07 | 3.86e-08 |
+| 1,976 from 10 schema version 2 games, recorded that day | 1,976 | 2.38e-07 | 4.26e-08 |
+| Of those, 868 with the initiative, the monarch or speed set | 868 | 1.79e-07 | 3.87e-08 |
+| Of those, 88 with a left-out stack ability | 88 | 1.19e-07 | 3.57e-08 |
+
+Forge left out 1,970 stack abilities on the dry run and 88 on the new games, the same counts as the join. A version 1 bundle still runs on that jar. The dry-run v1 bundle gave the same scores, bit for bit, as on the trunk jar (`9c32892`) on the 164,762 dry-run snapshots with no left-out stack ability. On the other 1,292, which version 1 training dropped, 1,249 moved, by at most 0.316 and 0.012 on average. The placeholder case has no game file, because a real game never holds one. The fork's `OnnxEvaluatorTest` covers it twice, on the fixture below and on a pruned copy of a live game that plays a placeholder onto the battlefield.
+
+The fork's Java tests run on a fixture that `tests/forge_fixture.py` builds: a smoke-model bundle, a game file with every kind of input the contract has, and PyTorch's score for each of its snapshots. `python -m tests.forge_fixture OUT` rebuilds it, and the fork keeps the result in `forge-gui-desktop/src/test/resources/onnx-fixture/`. From version 2 the fixture also holds the initiative, the monarch and speed on the scoreboard, The Initiative and a Tamiyo effect on the stack, and the `hidden` placeholder on the battlefield and in a graveyard. The version 1 fixture stays in `onnx-fixture-v1/`, so the fork's tests show a version 1 bundle still loads and scores what it did.
 
 ## First real files
 

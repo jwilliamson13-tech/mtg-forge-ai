@@ -16,7 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+# Version 1 files still load. Their snapshots lack the version 2 scoreboard fields, and the loader fills them in
+# as `V1_DEFAULTS`: version 1 recorded no such state, so these say "not recorded" as 0 and false.
+SCHEMA_VERSIONS = (1, 2)
 
 END_REASONS = ("win", "draw_clock", "draw_turn_cap", "draw_rules", "exception")
 SIM_MODES = ("heuristic", "hybrid", "full")
@@ -153,7 +156,7 @@ METADATA = Shape({
     "honest_play": _boolean,
     "tripwire": TRIPWIRE,
 })
-SCOREBOARD = Shape({
+SCOREBOARD_V1 = Shape({
     "me_life": _integer(),
     "opp_life": _integer(),
     "me_poison": COUNT,
@@ -165,6 +168,18 @@ SCOREBOARD = Shape({
     "me_active": _boolean,
     "me_on_play": _boolean,
 })
+SPEED = _integer(0, 4)
+SCOREBOARD = Shape({
+    **SCOREBOARD_V1.fields,
+    "me_initiative": _boolean,
+    "opp_initiative": _boolean,
+    "me_monarch": _boolean,
+    "opp_monarch": _boolean,
+    "me_speed": SPEED,
+    "opp_speed": SPEED,
+})
+V1_DEFAULTS = {"me_initiative": False, "opp_initiative": False, "me_monarch": False, "opp_monarch": False,
+               "me_speed": 0, "opp_speed": 0}
 CARD = Shape({
     "id": _integer(),
     "name": _nullable(_text),
@@ -207,6 +222,8 @@ SNAPSHOT = Shape({
     "zones": ZONES,
     "stack": _list_of(STACK_ITEM),
 })
+SNAPSHOT_V1 = Shape({**SNAPSHOT.fields, "scoreboard": SCOREBOARD_V1})
+SNAPSHOT_BY_VERSION = {1: SNAPSHOT_V1, 2: SNAPSHOT}
 
 
 @dataclass(frozen=True)
@@ -218,6 +235,11 @@ class GameRecord:
     def game_id(self) -> str:
         """Unique across batches. A seed belongs to a worker, so it needs the game number too."""
         return f"{self.metadata['batch_id']}-{self.metadata['seed']}-{self.metadata['game_number']}"
+
+    @property
+    def schema_version(self) -> int:
+        """The version the file was written in. A version 1 file's snapshots have `V1_DEFAULTS` filled in."""
+        return self.metadata["schema_version"]
 
     @property
     def honest_play(self) -> bool:
@@ -240,8 +262,8 @@ def _check_metadata(metadata: object) -> None:
     if type(metadata) is not dict:
         raise GameRecordError(f"{where}: expected the metadata object, got {metadata!r}")
     version = metadata.get("schema_version")
-    if version != SCHEMA_VERSION:
-        raise GameRecordError(f"{where}.schema_version: expected {SCHEMA_VERSION}, got {version!r}")
+    if type(version) is not int or version not in SCHEMA_VERSIONS:
+        raise GameRecordError(f"{where}.schema_version: expected one of {SCHEMA_VERSIONS}, got {version!r}")
     METADATA(metadata, where)
     reason, winner = metadata["end_reason"], metadata["winner"]
     if reason == "exception":
@@ -289,11 +311,15 @@ def _check_stack_item(item: dict, where: str) -> None:
             raise GameRecordError(f"{where}.targets[{index}]: a target is a card or a seat")
 
 
-def _check_snapshot(snapshot: object, where: str, final_turn: int) -> None:
-    SNAPSHOT(snapshot, where)
-    turn = snapshot["scoreboard"]["turn"]
+def _check_snapshot(snapshot: object, where: str, final_turn: int, version: int = SCHEMA_VERSION) -> None:
+    SNAPSHOT_BY_VERSION[version](snapshot, where)
+    board = snapshot["scoreboard"]
+    turn = board["turn"]
     if turn > final_turn:
         raise GameRecordError(f"{where}.scoreboard.turn: {turn} is past final_turn {final_turn}")
+    for marker in ("initiative", "monarch"):
+        if board.get(f"me_{marker}") and board.get(f"opp_{marker}"):
+            raise GameRecordError(f"{where}.scoreboard: only one player can have the {marker}")
     zones = snapshot["zones"]
     battlefield_ids = {card["id"] for card in zones["battlefield"]}
     for zone, cards in zones.items():
@@ -311,9 +337,12 @@ def _read(lines: Iterable[str]) -> GameRecord:
     metadata = json.loads(first)
     _check_metadata(metadata)
     snapshots = []
+    version = metadata["schema_version"]
     for number, line in enumerate(lines, start=2):
         snapshot = json.loads(line)
-        _check_snapshot(snapshot, f"line {number}", metadata["final_turn"])
+        _check_snapshot(snapshot, f"line {number}", metadata["final_turn"], version)
+        if version == 1:
+            snapshot["scoreboard"].update(V1_DEFAULTS)
         snapshots.append(snapshot)
     if not snapshots:
         raise GameRecordError("the file has no snapshots")

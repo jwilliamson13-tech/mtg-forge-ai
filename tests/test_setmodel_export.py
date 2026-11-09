@@ -19,7 +19,8 @@ from tests.setmodel_corpus import (card, card_table, game, manifest, smoke_games
                                    write_manifest, write_parquet)
 
 DOCS = Path(__file__).parent.parent / "docs"
-COMMITTED = DOCS / "tensor-contract-v1.json"
+COMMITTED = DOCS / "tensor-contract-v2.json"
+V1 = DOCS / "tensor-contract-v1.json"  # kept as written, for a version 1 bundle such as gen0
 
 
 def hidden_game():
@@ -100,7 +101,7 @@ def test_the_card_table_gives_a_whole_split_name_what_training_resolves_on_every
 def test_the_committed_contract_is_the_one_the_code_builds():
     committed = json.loads(COMMITTED.read_text(encoding="utf-8"))
     assert committed == build_contract(Caps(), committed["sizes"]["K"])
-    assert committed["version"] == 1
+    assert committed["version"] == 2
 
 
 def test_the_contract_doc_names_every_input_and_field():

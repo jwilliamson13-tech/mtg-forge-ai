@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -37,6 +38,11 @@ from setmodel.features import EMPTY_CARD, CardTable, Caps, Encoded, densify, enc
 # Spec 5 reads the manifest and never writes it. Spec 4 owns the file.
 MANIFEST_VERSION = 1
 DECK_SPLITS = ("train", "held_out")
+
+# The name of the placeholder #25's pruned search copies hold for a card the searching side can't know,
+# `GameCopier.HIDDEN_CARD_NAME` in the fork. A copy can move one into a public zone. It is encoded as a hidden card:
+# no lookup, `hidden` 1. A real game never holds one, so on game files this only matters if Forge ever names a card so.
+PLACEHOLDER_NAME = "hidden"
 
 # A hidden card has no name, so it can't be an unmatched name. Set this True to treat it as
 # one, and every snapshot holding a hidden card is dropped.
@@ -117,6 +123,7 @@ class JoinReport:
     card_rows: int = 0
     hidden_cards: int = 0
     unmatched: Counter = field(default_factory=Counter)  # (name, face) -> rows
+    skipped: Counter = field(default_factory=Counter)  # stack abilities with no card behind them: name -> rows
     ambiguous: Counter = field(default_factory=Counter)  # name -> rows that got only what its scripts share
     script_counts: dict[str, int] = field(default_factory=dict)  # ambiguous name -> scripts
 
@@ -126,6 +133,7 @@ class JoinReport:
                 "hidden_cards": self.hidden_cards,
                 "unmatched": [{"name": name, "face": face, "rows": rows}
                               for (name, face), rows in self.unmatched.most_common()],
+                "skipped": [{"name": name, "rows": rows} for name, rows in self.skipped.most_common()],
                 "ambiguous": [{"name": name, "scripts": self.script_counts[name], "rows": rows}
                               for name, rows in self.ambiguous.most_common()]}
 
@@ -135,6 +143,9 @@ class JoinReport:
                  f"card and stack rows {self.card_rows}", f"hidden cards {self.hidden_cards}",
                  f"unmatched names {len(self.unmatched)}, {self.unmatched.total()} rows"]
         lines += [f"  {rows}  {name} ({face})" for (name, face), rows in self.unmatched.most_common()]
+        lines.append(f"stack abilities left out, no card behind them: {self.skipped.total()} rows, "
+                     f"{len(self.skipped)} names")
+        lines += [f"  {rows}  {name}" for name, rows in self.skipped.most_common()]
         lines.append(f"names on several scripts, shared features only: {len(self.ambiguous)}, "
                      f"{self.ambiguous.total()} rows")
         lines += [f"  {rows}  {name} ({self.script_counts[name]} scripts)"
@@ -314,6 +325,37 @@ def _add_counters(table: pa.Table, counts: np.ndarray) -> None:
     counts[:, COUNT["counters_other"]] += np.bincount(owner[other], amounts[other], len(counters)).astype(np.int64)
 
 
+def _hidden(table: pa.Table) -> np.ndarray:
+    """A card this side may not look at: no name, or the placeholder a pruned search copy holds."""
+    names = _array(table, "name")
+    return _numpy(pc.fill_null(pc.equal(names, PLACEHOLDER_NAME), True))
+
+
+def _skipped(table: pa.Table, feature: np.ndarray) -> np.ndarray:
+    """Stack abilities whose source isn't a card: an effect, an emblem, The Initiative, The Monarch, speed.
+
+    Forge gives such a source a name no card has, so the test is an ability whose named source the card table
+    lacks. Tensor contract version 2 leaves these out of the state. A spell always has a card behind it, and any
+    other unmatched name still drops its snapshot.
+    """
+    if "kind" not in table.column_names:
+        return np.zeros(table.num_rows, dtype=bool)
+    return (feature < 0) & _numpy(pc.fill_null(pc.equal(_array(table, "kind"), "ability"), False))
+
+
+_EFFECT_NUMBER = re.compile(r" \(\d+\)")
+
+
+def _tally(counter: Counter, table: pa.Table, rows: np.ndarray, *, with_face: bool) -> None:
+    """Add these rows to a report counter by name. A Forge id in an effect's name, as in `X (48)'s Effect`, is dropped."""
+    if not rows.any():
+        return
+    names = _numpy(_array(table, "name"))[rows]
+    faces = _numpy(_array(table, "face"))[rows]
+    for name, face in zip(names.tolist(), faces.tolist()):
+        counter[(name, face) if with_face else _EFFECT_NUMBER.sub(" (N)", name)] += 1
+
+
 def _card_live(table: pa.Table, mine: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Flags and counts per card row. All of it is on the row itself, so it is what this side saw."""
     counts = np.zeros((table.num_rows, len(COUNT_FIELDS)), dtype=np.int64)
@@ -323,7 +365,7 @@ def _card_live(table: pa.Table, mine: np.ndarray) -> tuple[np.ndarray, np.ndarra
     _add_counters(table, counts)
     flags = {"is_creature": _is_set(table, "power"), "tapped": _flag(table, "tapped"),
              "summoning_sick": _flag(table, "summoning_sick"), "mine": mine, "face_down": _flag(table, "face_down"),
-             "hidden": ~_is_set(table, "name"),
+             "hidden": _hidden(table),
              "attacking": _is_set(table, "attacking_seat") | _is_set(table, "attacking_card"),
              "blocking": _has_items(table, "blocking"), "blocked": _has_items(table, "blocked_by"),
              "attached": _is_set(table, "attached_to") | _is_set(table, "attached_to_seat")}
@@ -331,7 +373,7 @@ def _card_live(table: pa.Table, mine: np.ndarray) -> tuple[np.ndarray, np.ndarra
 
 
 def _stack_live(table: pa.Table, mine: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    flags = {"mine": mine, "face_down": _flag(table, "face_down"), "hidden": ~_is_set(table, "name"),
+    flags = {"mine": mine, "face_down": _flag(table, "face_down"), "hidden": _hidden(table),
              "stack_ability": _numpy(pc.equal(_array(table, "kind"), "ability"))}
     return _pack(flags, table.num_rows), np.zeros((table.num_rows, len(COUNT_FIELDS)), dtype=np.int64)
 
@@ -357,9 +399,10 @@ class _Features:
         self.of_pair: dict[str, int] = {}  # "name\0face" to its feature, or -1
 
     def indices(self, table: pa.Table, *, count: bool = True) -> np.ndarray:
-        """A feature index per row: 0 for a hidden card, -1 for an unmatched name.
+        """A feature index per row: 0 for a hidden card or a placeholder, -1 for an unmatched name.
 
-        `count` adds the rows to the join report. The second pass reads the same rows again and doesn't.
+        `count` adds matched rows on several scripts to the join report. The second pass reads the same rows again
+        and doesn't. The caller counts unmatched rows, because only it knows which of them are left out.
         """
         pairs = pc.binary_join_element_wise(_array(table, "name"), _array(table, "face"), "\0").dictionary_encode()
         codes = _numpy(pc.fill_null(pairs.indices, -1)).astype(np.int64)
@@ -374,6 +417,8 @@ class _Features:
         return np.array([*lookup, 0], dtype=np.int64)[codes]  # a null code of -1 reads the 0 on the end: hidden
 
     def _feature(self, name: str, face: str) -> int:
+        if name == PLACEHOLDER_NAME:
+            return 0
         resolved = self.cards.resolve(name, face)
         if resolved is None:
             return -1
@@ -385,9 +430,7 @@ class _Features:
         return self.index[key]
 
     def _count(self, name: str, face: str, feature: int, rows: int) -> None:
-        if feature < 0:
-            self.report.unmatched[(name, face)] += rows
-        elif self.cards.resolve(name, face).ambiguous:
+        if feature > 0 and self.cards.resolve(name, face).ambiguous:
             self.report.ambiguous[name] += rows
             self.report.script_counts[name] = self.cards.script_count(name)
 
@@ -466,23 +509,26 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
 
     report = JoinReport(games=len(games), snapshots=snapshot_count)
     features = _Features(cards, vocab, caps, report)
-    tables = ((parquet / "cards", CARD_COLUMNS, _card_live, _card_zones),
-              (parquet / "stack", STACK_COLUMNS, _stack_live, _stack_zones))
+    tables = ((parquet / "cards", CARD_COLUMNS, _card_live, _card_zones, ()),
+              (parquet / "stack", STACK_COLUMNS, _stack_live, _stack_zones, ("kind",)))
 
-    # Pass 1: names, drops, and each snapshot's card count.
+    # Pass 1: names, drops, left-out stack abilities, and each snapshot's card count.
     keep = np.ones(snapshot_count, dtype=bool)
     per_row = np.zeros(snapshot_count, dtype=np.int64)
-    for folder, *_ in tables:
-        for chunk in _chunks(folder, ("game_id", "snapshot_index", "name", "face")):
+    for folder, _, _, _, extra in tables:
+        for chunk in _chunks(folder, ("game_id", "snapshot_index", "name", "face", *extra)):
             row, feature = owning_row(chunk), features.indices(chunk)
-            hidden = ~_is_set(chunk, "name")
-            report.card_rows += len(feature)
+            skipped = _skipped(chunk, feature)
+            hidden = _hidden(chunk)
+            report.card_rows += int((~skipped).sum())
             report.hidden_cards += int(hidden.sum())
-            bad = feature < 0
+            bad = (feature < 0) & ~skipped
+            _tally(report.unmatched, chunk, bad, with_face=True)
+            _tally(report.skipped, chunk, skipped, with_face=False)
             if HIDDEN_COUNTS_AS_UNMATCHED:
                 bad |= hidden
             keep[row[bad]] = False
-            per_row += np.bincount(row, minlength=len(per_row))
+            per_row += np.bincount(row[~skipped], minlength=len(per_row))
     report.snapshots_dropped = int((~keep).sum())
     if not keep.any():
         raise DatasetError(f"{parquet}: every snapshot was dropped\n{report.format()}")
@@ -492,15 +538,15 @@ def load_corpus(parquet: str | Path, cards: CardTable, vocab: Vocabulary, manife
     card_offsets = np.concatenate([[0], np.cumsum(per_row[keep])])
     arrays = _CardArrays(int(card_offsets[-1]), len(features.encoded))
     filled = np.zeros(len(card_offsets) - 1, dtype=np.int64)
-    for folder, columns, live_of, zones_of in tables:
+    for folder, columns, live_of, zones_of, _ in tables:
         for chunk in _chunks(folder, columns):
             row = owning_row(chunk)
-            kept = keep[row]
+            feature = features.indices(chunk, count=False)
+            kept = keep[row] & ~_skipped(chunk, feature)
             if not kept.any():
                 continue
             mine = _numpy(pc.fill_null(_array(chunk, "controller"), 0)) == side[row]
             flags, counts = live_of(chunk, mine)
-            feature = features.indices(chunk, count=False)
             target = new_row[row[kept]]
             at = card_offsets[target] + filled[target] + _ranks(target)
             filled += np.bincount(target, minlength=len(filled))
