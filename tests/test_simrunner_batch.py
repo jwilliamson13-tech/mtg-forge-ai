@@ -156,6 +156,75 @@ def test_a_negative_budget_stops_the_batch(config, records):
     assert records() == {}
 
 
+def test_a_batch_has_no_ai_step_budget_unless_asked(config, records):
+    batch = run_batch(config())
+    assert all("-aisteps" not in run["argv"] for run in records().values())
+    assert "AI step budget" not in format_summary(batch)
+
+
+def test_an_ai_step_budget_passes_through_and_is_reported(config, records, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "step_stops")
+    batch = run_batch(config(ai_steps=5000))
+    assert all(run["argv"][run["argv"].index("-aisteps") + 1] == "5000" for run in records().values())
+    assert batch.clean
+    assert batch.step_stops == 6
+    assert batch.most_steps == 103  # the stub's game 3 is the largest: 100 plus its number
+    summary = format_summary(batch)
+    assert "AI step budget                    5000 steps per heuristic decision\n" in summary
+    assert "AI step budget stops              6\n" in summary
+    assert "AI most steps in one decision     103\n" in summary
+
+
+def test_a_jar_that_ignores_the_ai_step_budget_fails_the_batch(config, monkeypatch):
+    monkeypatch.setenv("STUB_SCENARIO", "no_steps_jar")
+    batch = run_batch(config(ai_steps=5000))
+    assert not batch.clean
+    assert "did not report on the AI step budget" in format_workers(batch)
+
+
+def test_a_negative_ai_step_budget_stops_the_batch(config, records):
+    with pytest.raises(SetupError):
+        run_batch(config(ai_steps=-1))
+    assert records() == {}
+
+
+def test_pool_turns_the_ai_step_budget_on_by_default_and_batch_does_not():
+    from simrunner.__main__ import build_parser
+    from simrunner.worker import DEFAULT_AI_STEPS
+    parser = build_parser()
+    pool = parser.parse_args(["pool", "--games", "10", "--seed", "1", "--start", "23:00", "--stop", "05:00"])
+    batch = parser.parse_args(["batch", "a.dck", "b.dck", "--games", "10", "--seed", "1"])
+    matchup = parser.parse_args(["matchup", "a", "b", "--seed", "1"])
+    assert pool.ai_steps == DEFAULT_AI_STEPS
+    assert batch.ai_steps == 0 and matchup.ai_steps == 0
+    off = parser.parse_args(["pool", "--games", "10", "--seed", "1", "--start", "23:00", "--stop", "05:00",
+                             "--ai-steps", "0"])
+    assert off.ai_steps == 0
+
+
+def test_generation_passes_the_ai_step_budget_to_pool_alone(monkeypatch):
+    from simrunner import loop
+    seen = []
+
+    class Captured(Exception):
+        pass
+
+    def capture(config):
+        seen.append(config)
+        raise Captured
+
+    monkeypatch.setattr(loop, "Loop", capture)
+    base = ["generation", "--from", "heuristic", "--to", "gen0", "--games", "10", "--seed", "1",
+            "--start", "23:00", "--stop", "05:00"]
+    for extra in ([], ["--ai-steps", "0"]):
+        with pytest.raises(Captured):
+            main(base + extra)
+    left_out, off = seen
+    assert "--ai-steps" not in left_out.pool_options  # so the pool's own default applies
+    assert off.pool_options[off.pool_options.index("--ai-steps") + 1] == "0"
+    assert "--ai-steps" not in off.ladder_options + off.converge_options + off.forge_options
+
+
 def test_each_worker_gets_its_own_throwaway_profile(config, records, tmp_path):
     run_batch(config(workers=3))
     runs = list(records().values())

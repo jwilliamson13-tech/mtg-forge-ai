@@ -116,14 +116,19 @@ def outcome_lines(turn: int, first: str, second: str) -> None:
 
 
 def print_ai_limits(argv: list[str], scenario: str, seed: int, n: int) -> None:
-    """Forge prints this per game with `-sim` or `-budget`, and a stale jar never does."""
-    if "-sim" in argv or "-budget" in argv:
+    """Forge prints this per game with `-sim`, `-budget` or `-aisteps`, and a stale jar never does."""
+    if "-sim" in argv or "-budget" in argv or "-aisteps" in argv:
         if scenario not in ("stale_jar", "no_budget_jar"):
             expiries = 2 if scenario == "deadlines" else 0
             stops = 1 if scenario == "budget_stops" else 0
             line = f"AI limits: {expiries} deadline expiries, {stops} budget stops, {seed % 1000 + n} random draws"
             if scenario == "stops":
                 line += ", 3 stops played, 1 stops passed, 2 stops with a land, 1 land drops missed"
+            if "-aisteps" in argv and scenario != "no_steps_jar":
+                if scenario != "stops":
+                    line += ", 0 stops played, 0 stops passed, 0 stops with a land, 0 land drops missed"
+                # a jar with the step budget prints both step fields, and only with the flag
+                line += f", {1 if scenario == 'step_stops' else 0} step stops, {100 + n} most steps"
             print(line)
 
 

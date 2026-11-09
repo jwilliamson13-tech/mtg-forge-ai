@@ -91,6 +91,8 @@ def format_summary(batch: BatchResult) -> str:
         ("workers", str(len(batch.workers))),
         ("clock", f"{config.clock_s} s"),
         ("search budget", f"{batch.search_budget} steps per decision" if batch.search_budget else "off"),
+        # only with -aisteps, so that a report without it reads as it always did
+        *([("AI step budget", f"{config.ai_steps} steps per heuristic decision")] if config.ai_steps else []),
         ("games attempted", str(batch.attempted)),
         ("games finished", str(batch.finished)),
         ("games not finished", str(batch.not_finished)),
@@ -116,6 +118,8 @@ def format_summary(batch: BatchResult) -> str:
         ("AI decision timeouts", str(sum(worker.ai_timeouts for worker in batch.workers))),
         ("AI deadline expiries", _count(batch.deadline_expiries)),
         ("AI search budget stops", _count(batch.budget_stops)),
+        *([("AI step budget stops", _count(batch.step_stops)),
+           ("AI most steps in one decision", _count(batch.most_steps))] if config.ai_steps else []),
         ("AI stops that played a line", _count(batch.stops_played)),
         ("AI stops that passed", _count(batch.stops_passed)),
         ("AI stops with a land candidate", _count(batch.stops_with_land)),

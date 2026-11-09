@@ -180,9 +180,13 @@ def plan_units(players: tuple[Player, ...], deck_pairs: list[tuple[str, str]], b
 def _plan_fields(config: LadderConfig, deck_pairs: list[tuple[str, str]]) -> dict:
     """What decides which games the ladder folder holds. The players are added to as generations come."""
     base = config.base
-    return {"seed": base.batch_seed, "split": config.split, "deck_pairs": [list(pair) for pair in deck_pairs],
-            "pair_games": config.pair_games, "clock_s": base.clock_s, "search_budget": base.search_budget,
-            "turn_cap": base.records.turn_cap, "honest": base.records.honest, "tripwire": base.tripwire}
+    fields = {"seed": base.batch_seed, "split": config.split, "deck_pairs": [list(pair) for pair in deck_pairs],
+              "pair_games": config.pair_games, "clock_s": base.clock_s, "search_budget": base.search_budget,
+              "turn_cap": base.records.turn_cap, "honest": base.records.honest, "tripwire": base.tripwire}
+    if base.ai_steps:
+        # only when on, so that a plan written before the setting existed reads as played without it
+        fields["ai_steps"] = base.ai_steps
+    return fields
 
 
 def _hold_plan(config: LadderConfig, splits: dict[str, str]) -> list[tuple[str, str]]:
@@ -197,7 +201,8 @@ def _hold_plan(config: LadderConfig, splits: dict[str, str]) -> list[tuple[str, 
             raise SetupError(f"{config.run_dir} holds a ladder over {len(pairs)} deck pairs, not {config.deck_pairs}")
     fields = _plan_fields(config, pairs)
     if held is not None:
-        differs = sorted(key for key in fields if held.get(key) != fields[key])
+        # ai_steps from the held side too, because a plan leaves it out when off
+        differs = sorted(key for key in fields.keys() | ({"ai_steps"} & held.keys()) if held.get(key) != fields.get(key))
         if differs:
             raise SetupError(f"{config.run_dir} holds a ladder with other settings, in: {', '.join(differs)}")
         unknown = [deck for pair in pairs for deck in pair if deck not in splits]
@@ -514,6 +519,7 @@ def ladder_fields(ladder: LadderResult) -> dict:
         "turn_cap": base.records.turn_cap,
         "honest": base.records.honest,
         "tripwire": base.tripwire,
+        **({"ai_steps": base.ai_steps} if base.ai_steps else {}),
         "confidence": config.confidence,
         "anchor": {"player": config.anchor_label, "rating": config.anchor_rating},
         "method": ("Bradley-Terry maximum likelihood over decisive games, on the Elo scale "

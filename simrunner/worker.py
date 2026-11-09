@@ -39,6 +39,9 @@ DEFAULT_EVALUATOR = "forge"
 DECK_NAMES = ("seat1.dck", "seat2.dck")
 # Search steps per AI decision. See "Full-sim replay" in docs/forge-build.md for how this was chosen.
 DEFAULT_SEARCH_BUDGET = 100
+# AI steps per heuristic decision, Forge's `-aisteps`. `pool` turns it on by default. See "Heuristic step budget" in
+# docs/forge-build.md for how this was chosen.
+DEFAULT_AI_STEPS = 1000
 
 # Past this, a worker is hung rather than slow, and gets killed. The clock already
 # bounds each game, so this is a backstop for a JVM that stops responding.
@@ -194,7 +197,7 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
              search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
-             tripwire: bool = True, prune: bool = True) -> list[str]:
+             tripwire: bool = True, prune: bool = True, ai_steps: int = 0) -> list[str]:
     """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -207,6 +210,8 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-eval", *evaluators]
     if search_budget:
         args += ["-budget", str(search_budget)]
+    if ai_steps:
+        args += ["-aisteps", str(ai_steps)]
     if not tripwire:
         args += ["-tripwire", "off"]
     if not prune:

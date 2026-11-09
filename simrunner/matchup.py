@@ -318,6 +318,8 @@ def result_fields(result: MatchupResult) -> dict:
         "honest": bool(batch.records and batch.records.honest),
         "turn_cap": batch.records.turn_cap if batch.records else None,
         "tripwire": batch.tripwire,
+        # only when on, so that a matchup.json written before the setting existed reads as played without it
+        **({"ai_steps": batch.ai_steps} if batch.ai_steps else {}),
         "games_attempted": result.attempted,
         "games_finished": result.finished,
         **_tally_fields(result.tally),

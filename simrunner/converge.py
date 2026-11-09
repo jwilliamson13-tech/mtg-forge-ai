@@ -43,7 +43,7 @@ INCOMPLETE = "incomplete"
 ENDED = (MET, BUDGET_SPENT)  # a matchup that ended this way gives the same answer if played again
 # The matchup.json fields that decide its games and its interval. A reused matchup has to match them.
 SETTINGS = ("seed", "workers", "width_points", "confidence", "round_games", "max_games", "clock_s", "search_budget",
-            "records", "honest", "turn_cap", "tripwire")
+            "records", "honest", "turn_cap", "tripwire", "ai_steps")
 SIDE_SETTINGS = ("deck", "ai_profile", "sim_mode", "evaluator", "generation")
 
 
@@ -309,6 +309,7 @@ def converge_fields(result: ConvergeResult) -> dict:
         "turn_cap": batch.records.turn_cap,
         "honest": batch.records.honest,
         "tripwire": batch.tripwire,
+        **({"ai_steps": batch.ai_steps} if batch.ai_steps else {}),
         "counts": result.counts,
         "matchups": rows,
         "set_aside": [str(folder) for folder in result.set_aside],

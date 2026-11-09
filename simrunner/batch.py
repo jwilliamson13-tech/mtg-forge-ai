@@ -55,6 +55,7 @@ class BatchConfig:
     tripwire: bool = True  # catch forge-ai reading hidden cards
     prune: bool = True  # False passes -prune off, so a searching seat's copies hold the hidden cards
     batch_name: str | None = None  # the batch id, when it isn't the run folder's name
+    ai_steps: int = 0  # AI steps per heuristic decision, Forge's -aisteps; 0 leaves the wall clock in charge
 
     @property
     def batch_id(self) -> str:
@@ -203,6 +204,17 @@ class BatchResult:
         return self._limit_total("budget_stops")
 
     @property
+    def step_stops(self) -> int | None:
+        return self._limit_total("step_stops")
+
+    @property
+    def most_steps(self) -> int | None:
+        """The most AI steps any one decision of the batch spent. None when Forge didn't say."""
+        reported = [game.ai_limits.most_steps for game in self.games
+                    if game.ai_limits and game.ai_limits.most_steps is not None]
+        return max(reported) if reported else None
+
+    @property
     def stops_played(self) -> int | None:
         return self._limit_total("stops_played")
 
@@ -254,6 +266,9 @@ class BatchResult:
         ignored = []
         if self.search_budget and not all(game.ai_limits for game in worker.games):
             ignored.append("Forge did not report on the search budget")
+        if self.config.ai_steps and not all(game.ai_limits and game.ai_limits.step_stops is not None
+                                            for game in worker.games):
+            ignored.append("Forge did not report on the AI step budget")
         if self.config.records and check_records(worker).missing:
             ignored.append("a game with no game record")
         if self.config.records and self.config.records.honest and not all(
@@ -370,6 +385,8 @@ def check_setup(config: BatchConfig) -> None:
         raise SetupError("games and workers must both be at least 1")
     if config.search_budget is not None and config.search_budget < 0:
         raise SetupError("the search budget can't be negative")
+    if config.ai_steps < 0:
+        raise SetupError("the AI step budget can't be negative")
     for number, seat in enumerate(config.seats, 1):
         if seat.evaluator not in (None, DEFAULT_EVALUATOR) and not seat_searches(seat):
             # A heuristic seat never scores a state, so it would play stock under another name.
@@ -450,7 +467,7 @@ def _play(config: BatchConfig, jar: Path, forge_gui: Path) -> BatchResult:
                        "-jar", str(jar),
                        *sim_args(config.seats, deck_dir, plan.games, plan.seed, config.clock_s,
                                  resolve_search_budget(config.seats, config.search_budget), records, config.batch_id,
-                                 config.tripwire, config.prune)]
+                                 config.tripwire, config.prune, config.ai_steps)]
             jobs.append((plan, command, folder, config.run_dir / folder.name, config.clock_s, started,
                          config.window.kill_at if config.window else None))
 
