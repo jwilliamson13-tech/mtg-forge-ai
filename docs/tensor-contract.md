@@ -1,8 +1,18 @@
 # Tensor contract
 
-This is the interface between the trained model and Forge's ONNX evaluator, which is Spec 3. The Java side builds its inputs from this page and `tensor-contract-v1.json`, and doesn't need to read the Python. Spec 5 owns both.
+This is the interface between the trained model and Forge's ONNX evaluator, which is Spec 3. The Java side builds its inputs from this page and `tensor-contract-v2.json`, and doesn't need to read the Python. Spec 5 owns both.
 
-The current version is 1. `tensor-contract-v1.json` is the machine-readable copy, and `setmodel.export.build_contract` is its source. A test fails if the two differ. Any change to a name, a dtype, a shape, a field's meaning or a field's order makes a new version. Each bundle carries its own `contract.json` with the same fields, plus a `bundle` section that says which generation it is.
+The current version is 2. `tensor-contract-v2.json` is the machine-readable copy, and `setmodel.export.build_contract` is its source. A test fails if the two differ. `tensor-contract-v1.json` stays as it was, for version 1 bundles such as gen0's. Any change to a name, a dtype, a shape, a field's meaning or a field's order makes a new version. Each bundle carries its own `contract.json` with the same fields, plus a `bundle` section that says which generation it is.
+
+## Version 2
+
+Decided 2026-11-08. Three changes, and the inputs keep their names, dtypes and order:
+
+1. The scoreboard gains six fields, so S is 16: `me_initiative`, `opp_initiative`, `me_monarch`, `opp_monarch`, `me_speed`, `opp_speed`. Game-record schema version 2 writes them. Forge holds these as effect objects in the command zone, which no zone here holds, so before this they reached the model only as a stack item while one of their triggers waited to resolve, and training dropped that snapshot.
+2. A stack ability whose source the card table lacks is left out of the state. Forge gives an effect, an emblem, The Initiative, The Monarch and speed (`Start Your Engines!`) names no card has. Version 1 dropped the whole snapshot, 1,292 of the dry run's 166,054. Any other unmatched name still drops its snapshot, a spell's included.
+3. A card or stack item named `hidden`, the `card_table.placeholder`, is a hidden card in any zone: all masks 0 and `hidden` 1. It is the placeholder #25's pruned search copies hold for a card the searching side can't know, `GameCopier.HIDDEN_CARD_NAME` in the fork. A copy can play one onto the battlefield or into a graveyard, where version 1 scored it as a named card with no text. A real game never holds one.
+
+The fork's `OnnxBundle` loads versions 1 and 2. It reads the bundle's `version` and builds that version's scoreboard, so a version 1 bundle gets its 10 fields from a version 2 line. Rules 2 and 3 apply to both: version 1 training dropped every snapshot that held either case, so neither changes a score that version 1 parity covered. `setmodel` builds only version 2, and `load_model` refuses an artifact trained under version 1 with a message naming both versions. `simrunner.generations` accepts bundles of versions 1 and 2 and refuses any other with the version it found.
 
 ## Bundle
 
@@ -27,7 +37,7 @@ The current version is 1. `tensor-contract-v1.json` is the machine-readable copy
 | T | 24 | Tokens per row. |
 | K | 239 | Numeric keys, the vocabulary's `numeric_keys`. |
 | L | 18 | Live-state fields. |
-| S | 10 | Scoreboard fields. |
+| S | 16 | Scoreboard fields. 10 in version 1. |
 
 K comes from the vocabulary of `data/vocab.json`, built with `min_count=5`. A smoke bundle built from a small dump has a smaller K, and its `contract.json` says so.
 
@@ -49,11 +59,11 @@ The output is `win_probability`, float32, shape [1], the chance that this side w
 
 ### Scoreboard fields, in order
 
-`me_life`, `opp_life`, `me_poison`, `opp_poison`, `me_library`, `opp_library`, `opp_hand`, `turn`, `me_active`, `me_on_play`. `game-record.md` defines each one.
+`me_life`, `opp_life`, `me_poison`, `opp_poison`, `me_library`, `opp_library`, `opp_hand`, `turn`, `me_active`, `me_on_play`, `me_initiative`, `opp_initiative`, `me_monarch`, `opp_monarch`, `me_speed`, `opp_speed`. `game-record.md` defines each one. A schema version 1 game file has none of the last six, and they are 0, as they are false and 0 in the Parquet tables such a file converts to. Speed is a count from 0 to 4, scaled by 4 inside the model.
 
 ### Zones, in order
 
-`battlefield` is 0, `me_hand` 1, `me_graveyard` 2, `opp_graveyard` 3, `me_exile` 4, `opp_exile` 5, `opp_revealed` 6, `stack` 7. Both players' permanents share `battlefield`. A stack item counts as one card, looked up by its source card's name and face.
+`battlefield` is 0, `me_hand` 1, `me_graveyard` 2, `opp_graveyard` 3, `me_exile` 4, `opp_exile` 5, `opp_revealed` 6, `stack` 7. Both players' permanents share `battlefield`. A stack item counts as one card, looked up by its source card's name and face. A stack ability with no card behind it isn't one: see rule 2 above.
 
 ### Live fields, in order
 
@@ -98,10 +108,10 @@ One JSON object per line, in `card_features.jsonl.gz`:
 
 To find a card's line:
 
-1. A hidden card has no name, so it has no lookup. All its masks are 0, and `hidden` is 1 in `live`.
+1. A hidden card has no name, or the placeholder name `hidden`, so it has no lookup. All its masks are 0, and `hidden` is 1 in `live`. Its other live fields come from the record as usual.
 2. Map the record's face to a slot. `Original` is `front`, `EmptyRoom` is `empty_room`, and any other face is `back`.
 3. Take the entry for (name, slot), or else the name's entry under any slot.
-4. If the table has no such name, all masks are 0. Training dropped such snapshots, so the model has never seen this case with `hidden` 0, and a real run should log it.
+4. If the table has no such name and the item is a stack ability, leave it out of the state: it has no card behind it. Any other name the table lacks gets all masks 0. Training dropped such snapshots, so the model has never seen this case with `hidden` 0, and a real run should log it.
 
 A whole split name, `Fire // Ice`, has its own entries, one per slot. `front` and `back` hold the rows of both halves. `empty_room` is the empty Room, and it holds only the two identity rows.
 

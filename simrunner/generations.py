@@ -23,6 +23,10 @@ DEFAULT_MODELS = Path(__file__).resolve().parents[1] / "models"
 NAME = re.compile(r"[A-Za-z0-9_-]+")
 NUMBERED = re.compile(r"gen(\d+)")  # a name that states its generation number
 BUNDLE_FILES = ("contract.json", "model.onnx")
+# Tensor contract versions the fork's ONNX evaluator loads, `OnnxBundle.CONTRACT_VERSIONS` in forge.view. Version 1
+# bundles, such as gen0's, still load and run: the fork builds each version's scoreboard from the bundle's own
+# field list. A jar from before version 2 loads only version 1 and refuses the rest itself.
+CONTRACT_VERSIONS = (1, 2)
 
 
 class GenerationError(ValueError):
@@ -78,6 +82,10 @@ def resolve(name: str, models: Path = DEFAULT_MODELS) -> Generation:
         contract = json.loads((folder / "contract.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
         raise GenerationError(f"can't read {folder / 'contract.json'}: {e}") from e
+    version = contract.get("version") if isinstance(contract, dict) else None
+    if type(version) is not int or version not in CONTRACT_VERSIONS:
+        raise GenerationError(f"{name}: {folder / 'contract.json'} is tensor contract version {version!r}, and Forge "
+                              f"loads versions {', '.join(map(str, CONTRACT_VERSIONS))}")
     number = (contract.get("bundle") or {}).get("generation")
     stated = NUMBERED.fullmatch(name)
     if stated and number is not None and int(stated[1]) != number:

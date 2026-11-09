@@ -30,7 +30,7 @@ TRIPWIRE = "tripwire"  # the dropped count for games with tripwire hits
 
 SEAT_COLUMNS = [(f"seat{seat}_{name}", kind) for seat in (1, 2) for name, kind in (
     ("deck", pa.string()), ("ai_profile", pa.string()), ("sim_mode", pa.string()), ("search_budget", pa.int32()))]
-SCOREBOARD_BOOLEANS = ("me_active", "me_on_play")
+SCOREBOARD_BOOLEANS = ("me_active", "me_on_play", "me_initiative", "opp_initiative", "me_monarch", "opp_monarch")
 
 SNAPSHOT_SCHEMA = pa.schema([
     ("game_id", pa.string()),
@@ -86,6 +86,7 @@ class ConversionReport:
     dropped: Counter = field(default_factory=Counter)  # by end reason
     rejected: list[tuple[Path, str]] = field(default_factory=list)  # file and why
     tripwire_games: list[tuple[str, int, list[str]]] = field(default_factory=list)  # game id, hits, signatures
+    version_1_games: int = 0  # kept games whose file had no initiative, monarch or speed fields, so they went in as 0
     snapshot_rows: int = 0
     card_rows: int = 0
     stack_rows: int = 0
@@ -187,6 +188,7 @@ def convert_folder(folder: Path, out: Path, drop_tripwire_hits: bool = False) ->
                 report.dropped[reason] += 1
                 continue
             report.kept[reason] += 1
+            report.version_1_games += game.schema_version == 1
             batch_id = game.metadata["batch_id"]
             game_snapshots, game_cards, game_stack = snapshot_rows(game), card_rows(game), stack_rows(game)
             snapshots.write(batch_id, game_snapshots)
@@ -201,6 +203,9 @@ def convert_folder(folder: Path, out: Path, drop_tripwire_hits: bool = False) ->
 def format_report(report: ConversionReport) -> str:
     lines = [f"kept {report.kept.total()}"]
     lines += [f"  {reason}: {count}" for reason, count in sorted(report.kept.items())]
+    if report.version_1_games:
+        lines.append(f"  of those, {report.version_1_games} from schema version 1 files: "
+                     "initiative, monarch and speed went in as 0")
     lines.append(f"dropped {report.dropped.total()}")
     lines += [f"  {reason}: {count}" for reason, count in sorted(report.dropped.items())]
     for game_id, hits, signatures in report.tripwire_games:

@@ -1,7 +1,7 @@
 """Write what Forge loads: the ONNX model, the card-feature table, the vocabulary, the scales and the contract.
 
 `docs/tensor-contract.md` describes the bundle for the Java side. `build_contract` is the
-one source of it, and `docs/tensor-contract-v1.json` is its committed copy.
+one source of it, and `docs/tensor-contract-v2.json` is its committed copy.
 
 The dynamo exporter is the one to use. The older TorchScript exporter also runs, but its
 scatter-add drifted by 0.002 at 300 cards on the same model, so it would fail the check.
@@ -19,12 +19,12 @@ import onnx
 import onnxruntime
 import torch
 
-from setmodel.config import CHECK_STATES, CHECK_THRESHOLD
-from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, LIVE_FIELDS, SCOREBOARD_FIELDS, ZONE_NAMES, Corpus
+from setmodel.config import CHECK_STATES, CHECK_THRESHOLD, CONTRACT_VERSION
+from setmodel.dataset import (HELD_OUT_DECKS, HELD_OUT_GAMES, LIVE_FIELDS, PLACEHOLDER_NAME, SCOREBOARD_FIELDS,
+                              ZONE_NAMES, Corpus)
 from setmodel.features import BACK, EMPTY_CARD, EMPTY_ROOM, FRONT, CardTable, Caps, Encoded, densify, encode
 from setmodel.model import LIVE_SCALE, SCOREBOARD_SCALE, SetModel, StateModel
 
-CONTRACT_VERSION = 1
 MODEL = "model.onnx"
 CARD_TABLE = "card_features.jsonl.gz"
 VOCAB = "vocab.json"
@@ -47,7 +47,7 @@ OUTPUT = {"name": "win_probability", "dtype": "float32", "shape": [1], "meaning"
 
 
 def build_contract(caps: Caps, key_count: int) -> dict:
-    """Tensor contract version 1. Shape letters are named in `sizes`. N, the card count, is the one dynamic axis."""
+    """The tensor contract. Shape letters are named in `sizes`. N, the card count, is the one dynamic axis."""
     return {
         "version": CONTRACT_VERSION,
         "sizes": {"N": "dynamic, 0 or more", "A": caps.abilities, "T": caps.tokens, "K": key_count,
@@ -64,7 +64,11 @@ def build_contract(caps: Caps, key_count: int) -> dict:
         "card_table": {"file": CARD_TABLE,
                        "slots": {"Original": FRONT, "EmptyRoom": EMPTY_ROOM, "any other face": BACK},
                        "lookup": "(name, slot), else the name's entry under any slot, else all masks 0.",
-                       "hidden": "A hidden card has no lookup: all masks 0 and `hidden` 1 in `live`."},
+                       "hidden": "A hidden card has no lookup: all masks 0 and `hidden` 1 in `live`.",
+                       "placeholder": PLACEHOLDER_NAME,
+                       "placeholder_rule": "A card or stack item named `placeholder` is a hidden card, in any zone.",
+                       "skipped": "A stack ability whose name the table lacks has no card behind it, such as an "
+                                  "effect, The Initiative or The Monarch, and is left out of the state."},
     }
 
 

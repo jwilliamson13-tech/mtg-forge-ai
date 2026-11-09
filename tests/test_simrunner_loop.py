@@ -32,7 +32,7 @@ def open_window(minutes=60):
 def bundle(models, name, generation):
     folder = models / name
     folder.mkdir(parents=True)
-    (folder / "contract.json").write_text(json.dumps({"bundle": {"generation": generation}}), encoding="utf-8")
+    (folder / "contract.json").write_text(json.dumps({"version": 1, "bundle": {"generation": generation}}), encoding="utf-8")
     (folder / "model.onnx").write_bytes(f"weights of {name}".encode())
 
 

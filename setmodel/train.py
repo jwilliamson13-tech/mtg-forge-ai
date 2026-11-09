@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from cardscript.vocab import Vocabulary
-from setmodel.config import FULL, TrainConfig
+from setmodel.config import CONTRACT_VERSION, FULL, TrainConfig
 from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, SPLITS, TRAIN, ZONE_IDS, ZONE_NAMES, Corpus
 from setmodel.features import Caps
 from setmodel.model import ModelConfig, SetModel, weighted_loss
@@ -171,7 +171,8 @@ def save_run(trained: Trained, corpus: Corpus, out: str | Path, seconds: float) 
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     config = trained.config
-    metadata = {"generation": config.generation, "batch_ids": corpus.batch_ids, "ablation": config.ablation,
+    metadata = {"contract": CONTRACT_VERSION, "generation": config.generation, "batch_ids": corpus.batch_ids,
+                "ablation": config.ablation,
                 "train_rows": int(len(corpus.rows(TRAIN))),
                 "train_games": int(len(np.unique(corpus.game[corpus.rows(TRAIN)]))),
                 "torch": str(torch.__version__), "device": _device_name(trained.device)}
@@ -190,6 +191,11 @@ def _device_name(device: str) -> str:
 
 def load_model(folder: str | Path) -> tuple[SetModel, Vocabulary, Caps, dict]:
     artifact = torch.load(Path(folder) / MODEL_FILE, map_location="cpu", weights_only=True)
+    version = artifact["metadata"].get("contract", 1)  # artifacts from before the field were all version 1
+    if version != CONTRACT_VERSION:
+        raise ValueError(f"{folder}: the model was trained under tensor contract version {version}, and this code "
+                         f"builds version {CONTRACT_VERSION} inputs. Use a checkout of that version to export, "
+                         f"review or check it.")
     state = artifact["state_dict"]
     model = SetModel(ModelConfig(**artifact["model_config"]), state["key_scale"])
     model.load_state_dict(state)
