@@ -42,7 +42,7 @@ python -m setmodel pairtest MODEL CARDS [--fixture FILE]
 python -m setmodel parity MODEL PARQUET CARDS MANIFEST SCORES
 ```
 
-`join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device`, `--weight-decay`, `--val-share`, `--eval-every`, `--patience` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
+`join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device`, `--weight-decay`, `--arch`, `--val-share`, `--eval-every`, `--patience` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
 
 ## Rows
 
@@ -128,6 +128,18 @@ The per-key constant is the median absolute deviation of the key's values over t
 
 Mean pooling can't count. One bear and five bears pool to the same `battlefield` vector, and the same goes for a graveyard's size. The spec asks for means, and the board size only reaches the model through which cards are in the mean. If the ablations disappoint, look here before the card encoding.
 
+### Arches
+
+`--arch` picks the network between a placed card and the head. Every arch takes the same contract inputs and gives the same output, so a bundle from any of them loads in Forge with no change to the Java side or the snapshot encoder. The artifact records the arch in `model_config`, and an artifact from before the field loads as `mean`.
+
+| Arch | Between the placed cards and the head |
+|---|---|
+| `mean` | The mean per zone, as above. |
+| `count` | Per zone, the mean, the mean times log(1 + n) and log(1 + n), where n is the zone's card count. Five bears and one bear now differ, and so do a big and a small graveyard. |
+| `attention` (default) | One self-attention block over all of the state's cards, every zone together (4 heads, pre-norm, with a residual and a feed-forward layer), then the `count` pooling. A card's vector can depend on the rest of the board, which mean pooling can't do: the pair test's "consider attention over the battlefield". |
+
+Training batches pad each state's cards to the longest state in the batch and mask the padding. The export traces the one-state path, which has no padding. `tests/test_setmodel_arch.py` requires the two to give the same score for a state, whatever its batch mates are. Card text is still computed per card for every call, and it is most of the cost: at the gen-0 sizes the three arches run within noise of each other on the CPU.
+
 ## Report
 
 `train` writes `model.pt` and `metrics.json`. The artifact holds the weights, the vocabulary, the caps and `metadata`, which has `generation`, `batch_ids`, the ablation, and the row and game counts. `batch_ids` are the batches of the training rows.
@@ -168,7 +180,7 @@ The model is scored on the validation games every `--eval-every` batches (defaul
 
 `metrics.json` `validation.curve` has one point per score: `step`, `epoch` (fractional inside an epoch), `train_loss` (the weighted mean since the last score), `val_log_loss` and `val_accuracy`. `validation.kept` is the curve point whose weights were saved. The held-out numbers in the report are for those weights. `train_rows` and `train_games` in the artifact's metadata still count the whole training split, validation games included. The vocabulary, caps and key scales come from the whole training split too, which is features and not labels.
 
-The loop (`simrunner/loop.py`) calls `train` and `ablate` without these flags, so it gets the defaults, and its `train` summary carries `kept` and `stopped_early`.
+The loop (`simrunner/loop.py`) calls `train` and `ablate` without these flags, so it gets the defaults (`simrunner generation --arch` passes an arch through), and its `train` summary carries `kept` and `stopped_early`.
 
 ## Ablations
 
