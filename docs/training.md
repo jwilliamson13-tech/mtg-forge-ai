@@ -134,9 +134,9 @@ Mean pooling can't count. One bear and five bears pool to the same `battlefield`
 
 | Arch | Between the placed cards and the head |
 |---|---|
-| `mean` (default) | The mean per zone, as above. |
+| `mean` | The mean per zone, as above. |
 | `count` | Per zone, the mean, the mean times log(1 + n) and log(1 + n), where n is the zone's card count. Five bears and one bear now differ, and so do a big and a small graveyard. |
-| `attention` | One self-attention block over all of the state's cards, every zone together (4 heads, pre-norm, with a residual and a feed-forward layer), then the `count` pooling. A card's vector can depend on the rest of the board, which mean pooling can't do: the pair test's "consider attention over the battlefield". |
+| `attention` (default) | One self-attention block over all of the state's cards, every zone together (4 heads, pre-norm, with a residual and a feed-forward layer), then the `count` pooling. A card's vector can depend on the rest of the board, which mean pooling can't do: the pair test's "consider attention over the battlefield". |
 
 Training batches pad each state's cards to the longest state in the batch and mask the padding. The export traces the one-state path, which has no padding. `tests/test_setmodel_arch.py` requires the two to give the same score for a state, whatever its batch mates are. Card text is still computed per card for every call, and it is most of the cost: at the gen-0 sizes the three arches run within noise of each other on the CPU.
 
