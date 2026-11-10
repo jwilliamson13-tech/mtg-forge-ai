@@ -509,11 +509,13 @@ The page never prints a bare percentage. A win rate carries its interval and gam
 
 Merge first, in this order: the stack under this branch (#67 and every PR below it), this PR, and #65, the memory-lean `setmodel`. Join and train on a 10,000-game pool need #65 on this PC, and without it expect the memory floor to kill one of them. The `-eval onnx:DIR` branch is optional. Without it the ladder lists gen0 against gen1 as not played and rates both through heuristic and full.
 
-Gen 0 trains on the heuristic pool already played on 2026-11-07, which the loop adopts as it is:
+Gen 0 trains on a heuristic pool the loop plays itself. The pool of 2026-11-07 had a turn-order leak and was replaced. It was played under the loser-goes-first rule, and since #75 and #76 `pool` and the generation loop default to `--first-player random`, so the loop refuses it with "different plan, in: first_player" and `--data-dir runs/gen0-pool` no longer works. The real gen-0 run plays a new pool into the default run folder, `runs/generations/gen0`:
 
 ```powershell
-python -m simrunner generation --from heuristic --to gen0 --data-dir runs/gen0-pool --games 10000 --seed 20261107 --workers 4 --start 23:00 --stop 07:00
+python -m simrunner generation --from heuristic --to gen0 --games 10000 --seed 20261109 --workers 4 --start HH:MM --stop HH:MM
 ```
+
+Put the night's window in `--start` and `--stop`. The generation loop has no `--java` flag. Every Forge step runs the `java` on `PATH`, so Temurin's `bin` has to come first on `PATH` for any step that loads ONNX: the ladder, converge, and the pools of gen 1 and later. Oracle 21.0.2 crashes ONNX Runtime.
 
 That ladder rates heuristic, full and gen0, and the convergence check runs heuristic against gen0. Then gen 1 plays its own pool with gen0 in both seats:
 
@@ -1086,6 +1088,25 @@ Three causes remain, and they come from the design of the seam rather than from 
 A throwaway scorer counted where the passthrough's available value differs from Forge's over 11,428 states it scored, played the same way: 1,803 states differ. 1,619 had a sick creature with a static ability, a lord or a copy of one. 74 were on the opponent's turn with no such creature, which I take to be the missing blocker. 110 had a band on one side. The two decks have no mana creatures, so the opposite case never came up: a sick mana creature can't tap, and Forge still counts its mana, where the second look doesn't. `EvaluatorsTest` pins that case with Llanowar Elves. The diagnostic run ran out of its 2048m heap after 4 games. Those 4 games match the `164dd62` passthrough record for record, so the counts describe the passthrough's own play.
 
 What this doesn't cover: one matchup, one seed, 20 games. The passthrough runs took 1035 to 1259 seconds against stock's 747, and memory wasn't measured.
+
+**Result: statics kept (fork PR 18).** Josh decided on 2026-11-09 to keep a sick creature's static abilities in the second look. Summoning sickness stops a creature attacking and tapping, and it doesn't switch off a static ability, so a sick lord still pumps this turn's attackers. The second look still takes the creature off the battlefield and out of combat. It first copies the creature's static abilities onto an effect card in its controller's command zone, the way Forge's own effects hold them, and the effect takes the creature's timestamps. Forge's combat look copies the state with `GameCopier`, which recomputes statics, so a pump left in place with no source would vanish in the copy. Same matchup, seed, budget and records as above, 2 workers:
+
+| Run | Jar | Heap | Seat 1 and seat 2 wins | Record digest | Wall time | Same record as stock |
+|---|---|---|---|---|---|---|
+| stock, no `-eval` | trunk `c1ccaf9` | 2048m | 6 and 14 | `b5f51c103433` | 515 s | |
+| stock, no `-eval` | the fix branch | 2048m | 6 and 14 | `b5f51c103433` | 570 s | |
+| `passthrough` | the fix branch | 4096m | 6 and 14 | `b5f51c103433` | 815 s | 20 of 20 |
+
+The passthrough matches stock record for record in 20 of 20 games. It was 7 of 20 after fork PR 15 and 1 of 20 before. The result digest differs from stock's only by the `[eval=passthrough]` in the player names. Stock's digests didn't move, and 678 Forge tests pass. The passthrough took 815 seconds against stock's 515 to 570.
+
+Still open, none of it reached in these 20 games:
+
+- A sick blocker flashed in on the opponent's turn is still removed from the second look, so Forge's combat look plays one blocker short.
+- The second look's combat uses its own random stream (`SECOND_LOOK_SEED`), where stock draws from the game's stream. The attack and block AI draw from `MyRandom`, so on some boards the two combats can play out differently.
+- A sick mana creature's mana is still dropped from the second look, where Forge counts it. These decks have no mana creatures.
+- A static ability that reads its own card now reads the effect card. The lords here give flat pumps, so it never came up.
+
+Scope is one matchup and one seed.
 
 ### The ONNX evaluator
 
