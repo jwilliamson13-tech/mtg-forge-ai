@@ -5,7 +5,11 @@ not look at. The ids in a game record must not undo that, so this runs the two a
 that worked when records held Forge's own card ids:
 
 - other games: an id that names a card in another game of the folder. Forge numbers
-  cards in deck order, so its ids meant the same card in every game of a batch.
+  cards in deck order, so its ids meant the same card in every game of a batch. It counts
+  only when that name is also a card of the hidden card's own game, since only then can it
+  be the hidden card. Record ids are 31-bit hashes, so in a pool of millions of ids one can
+  turn up in another game by chance, naming a card from other decks. Those are counted apart
+  as chance collisions and don't fail the check.
 - other side: an id that the other side's rows of the same file put a name to.
 
 Both must come to zero. A third count is not an id attack and can't reach zero: the
@@ -37,6 +41,7 @@ class HiddenCheck:
     by_other_games: int
     by_other_side: int
     by_public_state: int
+    by_chance: int = 0  # ids that turn up in another game under a name this game never shows
 
     @property
     def ids_named_nothing(self) -> bool:
@@ -88,7 +93,8 @@ def _neighbors(snapshots: list[dict], index: int) -> Iterator[dict]:
 
 def check_games(paths: Iterable[Path]) -> HiddenCheck:
     """Run the attacks over these game files, taken as one batch."""
-    games_naming = defaultdict(set)  # id -> the games where it has a name
+    games_naming = defaultdict(lambda: defaultdict(set))  # id -> game -> the names it has there
+    game_names = defaultdict(set)  # game -> every name either side sees in it
     hidden = set()  # (game, side, id)
     named_by_side = set()
     named_by_state = set()
@@ -103,7 +109,8 @@ def check_games(paths: Iterable[Path]) -> HiddenCheck:
         for snapshot in snapshots:
             for row in _rows(snapshot):
                 if row["name"] is not None and row["id"] is not None:
-                    games_naming[row["id"]].add(game)
+                    games_naming[row["id"]][game].add(row["name"])
+                    game_names[game].add(row["name"])
                     names_by_side[snapshot["side"]].add(row["id"])
         for index, snapshot in enumerate(snapshots):
             side = snapshot["side"]
@@ -117,8 +124,15 @@ def check_games(paths: Iterable[Path]) -> HiddenCheck:
             for card in snapshot["zones"]["battlefield"]:
                 if card["name"] is None and any(_named_by_state(card, other) for other in _neighbors(snapshots, index)):
                     named_by_state.add((game, side, card["id"]))
-    named_by_games = {key for key in hidden if games_naming[key[2]] - {key[0]}}
-    return HiddenCheck(games, len(hidden), len(named_by_games), len(named_by_side), len(named_by_state))
+    named_by_games, by_chance = set(), set()
+    for key in hidden:
+        elsewhere = {name for other, names in games_naming[key[2]].items() if other != key[0] for name in names}
+        if elsewhere & game_names[key[0]]:
+            named_by_games.add(key)
+        elif elsewhere:
+            by_chance.add(key)
+    return HiddenCheck(games, len(hidden), len(named_by_games), len(named_by_side), len(named_by_state),
+                       len(by_chance))
 
 
 def check_folder(folder: Path) -> HiddenCheck:
@@ -130,4 +144,5 @@ def format_check(check: HiddenCheck) -> str:
             f"hidden cards {check.hidden}\n"
             f"named by ids from other games {check.by_other_games}\n"
             f"named by ids from the other side {check.by_other_side}\n"
-            f"matched by public state to the other side's row {check.by_public_state}\n")
+            f"matched by public state to the other side's row {check.by_public_state}\n"
+            f"ids shared with other games by chance {check.by_chance}\n")
