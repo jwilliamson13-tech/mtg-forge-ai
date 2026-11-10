@@ -46,10 +46,14 @@ class ModelConfig:
     width: int = 64
     arch: str = MEAN  # artifacts from before the field are all `mean`
     heads: int = 4  # attention heads, `attention` only
+    dropout: float = 0.0  # on the head's input and hidden layer, training only; artifacts from before the field are 0
+
 
     def __post_init__(self):
         if self.arch not in ARCHES:
             raise ValueError(f"unknown arch {self.arch!r}, expected one of {ARCHES}")
+        if not 0 <= self.dropout < 1:
+            raise ValueError(f"dropout must be in [0, 1), got {self.dropout}")
         if self.arch == ATTENTION and self.width % self.heads:
             raise ValueError(f"width {self.width} doesn't split into {self.heads} heads")
 
@@ -147,7 +151,19 @@ class SetModel(nn.Module):
             scale = torch.log1p(count).unsqueeze(1)
             zones = torch.cat([mean, mean * scale, scale], dim=1)
         zones = zones.reshape(rows, -1)
-        return self.head(torch.cat([zones, scoreboard / self.scoreboard_scale], dim=1)).squeeze(1)
+        return self._head(torch.cat([zones, scoreboard / self.scoreboard_scale], dim=1)).squeeze(1)
+
+    def _head(self, pooled: Tensor) -> Tensor:
+        """The head MLP, with dropout on its input and hidden layer while training. In eval mode it is `self.head`.
+
+        The dropout is functional, so the head stays the same `Sequential` and older artifacts' keys still load.
+        """
+        p = self.config.dropout
+        if not (p and self.training):
+            return self.head(pooled)
+        first, relu, last = self.head
+        hidden = relu(first(nn.functional.dropout(pooled, p, training=True)))
+        return last(nn.functional.dropout(hidden, p, training=True))
 
     def _attend(self, placed: Tensor, row: Tensor, rows: int, one_state: bool) -> Tensor:
         """Run attention within each state: pad the states to the longest, attend with the padding masked, unpad."""

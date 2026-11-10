@@ -45,13 +45,16 @@ def _training_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--arch", choices=ARCHES, default=defaults.arch,
                         help="the card-set network: mean pooling, count-aware pooling, or attention over the "
                              "cards then count-aware pooling. All take the same contract inputs")
+    parser.add_argument("--dropout", type=float, default=defaults.dropout,
+                        help="dropout on the head's input and hidden layer while training, 0 is none")
 
 
 def _config(args: argparse.Namespace) -> TrainConfig:
     return TrainConfig(generation=args.generation, epochs=args.epochs, batch_size=args.batch_size,
                        learning_rate=args.learning_rate, width=args.width, seed=args.seed, device=args.device,
                        val_share=args.val_share, eval_every=args.eval_every, patience=args.patience,
-                       weight_decay=args.weight_decay, arch=args.arch)
+                       weight_decay=args.weight_decay, arch=args.arch,
+                       dropout=args.dropout)
 
 
 def _print(text: str) -> None:

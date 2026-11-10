@@ -261,3 +261,17 @@ def test_the_command_line_takes_the_stopping_flags():
     assert (config.val_share, config.patience, config.eval_every, config.weight_decay) == (0.2, 7, 50, 0.01)
     defaults = _config(build_parser().parse_args(["ablate", "p", "c", "m", "--out", "o"]))
     assert (defaults.val_share, defaults.patience) == (0.1, 4)
+
+
+def test_the_command_line_takes_dropout_and_saves_it_in_the_artifact(tmp_path):
+    from setmodel.__main__ import _config, build_parser
+    assert _config(build_parser().parse_args(["train", "p", "c", "m", "--out", "o", "--dropout", "0.2"])).dropout == 0.2
+    assert _config(build_parser().parse_args(["ablate", "p", "c", "m", "--out", "o"])).dropout == 0.0
+    parquet = write_parquet(smoke_games(), tmp_path)
+    out = tmp_path / "model"
+    assert main(["train", str(parquet), str(write_dump(tmp_path / "cards.jsonl")),
+                 str(write_manifest(tmp_path / "manifest.json")), "--out", str(out), "--epochs", "1", "--width", "8",
+                 "--min-count", "1", "--device", "cpu", "--dropout", "0.2"]) == 0
+    model, *_ = load_model(out)
+    assert model.config.dropout == 0.2 and not model.training
+    assert json.loads((out / METRICS_FILE).read_text(encoding="utf-8"))["config"]["dropout"] == 0.2

@@ -135,7 +135,8 @@ def train(corpus: Corpus, vocab: Vocabulary, config: TrainConfig) -> Trained:
     rows, val_rows = validation_split(corpus, all_rows, config.val_share, config.seed)
     loss_scale = float(corpus.weights[rows].mean()) * config.batch_size
 
-    model_config = ModelConfig(len(vocab.tokens), len(vocab.numeric_keys), config.width, arch=config.arch)
+    model_config = ModelConfig(len(vocab.tokens), len(vocab.numeric_keys), config.width, arch=config.arch,
+                               dropout=config.dropout)
     model = SetModel(model_config, torch.as_tensor(key_scale)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
     trained = Trained(model, vocab, config, device)

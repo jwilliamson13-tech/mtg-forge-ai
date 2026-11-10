@@ -40,3 +40,4 @@ class TrainConfig:
     patience: int = 4  # evaluations without a better validation log loss before the run stops
     weight_decay: float = 0.0  # AdamW's decoupled decay; 0 is plain Adam
     arch: str = ATTENTION  # the card-set network, one of ARCHES
+    dropout: float = 0.0  # dropout on the head's input and hidden layer while training; 0 is none
