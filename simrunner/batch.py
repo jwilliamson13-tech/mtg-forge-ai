@@ -17,8 +17,8 @@ from gamerecord import GameRecordError, game_digest, read_metadata
 from simrunner.output import DrawCause, GameResult
 from simrunner.seeds import derive_seed, split_games
 from simrunner.window import Window
-from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_FIRST_PLAYER, DEFAULT_SIM_MODE, FIRST_PLAYER_RULES,
-                              JVM_PROPERTIES, GameFile, RecordPlan, Seat,
+from simrunner.worker import (DEFAULT_EVALUATOR, DEFAULT_SIM_MODE, FIRST_PLAYER_RULES, JVM_PROPERTIES,
+                              STOCK_FIRST_PLAYER, GameFile, RecordPlan, Seat,
                               WorkerPlan, WorkerResult, any_seat_searches, evaluator_wiring, kill_tree, onnx_problem,
                               prepare_folder, remove_folder, expected_printed_evaluators, requested_sim_modes,
                               resolve_search_budget, run_worker, seat_searches, sim_args)
@@ -57,7 +57,7 @@ class BatchConfig:
     prune: bool = True  # False passes -prune off, so a searching seat's copies hold the hidden cards
     batch_name: str | None = None  # the batch id, when it isn't the run folder's name
     ai_steps: int = 0  # AI steps per heuristic decision, Forge's -aisteps; 0 leaves the wall clock in charge
-    first_player: str = DEFAULT_FIRST_PLAYER  # Forge's -firstplayer: loser is stock, random flips for every game
+    first_player: str = STOCK_FIRST_PLAYER  # Forge's -firstplayer: loser is stock, random flips for every game
 
     @property
     def batch_id(self) -> str:
@@ -271,7 +271,7 @@ class BatchResult:
         if self.config.ai_steps and not all(game.ai_limits and game.ai_limits.step_stops is not None
                                             for game in worker.games):
             ignored.append("Forge did not report on the AI step budget")
-        if self.config.first_player != DEFAULT_FIRST_PLAYER and worker.games and not worker.random_first_player:
+        if self.config.first_player != STOCK_FIRST_PLAYER and worker.games and not worker.random_first_player:
             ignored.append("Forge did not say it flips for the first player of every game")
         if self.config.records and check_records(worker).missing:
             ignored.append("a game with no game record")
