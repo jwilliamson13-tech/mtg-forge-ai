@@ -29,13 +29,28 @@ def write_game(folder, number, snapshots):
 
 
 def test_forges_ids_name_a_hidden_card_from_another_game(tmp_path):
-    write_game(tmp_path, 1, [line(2, [card(7, None)])])
+    # Same decks in both games, so game 1 shows another Grizzly Bears under its own id.
+    write_game(tmp_path, 1, [line(2, [card(7, None), card(8, "Grizzly Bears", face_down=False)])])
     write_game(tmp_path, 2, [line(1, [card(7, "Grizzly Bears", face_down=False)])])
 
     check = check_folder(tmp_path)
 
-    assert (check.games, check.hidden, check.by_other_games) == (2, 1, 1)
+    assert (check.games, check.hidden, check.by_other_games, check.by_chance) == (2, 1, 1, 0)
     assert not check.ids_named_nothing
+
+
+def test_an_id_shared_by_chance_with_another_games_card_is_not_an_attack(tmp_path):
+    # 2026-11-09 gen-0 pool: a face-down creature in Dark Depths vs Stoneblade had the id that an
+    # Acererak on the stack had in Aluren vs Bant Aggro. A 31-bit hash collision, and the name it
+    # gives isn't a card of the hidden card's game, so it can't name it.
+    write_game(tmp_path, 1, [line(2, [card(7, None), card(8, "Marit Lage", face_down=False)])])
+    write_game(tmp_path, 2, [line(1, [], stack=[{"id": 7, "name": "Acererak the Archlich", "face": None,
+                                                    "face_down": False}])])
+
+    check = check_folder(tmp_path)
+
+    assert (check.hidden, check.by_other_games, check.by_chance) == (1, 0, 1)
+    assert check.ids_named_nothing
 
 
 def test_shared_ids_name_a_hidden_card_from_the_other_side(tmp_path):
