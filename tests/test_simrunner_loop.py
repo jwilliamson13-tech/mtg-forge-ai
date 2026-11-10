@@ -601,12 +601,15 @@ def test_the_command_runs_a_generation_end_to_end(setup, tmp_path, capsys):
                  "--start", start, "--stop", stop, "--run-dir", str(tmp_path / "cli"), "--models", str(tmp_path / "models"),
                  "--results", str(tmp_path / "cli-results"), "--ladder-dir", str(tmp_path / "cli-ladder"),
                  "--converge-dir", str(tmp_path / "cli-convergence"), "--width", "2.5", "--min-free-mb", "0",
-                 "--memory-floor-mb", "0", "--python", sys.executable, str(STUB)])
+                 "--memory-floor-mb", "0", "--arch", "attention", "--python", sys.executable, str(STUB)])
 
     assert code == 0
     assert "gen1 done: entry 1" in capsys.readouterr().err
     converge = setup.argv("converge")
     assert converge[converge.index("--width") + 1] == "2.5"
+    for step in ("train", "ablate"):
+        argv = setup.argv(step)
+        assert argv[argv.index("--arch") + 1] == "attention"
     assert len(read_entries(tmp_path / "cli-results")) == 1
 
 

@@ -3,6 +3,13 @@
 Every level is a mean over a set followed by a small MLP, so the order of tokens,
 abilities or cards can't matter, and a set of any size goes through the same weights.
 
+`arch` picks what happens between a placed card and its zone's vector. `mean` is the
+model above. `count` pools each zone to its mean, its mean times log(1 + count) and
+log(1 + count), so two copies of a card read differently from one. `attention` also runs
+one self-attention block over all of a state's cards, every zone together, before that
+pooling, so a card's vector can depend on the rest of the board. All three take the same
+contract inputs: only the network inside changes.
+
 Inputs are raw game values. The constants that scale them live in the model as buffers,
 so the exported file carries them and Forge has nothing to keep in step.
 
@@ -15,9 +22,12 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+import math
+
 import torch
 from torch import Tensor, nn
 
+from setmodel.config import ARCHES, ATTENTION, MEAN
 from setmodel.dataset import LIVE_FIELDS, SCOREBOARD_FIELDS, ZONE_NAMES
 
 # What a typical value is, so each input starts near 1. These are fixed, not learned from a corpus.
@@ -34,6 +44,14 @@ class ModelConfig:
     token_count: int
     key_count: int
     width: int = 64
+    arch: str = MEAN  # artifacts from before the field are all `mean`
+    heads: int = 4  # attention heads, `attention` only
+
+    def __post_init__(self):
+        if self.arch not in ARCHES:
+            raise ValueError(f"unknown arch {self.arch!r}, expected one of {ARCHES}")
+        if self.arch == ATTENTION and self.width % self.heads:
+            raise ValueError(f"width {self.width} doesn't split into {self.heads} heads")
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -48,6 +66,34 @@ def _masked_mean(values: Tensor, mask: Tensor, dim: int) -> Tensor:
     return (values * mask.unsqueeze(-1)).sum(dim) / mask.sum(dim).clamp(min=1).unsqueeze(-1)
 
 
+MASKED = -1e4  # an attention score for a padded card: its weight is exactly 0 in float32, and an all-padding row stays finite
+
+
+class CardAttention(nn.Module):
+    """One pre-norm transformer block over each state's cards. Permuting the cards permutes the output."""
+
+    def __init__(self, width: int, heads: int):
+        super().__init__()
+        self.heads = heads
+        self.norm = nn.LayerNorm(width)
+        self.qkv = nn.Linear(width, 3 * width)
+        self.out = nn.Linear(width, width)
+        self.ff_norm = nn.LayerNorm(width)
+        self.ff = _mlp(width, width, 2 * width)
+
+    def forward(self, cards: Tensor, keep: Tensor | None = None) -> Tensor:
+        """[B, N, W] cards to [B, N, W]. `keep` is [B, N], 1 for a real card and 0 for padding, None for no padding."""
+        batch, count, width = cards.shape
+        heads = self.heads
+        q, k, v = self.qkv(self.norm(cards)).reshape(batch, count, 3, heads, width // heads).permute(2, 0, 3, 1, 4)
+        scores = q @ k.transpose(-1, -2) / math.sqrt(width // heads)  # [B, H, N, N]
+        if keep is not None:
+            scores = scores.masked_fill(keep[:, None, None, :] == 0, MASKED)
+        mixed = (scores.softmax(-1) @ v).transpose(1, 2).reshape(batch, count, width)
+        cards = cards + self.out(mixed)
+        return cards + self.ff(self.ff_norm(cards))
+
+
 class SetModel(nn.Module):
     def __init__(self, config: ModelConfig, key_scale: Tensor):
         super().__init__()
@@ -59,7 +105,10 @@ class SetModel(nn.Module):
         self.ability = _mlp(width, width, width)
         self.card = _mlp(width, width, width)
         self.placed = _mlp(width + len(LIVE_FIELDS), width, width)  # a card in its zone, with its live state
-        self.head = _mlp(len(ZONE_NAMES) * width + len(SCOREBOARD_FIELDS), 1, 2 * width)
+        if config.arch == ATTENTION:
+            self.attention = CardAttention(width, config.heads)
+        pooled = width if config.arch == MEAN else 2 * width + 1
+        self.head = _mlp(len(ZONE_NAMES) * pooled + len(SCOREBOARD_FIELDS), 1, 2 * width)
         self.register_buffer("key_scale", key_scale.float())
         self.register_buffer("scoreboard_scale", torch.tensor([float(SCOREBOARD_SCALE[f]) for f in SCOREBOARD_FIELDS]))
         self.register_buffer("live_scale", torch.tensor([float(LIVE_SCALE.get(f, 1)) for f in LIVE_FIELDS]))
@@ -72,20 +121,47 @@ class SetModel(nn.Module):
         present = ((token_mask.sum(2) + number_mask.sum(2)) > 0).to(abilities.dtype)
         return self.card(_masked_mean(abilities, present, dim=1))
 
-    def score(self, text: Tensor, live: Tensor, zone: Tensor, row: Tensor, scoreboard: Tensor) -> Tensor:
+    def score(self, text: Tensor, live: Tensor, zone: Tensor, row: Tensor, scoreboard: Tensor,
+              one_state: bool = False) -> Tensor:
         """Cards of a batch of states to one logit per state. `row` says which state each card is in.
+
+        For `attention`, a state's cards must be contiguous with states in row order, as `Corpus.cards_of` gives
+        them. `one_state` says every card is in state 0, so attention needs no padding. It is the path the export
+        traces, and it gives what the batch path gives for the same state.
 
         An empty zone pools to zeros, and a state with no cards is fine.
         """
         rows, width = scoreboard.shape[0], self.config.width
         placed = self.placed(torch.cat([text + self.zones(zone), live / self.live_scale], dim=1))
+        if self.config.arch == ATTENTION:
+            placed = self._attend(placed, row, rows, one_state)
         segment = row * len(ZONE_NAMES) + zone  # one bucket per state and zone
         total = torch.zeros(rows * len(ZONE_NAMES), width, dtype=placed.dtype, device=placed.device)
         count = torch.zeros(rows * len(ZONE_NAMES), dtype=placed.dtype, device=placed.device)
         total = total.index_add(0, segment, placed)
         count = count.index_add(0, segment, torch.ones_like(segment, dtype=placed.dtype))
-        zones = (total / count.clamp(min=1).unsqueeze(1)).reshape(rows, len(ZONE_NAMES) * width)
+        mean = total / count.clamp(min=1).unsqueeze(1)
+        if self.config.arch == MEAN:
+            zones = mean
+        else:
+            scale = torch.log1p(count).unsqueeze(1)
+            zones = torch.cat([mean, mean * scale, scale], dim=1)
+        zones = zones.reshape(rows, -1)
         return self.head(torch.cat([zones, scoreboard / self.scoreboard_scale], dim=1)).squeeze(1)
+
+    def _attend(self, placed: Tensor, row: Tensor, rows: int, one_state: bool) -> Tensor:
+        """Run attention within each state: pad the states to the longest, attend with the padding masked, unpad."""
+        if one_state:
+            return self.attention(placed.unsqueeze(0))[0]
+        if placed.shape[0] == 0:
+            return placed
+        per_row = torch.bincount(row, minlength=rows)
+        first = torch.cumsum(per_row, 0) - per_row
+        position = torch.arange(placed.shape[0], device=placed.device) - first[row]
+        longest = int(per_row.max())
+        padded = placed.new_zeros(rows, longest, placed.shape[1]).index_put((row, position), placed)
+        keep = placed.new_zeros(rows, longest).index_put((row, position), torch.ones_like(position, dtype=placed.dtype))
+        return self.attention(padded, keep)[row, position]
 
 
 class StateModel(nn.Module):
@@ -98,7 +174,7 @@ class StateModel(nn.Module):
     def forward(self, scoreboard: Tensor, token_ids: Tensor, token_mask: Tensor, numbers: Tensor, number_mask: Tensor,
                 live: Tensor, zone: Tensor) -> Tensor:
         text = self.model.card_text(token_ids, token_mask, numbers, number_mask)
-        logit = self.model.score(text, live, zone, torch.zeros_like(zone), scoreboard.unsqueeze(0))
+        logit = self.model.score(text, live, zone, torch.zeros_like(zone), scoreboard.unsqueeze(0), one_state=True)
         return torch.sigmoid(logit)
 
 

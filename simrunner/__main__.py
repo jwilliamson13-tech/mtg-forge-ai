@@ -317,7 +317,7 @@ def _generation(args: argparse.Namespace) -> int:
         ladder_players=tuple(args.ladder_players), ladder_seed=args.ladder_seed, converge_seed=args.converge_seed,
         pool_options=tuple(options["pool"]), ladder_options=tuple(options["ladder"]),
         converge_options=tuple(options["converge"]), forge_options=tuple(options["forge"]),
-        train=loop.TrainOptions(args.epochs, args.batch_size, args.device, args.train_seed),
+        train=loop.TrainOptions(args.epochs, args.batch_size, args.device, args.train_seed, args.arch),
         max_tripwire_share=args.max_tripwire_share, max_drop_share=args.max_drop_share,
         max_timeout_share=args.max_timeout_share, min_free_mb=args.min_free_mb,
         memory_floor_mb=args.memory_floor_mb, ignore_kill_criterion=args.ignore_kill_criterion, redo=args.redo)
@@ -386,6 +386,7 @@ def _add_generation_arguments(parser: argparse.ArgumentParser) -> None:
     passed.add_argument("--batch-size", type=int, help="to train and ablate")
     passed.add_argument("--device", help="to train and ablate")
     passed.add_argument("--train-seed", type=int, help="to train and ablate, as --seed")
+    passed.add_argument("--arch", help="to train and ablate: the card-set network, see `python -m setmodel train -h`")
     gates = parser.add_argument_group("gates")
     gates.add_argument("--max-tripwire-share", type=float, default=loop.DEFAULT_MAX_TRIPWIRE_SHARE,
                        help="stop if more of the pool's games than this had tripwire hits; those under it are left "
