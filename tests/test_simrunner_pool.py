@@ -14,7 +14,7 @@ from setmodel.dataset import HELD_OUT_DECKS, HELD_OUT_GAMES, TRAIN, game_split, 
 from simrunner.__main__ import main
 from simrunner.batch import plan_workers
 from simrunner.pool import plan_pool
-from simrunner.worker import DEFAULT_AI_STEPS, POOL_FIRST_PLAYER
+from simrunner.worker import DEFAULT_AI_STEPS
 
 STUB = Path(__file__).parent / "stub_java.py"
 SPLITS = {deck.id: deck.split for deck in mf.load().decks}
@@ -213,7 +213,6 @@ def test_a_pool_with_the_ai_step_budget_refuses_a_restart_without_it(pool_manife
 def test_a_pool_flips_for_the_first_player_of_every_game_by_default(pool_manifest, forge, tmp_path, launches):
     run_dir = tmp_path / "run"
     assert main(pool_args(pool_manifest, forge, run_dir)) == 0
-    assert POOL_FIRST_PLAYER == "random"
     assert all(argv[argv.index("-firstplayer") + 1] == "random" for argv in launches().values())
     assert json.loads((run_dir / "plan.json").read_text(encoding="utf-8"))["first_player"] == "random"
 

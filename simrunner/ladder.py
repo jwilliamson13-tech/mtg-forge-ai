@@ -38,7 +38,7 @@ from simrunner.players import Player
 from simrunner.rating import ELO_PER_NAT, Fit, RatingError, fit, format_rating
 from simrunner.report import format_report, table, tripwire_rows, worker_note
 from simrunner.seeds import derive_seed
-from simrunner.worker import DEFAULT_FIRST_PLAYER, onnx_problem, remove_folder, seat_searches
+from simrunner.worker import STOCK_FIRST_PLAYER, onnx_problem, remove_folder, seat_searches
 
 DEFAULT_DECK_PAIRS = 6
 DEFAULT_PAIR_GAMES = 40  # per pair of players and deck pair: 10 in each of the four batches
@@ -186,7 +186,7 @@ def _plan_fields(config: LadderConfig, deck_pairs: list[tuple[str, str]]) -> dic
     if base.ai_steps:
         # only when on, so that a plan written before the setting existed reads as played without it
         fields["ai_steps"] = base.ai_steps
-    if base.first_player != DEFAULT_FIRST_PLAYER:
+    if base.first_player != STOCK_FIRST_PLAYER:
         # only off stock Forge's rule, so that a plan written before the setting existed reads as played on it
         fields["first_player"] = base.first_player
     return fields
@@ -524,7 +524,7 @@ def ladder_fields(ladder: LadderResult) -> dict:
         "honest": base.records.honest,
         "tripwire": base.tripwire,
         **({"ai_steps": base.ai_steps} if base.ai_steps else {}),
-        **({"first_player": base.first_player} if base.first_player != DEFAULT_FIRST_PLAYER else {}),
+        **({"first_player": base.first_player} if base.first_player != STOCK_FIRST_PLAYER else {}),
         "confidence": config.confidence,
         "anchor": {"player": config.anchor_label, "rating": config.anchor_rating},
         "method": ("Bradley-Terry maximum likelihood over decisive games, on the Elo scale "

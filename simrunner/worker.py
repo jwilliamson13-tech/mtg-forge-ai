@@ -44,11 +44,13 @@ DEFAULT_SEARCH_BUDGET = 100
 # docs/forge-build.md for how this was chosen.
 DEFAULT_AI_STEPS = 1000
 # Who goes first in each game after a JVM's first, Forge's `-firstplayer`. `loser` is stock Forge: the loser of the last
-# game, so a game's first player tells of the game before. `random` flips a coin for every game. `pool` and `generation`
-# default to `random`, everything else to `loser`. See "First player" in docs/forge-build.md.
+# game, so a game's first player tells of the game before. `random` flips a coin for every game. Every command defaults
+# to `random` but `batch` and `nightly`, which keep `loser`. The runner passes no flag for `loser`, and plan and result
+# files record the rule only when it isn't `loser`, so a file from before the flag reads as played on it. See "First
+# player" in docs/forge-build.md.
 FIRST_PLAYER_RULES = ("random", "loser")
-DEFAULT_FIRST_PLAYER = "loser"
-POOL_FIRST_PLAYER = "random"
+STOCK_FIRST_PLAYER = "loser"
+RANDOM_FIRST_PLAYER = "random"
 
 # Past this, a worker is hung rather than slow, and gets killed. The clock already
 # bounds each game, so this is a backstop for a JVM that stops responding.
@@ -206,7 +208,7 @@ def resolve_search_budget(seats: tuple[Seat, Seat], requested: int | None) -> in
 def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, clock_s: int,
              search_budget: int = 0, records: RecordPlan | None = None, batch_id: str | None = None,
              tripwire: bool = True, prune: bool = True, ai_steps: int = 0,
-             first_player: str = DEFAULT_FIRST_PLAYER) -> list[str]:
+             first_player: str = STOCK_FIRST_PLAYER) -> list[str]:
     """Return the `forge sim` arguments for one worker. With records, their folder has to be a full path."""
     args = ["sim", "-D", str(deck_dir), "-d", *DECK_NAMES,
             "-n", str(games), "-s", str(seed), "-c", str(clock_s), "-q"]
@@ -221,7 +223,7 @@ def sim_args(seats: tuple[Seat, Seat], deck_dir: Path, games: int, seed: int, cl
         args += ["-budget", str(search_budget)]
     if ai_steps:
         args += ["-aisteps", str(ai_steps)]
-    if first_player != DEFAULT_FIRST_PLAYER:
+    if first_player != STOCK_FIRST_PLAYER:
         # stock Forge's rule needs no flag, so a batch on it still runs on a jar from before the flag
         args += ["-firstplayer", first_player]
     if not tripwire:

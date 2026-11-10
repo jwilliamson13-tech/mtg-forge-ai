@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from simrunner.batch import BatchResult, check_records
 from simrunner.output import DrawCause
-from simrunner.worker import DEFAULT_FIRST_PLAYER, DEFAULT_SIM_MODE, Seat, WorkerResult
+from simrunner.worker import DEFAULT_SIM_MODE, STOCK_FIRST_PLAYER, Seat, WorkerResult
 
 # HANDOFF.md: the nightly window is 23:00 to 07:00, and kill criterion 1 is about 500 usable games a night.
 OVERNIGHT_HOURS = 8
@@ -94,7 +94,7 @@ def format_summary(batch: BatchResult) -> str:
         # only with -aisteps, so that a report without it reads as it always did
         *([("AI step budget", f"{config.ai_steps} steps per heuristic decision")] if config.ai_steps else []),
         # only off stock Forge's rule, for the same reason
-        *([("first player", f"{config.first_player} each game")] if config.first_player != DEFAULT_FIRST_PLAYER
+        *([("first player", f"{config.first_player} each game")] if config.first_player != STOCK_FIRST_PLAYER
           else []),
         ("games attempted", str(batch.attempted)),
         ("games finished", str(batch.finished)),

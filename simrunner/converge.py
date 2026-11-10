@@ -33,7 +33,7 @@ from simrunner.matchup import (BUDGET_SPENT, MET, ORDERS, MatchupConfig, Matchup
                                run_matchup)
 from simrunner.players import Player
 from simrunner.report import table
-from simrunner.worker import DEFAULT_FIRST_PLAYER
+from simrunner.worker import STOCK_FIRST_PLAYER
 
 RESULT_FILE = "convergence.json"
 MATCHUP_FILE = "matchup.json"
@@ -311,7 +311,7 @@ def converge_fields(result: ConvergeResult) -> dict:
         "honest": batch.records.honest,
         "tripwire": batch.tripwire,
         **({"ai_steps": batch.ai_steps} if batch.ai_steps else {}),
-        **({"first_player": batch.first_player} if batch.first_player != DEFAULT_FIRST_PLAYER else {}),
+        **({"first_player": batch.first_player} if batch.first_player != STOCK_FIRST_PLAYER else {}),
         "counts": result.counts,
         "matchups": rows,
         "set_aside": [str(folder) for folder in result.set_aside],
