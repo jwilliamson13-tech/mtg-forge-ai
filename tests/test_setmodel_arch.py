@@ -204,3 +204,35 @@ def test_the_command_line_trains_saves_and_reloads_an_arch(tmp_path):
     for row in rows:
         config = json.loads((ablation / row["run"] / "metrics.json").read_text(encoding="utf-8"))["config"]
         assert config["arch"] == COUNT
+
+
+def test_dropout_is_refused_outside_zero_to_one():
+    for p in (-0.1, 1.0):
+        with pytest.raises(ValueError, match="dropout"):
+            ModelConfig(token_count=20, key_count=K, dropout=p)
+    assert ModelConfig(token_count=20, key_count=K).dropout == 0.0  # a model_config with no dropout field
+
+
+def test_dropout_keeps_the_weight_names_and_changes_nothing_in_eval_mode():
+    torch.manual_seed(1)
+    plain = SetModel(ModelConfig(token_count=20, key_count=K, width=16, arch=ATTENTION), torch.ones(K))
+    torch.manual_seed(1)
+    dropped = SetModel(ModelConfig(token_count=20, key_count=K, width=16, arch=ATTENTION, dropout=0.5), torch.ones(K))
+    assert plain.state_dict().keys() == dropped.state_dict().keys()
+    inputs = state(12)
+    assert one(dropped.eval(), inputs).item() == one(plain.eval(), inputs).item()
+    dropped.train()
+    with torch.no_grad():
+        noisy = {StateModel(dropped)(**inputs).item() for _ in range(5)}
+    assert len(noisy) > 1  # training mode drops units, so repeated calls differ
+
+
+def test_a_dropout_model_exports_and_reloads(corpus, tmp_path):
+    corpus, _ = corpus
+    vocab, table = vocabulary(), card_table()
+    model = train(corpus, vocab, TrainConfig(epochs=1, width=16, device="cpu", arch=ATTENTION,
+                                             dropout=0.3)).model.cpu().eval()
+    assert model.config.dropout == 0.3
+    export_bundle(model, vocab, corpus.caps, {"generation": 1, "batch_ids": ["smoke"]}, table, corpus, tmp_path)
+    check = export_check(model, corpus, tmp_path)
+    assert check.passed and check.max_difference < 1e-5

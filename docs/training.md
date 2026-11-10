@@ -42,7 +42,7 @@ python -m setmodel pairtest MODEL CARDS [--fixture FILE]
 python -m setmodel parity MODEL PARQUET CARDS MANIFEST SCORES
 ```
 
-`join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device`, `--weight-decay`, `--arch`, `--val-share`, `--eval-every`, `--patience` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
+`join` prints the join report and truncation rates without training, and it doesn't need torch. `train` and `ablate` take `--epochs`, `--batch-size`, `--learning-rate`, `--width`, `--seed`, `--device`, `--weight-decay`, `--dropout`, `--arch`, `--val-share`, `--eval-every`, `--patience` and `--min-count`. Their defaults come from `TrainConfig` in `setmodel/config.py`, except `--min-count`. `--device auto` uses the GPU if torch can see one, and the report says which device ran. The commands rebuild the vocabulary from the dump at `--min-count`, 5 by default, which gives the same table as `data/vocab.json`.
 
 ## Rows
 
@@ -177,6 +177,8 @@ Held-out predictions above 0.99 or below 0.01 went from 22% of them at epoch 1 t
 The model is scored on the validation games every `--eval-every` batches (default 2000) and at the end of each epoch. At batch size 256 and gen 0's 1.7M fitting rows an epoch is about 6,600 batches, so that is about 3 scores in epoch 1 plus the end of each epoch. The best score so far is a copy of the weights. After `--patience` scores in a row with no lower validation log loss (default 4) the run stops, and the copy of the best weights is restored before `model.pt` and the held-out report are written. `--epochs` stays the cap. `--eval-every 0` scores at epoch ends only, which is cheaper and can miss a best point inside epoch 1. A score runs the model forward, with no backward pass, over the validation rows, about 10% of the fitting rows. That should cost about 4% of an epoch per score, an estimate from row counts that nobody has timed on gen 0 yet. At the defaults that is roughly 3 scores per epoch, so about 12% extra.
 
 `--weight-decay` (default 0) switches the optimizer to AdamW's decoupled decay. At 0 it is plain Adam.
+
+`--dropout` (default 0) drops that share of the head's input, the pooled zones and the scoreboard, and of its hidden layer, while training. It is functional dropout, so the head keeps its weight names and an artifact from before the field loads with 0. In eval mode, and so in the exported bundle, it does nothing. The artifact records it in `model_config`.
 
 `metrics.json` `validation.curve` has one point per score: `step`, `epoch` (fractional inside an epoch), `train_loss` (the weighted mean since the last score), `val_log_loss` and `val_accuracy`. `validation.kept` is the curve point whose weights were saved. The held-out numbers in the report are for those weights. `train_rows` and `train_games` in the artifact's metadata still count the whole training split, validation games included. The vocabulary, caps and key scales come from the whole training split too, which is features and not labels.
 
