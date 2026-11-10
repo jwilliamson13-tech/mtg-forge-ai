@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from setmodel.config import CHECK_STATES, CHECK_THRESHOLD, TrainConfig
+from setmodel.config import ARCHES, CHECK_STATES, CHECK_THRESHOLD, TrainConfig
 
 
 def _inputs(parser: argparse.ArgumentParser) -> None:
@@ -42,13 +42,16 @@ def _training_options(parser: argparse.ArgumentParser) -> None:
                         help="stop after this many validation scores without a better log loss")
     parser.add_argument("--weight-decay", type=float, default=defaults.weight_decay,
                         help="AdamW weight decay, 0 is plain Adam")
+    parser.add_argument("--arch", choices=ARCHES, default=defaults.arch,
+                        help="the card-set network: mean pooling, count-aware pooling, or attention over the "
+                             "cards then count-aware pooling. All take the same contract inputs")
 
 
 def _config(args: argparse.Namespace) -> TrainConfig:
     return TrainConfig(generation=args.generation, epochs=args.epochs, batch_size=args.batch_size,
                        learning_rate=args.learning_rate, width=args.width, seed=args.seed, device=args.device,
                        val_share=args.val_share, eval_every=args.eval_every, patience=args.patience,
-                       weight_decay=args.weight_decay)
+                       weight_decay=args.weight_decay, arch=args.arch)
 
 
 def _print(text: str) -> None:

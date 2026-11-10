@@ -254,11 +254,12 @@ class TrainOptions:
     batch_size: int | None = None
     device: str | None = None
     seed: int | None = None
+    arch: str | None = None
 
     def arguments(self) -> list[str]:
         out = []
         for flag, value in (("--epochs", self.epochs), ("--batch-size", self.batch_size), ("--device", self.device),
-                            ("--seed", self.seed)):
+                            ("--seed", self.seed), ("--arch", self.arch)):
             if value is not None:
                 out += [flag, str(value)]
         return out

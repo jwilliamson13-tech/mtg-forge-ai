@@ -13,6 +13,12 @@ FULL = "full"  # the run with no ablation
 # `train.load_model` refuses one trained under another version, whose inputs this code no longer builds.
 CONTRACT_VERSION = 2
 
+# The card-set network, `setmodel/model.py`. Every arch takes the same contract inputs.
+MEAN = "mean"  # mean pooling per zone, the original
+COUNT = "count"  # mean, mean times log(1 + count), and log(1 + count) per zone
+ATTENTION = "attention"  # one self-attention block over all of a state's cards, then the count pooling
+ARCHES = (MEAN, COUNT, ATTENTION)
+
 CHECK_STATES = 300
 CHECK_THRESHOLD = 1e-4
 
@@ -33,3 +39,4 @@ class TrainConfig:
     eval_every: int = 2000  # batches; 0 evaluates at each epoch's end only
     patience: int = 4  # evaluations without a better validation log loss before the run stops
     weight_decay: float = 0.0  # AdamW's decoupled decay; 0 is plain Adam
+    arch: str = ATTENTION  # the card-set network, one of ARCHES
