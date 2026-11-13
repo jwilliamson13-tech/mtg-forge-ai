@@ -13,7 +13,7 @@ powershell -ExecutionPolicy Bypass -File tools\move-machine\export-state.ps1
 
 The script refuses to pack while a `java`, `simrunner` or `setmodel` process runs, or while either repo has
 uncommitted or unpushed work. It packs `runs\` (minus `runs\venv`, which is rebuilt on the target), `models\`, `data\`
-and `results\` into `%LOCALAPPDATA%\Temp\forgeai-move\forgeai-state-<stamp>.tgz`, about 2.5 to 3 GB. It then sends the
+and `results\` into `%LOCALAPPDATA%\Temp\forgeai-move\forgeai-state-<stamp>.zip`, about 1.8 GB, a plain zip that Explorer also opens. It then sends the
 bundle, its `.sha256` and `setup-target.ps1` to the target's `Downloads` folder with `tailscale file cp`. Pass
 `-NoSend` to pack only, or `-Target <host>` for another machine.
 

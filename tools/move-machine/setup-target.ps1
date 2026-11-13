@@ -42,9 +42,9 @@ function Winget-Install([string]$id, [string]$version) {
 # ---------------------------------------------------------------------------------------------------------------
 Step "1. Preflight"
 if (-not $Bundle) {
-    $found = Get-ChildItem (Join-Path $env:USERPROFILE "Downloads") -Filter "forgeai-state-*.tgz" -ErrorAction SilentlyContinue |
+    $found = Get-ChildItem (Join-Path $env:USERPROFILE "Downloads") -Filter "forgeai-state-*.zip" -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $found) { Fail "no forgeai-state-*.tgz in Downloads. Pass -Bundle <path>." }
+    if (-not $found) { Fail "no forgeai-state-*.zip in Downloads. Pass -Bundle <path>." }
     $Bundle = $found.FullName
 }
 "  bundle   $Bundle"
@@ -125,7 +125,7 @@ if (-not (Has-Python313)) { Fail "Python 3.13 isn't reachable as 'py -3.13'. Ope
 Step "3. Clones"
 $tmp = Join-Path $env:TEMP "forgeai-manifest"
 New-Item -ItemType Directory -Force $tmp | Out-Null
-& "$env:SystemRoot\System32\tar.exe" -xzf $Bundle -C $tmp "runs/move-manifest.json"
+& "$env:SystemRoot\System32\tar.exe" -xf $Bundle -C $tmp "runs/move-manifest.json"
 if ($LASTEXITCODE -ne 0) { Fail "the bundle has no runs/move-manifest.json; was it made by export-state.ps1?" }
 $m = Get-Content (Join-Path $tmp "runs\move-manifest.json") -Raw | ConvertFrom-Json
 "  source   $($m.source_host), made $($m.made)"
@@ -192,7 +192,8 @@ if (-not (Test-Path $marker)) {
         if ($want -ne $got) { Fail "bundle checksum mismatch: the transfer is incomplete or damaged." }
         "  checksum ok"
     } else { Warn "no .sha256 beside the bundle; not verified." }
-    & "$env:SystemRoot\System32\tar.exe" -xzf $Bundle -C $mfa
+    # Windows' tar.exe, not Expand-Archive: PowerShell 5.1's Expand-Archive is slow and unreliable on a 2 GB zip
+    & "$env:SystemRoot\System32\tar.exe" -xf $Bundle -C $mfa
     if ($LASTEXITCODE -ne 0) { Fail "unpacking failed." }
 }
 

@@ -73,10 +73,11 @@ foreach ($j in $junctions) {
 Step "Packing"
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmm"
-$bundle = Join-Path $OutDir "forgeai-state-$stamp.tgz"
+$bundle = Join-Path $OutDir "forgeai-state-$stamp.zip"
 $parts = @("runs", "models", "data", "results") | Where-Object { Test-Path (Join-Path $ProjectRoot $_) }
-# Windows' own bsdtar, not Git's GNU tar, so drive-letter paths work
-& "$env:SystemRoot\System32\tar.exe" -czf $bundle -C $ProjectRoot @excludes @parts
+# Windows' own bsdtar, not Git's GNU tar: drive-letter paths work, and -a writes a zip (chosen by the .zip name)
+# that Explorer opens and the target's tar.exe unpacks
+& "$env:SystemRoot\System32\tar.exe" -a -cf $bundle -C $ProjectRoot @excludes @parts
 if ($LASTEXITCODE -ne 0) { Fail "tar exited $LASTEXITCODE." }
 $hash = (Get-FileHash $bundle -Algorithm SHA256).Hash.ToLower()
 "$hash  $(Split-Path $bundle -Leaf)" | Set-Content -Encoding ascii "$bundle.sha256"
