@@ -29,6 +29,7 @@ Written before starting, so they can't be moved after:
 1. After step 2: fewer than ~500 usable games per night on the user's machine means the data plan is dead as written. Rethink before building more.
 2. After the first trained model: if the full model doesn't beat the no-cards ablation by at least 5 points of held-out accuracy, the card encoding isn't carrying information. Redesign the encoding; don't scale data.
 3. Boredom. Named by the user as a real one.
+4. After the gen-1 ladder: if gen 1's interval against the heuristic AI doesn't sit entirely above 0, stop. Added 2026-11-12, confirmed by the user before the gen-1 ladder had a result.
 
 ## How we got here
 
